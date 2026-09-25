@@ -203,7 +203,7 @@ def _open_gripper(controller) -> None:
 
 
 def settle_start_state(model, seconds: float = SETTLE_SECONDS,
-                       tol: float = 0.010, qvel_tol: float = 1e-3) -> StartState:
+                       tol: float = 0.010, qvel_tol: float = 1e-3, pos=None) -> StartState:
     """From HOME_QPOS, drive the hand to START_POS with the collection
     controller (tracker + IK at the physics rate, gripper open) and let it
     come to rest. The resulting qpos/ctrl/q_des include the servos' steady-
@@ -214,7 +214,11 @@ def settle_start_state(model, seconds: float = SETTLE_SECONDS,
     exactly null under damping; measured 2026-09-16: 5 mm at START_POS,
     5-17 mm over the collection workspace, mostly +z, 0 with null_gain=0).
     The IK is not to be modified, so this only checks the arm came to rest
-    near START_POS."""
+    near START_POS.
+
+    pos (Step D): another hand position to settle at (the retreat pose of the 3-cube scene); None = START_POS,
+    exactly the source's behaviour."""
+    goal = START_POS if pos is None else np.asarray(pos, dtype=float)
     data = mujoco.MjData(model)
     apply_home_pose(model, data)
     _set_fingers(model, data, FINGER_OPEN)
@@ -223,17 +227,17 @@ def settle_start_state(model, seconds: float = SETTLE_SECONDS,
         controller = make_collect_controller(model, data)
         _open_gripper(controller)
         controller.sync_target_to_hand()
-        controller.desired_pos = controller._clamp_workspace(START_POS.copy())
+        controller.desired_pos = controller._clamp_workspace(goal.copy())
         hold = _Hold()
         for _ in range(int(round(seconds / model.opt.timestep))):
             controller.update(hold)
             mujoco.mj_step(model, data)
-    err = float(np.linalg.norm(data.xpos[controller.hand_body_id] - START_POS))
+    err = float(np.linalg.norm(data.xpos[controller.hand_body_id] - goal))
     speed = float(np.linalg.norm(data.qvel[controller.dof_indices]))
     if err > tol or speed > qvel_tol:
         raise RuntimeError(
             f"start state did not settle after {seconds} s: hand "
-            f"{err * 1000:.2f} mm from START_POS, |qvel| {speed:.2e} rad/s")
+            f"{err * 1000:.2f} mm from {goal}, |qvel| {speed:.2e} rad/s")
     return StartState(qpos=data.qpos.copy(), ctrl=data.ctrl.copy(),
                       q_des=controller.q_des.copy())
 

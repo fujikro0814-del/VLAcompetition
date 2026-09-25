@@ -21,6 +21,11 @@ CODE_FILES = (
     "src/recovla/data/vla_image_spec.py", "src/recovla/data/vla_state.py", "src/recovla/data/vla_observation.py",
     "src/recovla/data/convert.py", "src/recovla/policy/train_launcher.py", "src/recovla/eval/closed_loop.py",
     "src/recovla/common/code_version.py", "src/recovla/common/config.py", "configs/default.yaml", "configs/g0.yaml",
+    # Step D: 3 色の場面、台本、生成、記録
+    "assets/mjcf/scene_3cube.xml", "src/recovla/common/seeds.py", "src/recovla/sim/frames.py",
+    "src/recovla/sim/scene.py", "src/recovla/sim/rig.py", "src/recovla/sim/contact.py",
+    "src/recovla/expert/script.py", "src/recovla/expert/generate.py", "src/recovla/record/episode.py",
+    "src/recovla/record/snapshot.py",
 )
 
 

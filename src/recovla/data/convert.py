@@ -66,6 +66,47 @@ if STRIDE != int(_CFG["sim"]["stride"]):
 IMAGE_KEYS = spec.IMAGE_KEYS
 ACTION_NAMES = ["dx", "dy", "dz", "drx", "dry", "drz", "gripper"]
 ZERO_STD_EPS = 1e-8   # LeRobot MEAN_STD: (x - mean) / (std + eps)
+# Step D: 3 色の場面のエピソード（recovla.record.episode）から conversion.json の sources に持ち越す旗
+FLAG_KEYS = ("name", "kind", "layout_kind", "target", "instruction", "pair_id", "start_pose", "layout_seed", "retry")
+
+
+def episode_label(meta: dict) -> str:
+    """エピソードの呼び名: 3 色の場面は名前（n_20000_red_r0 など）、流用元の記録は ep_000123。"""
+    return meta["name"] if meta.get("name") else f"ep_{int(meta['episode_id']):06d}"
+
+
+def _sort_key(meta: dict):
+    return (1, meta["name"]) if meta.get("name") else (0, f"{int(meta['episode_id']):09d}")
+
+
+# ------------------------------------------------------------- manifest (B_提案書 §6)
+
+def write_manifest(path, name: str, entries: list, rule: str, base_commit=None) -> dict:
+    """entries: [{"run": 回のフォルダ（<ROOT> からの相対でも可）, "key": エピソードの名前}]。"""
+    comp = {}
+    for e in entries:
+        k = e["key"].split("_")
+        comp_key = k[0] if len(k) < 3 else f"{k[0]}_{k[2]}"
+        comp[comp_key] = comp.get(comp_key, 0) + 1
+    manifest = {"name": name, "created": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
+                "base_commit": base_commit, "rule": rule, "entries": entries, "composition": comp}
+    path = pathlib.Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists():
+        raise FileExistsError(path)
+    path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+    return manifest
+
+
+def manifest_episodes(manifest: dict) -> list:
+    """マニフェストに載った回と名前だけを読む。1 つでも見つからなければ、変換の前に止める。"""
+    paths, missing = [], []
+    for e in manifest["entries"]:
+        p = config.path(e["run"]) / e["key"]
+        (paths if (p / "meta.json").is_file() and (p / "data.npz").is_file() else missing).append(p)
+    if missing:
+        raise FileNotFoundError(f"manifest {manifest['name']}: {len(missing)} episode(s) missing, e.g. {missing[:3]}")
+    return paths
 
 
 def features(size: int = 256) -> dict:
@@ -89,17 +130,17 @@ def load_raw(path: pathlib.Path):
 def raw_episodes(raw_dir: pathlib.Path) -> list:
     eps = [p for p in raw_dir.glob("*/ep_*")
            if p.is_dir() and not p.name.endswith(".partial") and (p / "meta.json").is_file()]
-    return sorted(eps, key=lambda p: json.loads((p / "meta.json").read_text(encoding="utf-8"))["episode_id"])
+    return sorted(eps, key=lambda p: _sort_key(json.loads((p / "meta.json").read_text(encoding="utf-8"))))
 
 
 def episode_arrays(meta: dict, data: dict) -> dict:
     """10 fps state/action arrays + the raw frame indices they come from."""
     if int(meta["record_hz"]) != RAW_HZ:
-        raise ValueError(f"episode {meta['episode_id']}: record_hz {meta['record_hz']} != {RAW_HZ}")
+        raise ValueError(f"episode {episode_label(meta)}: record_hz {meta['record_hz']} != {RAW_HZ}")
     n = int(meta["n_frames"])
     k_frames = (n - 1) // STRIDE
     if k_frames < 1:
-        raise ValueError(f"episode {meta['episode_id']}: too short ({n} raw frames)")
+        raise ValueError(f"episode {episode_label(meta)}: too short ({n} raw frames)")
     idx = np.arange(k_frames) * STRIDE
     nxt = idx + STRIDE
     state = vla_state.policy_state(data["ee_pos"][idx], data["ee_quat"][idx],
@@ -145,7 +186,9 @@ def convert(episodes: list, out: pathlib.Path, name: str, manifest: dict = None)
                     "task": meta["instruction"],
                 })
             ds.save_episode()
-            sources.append({"episode_index": ep_index, "raw_episode_id": meta["episode_id"],
+            sources.append({"episode_index": ep_index, "raw_episode_id": meta.get("episode_id"),
+                            "raw_episode": episode_label(meta), "run": path.parent.name,
+                            **{k: meta.get(k) for k in FLAG_KEYS},
                             "raw_path": str(path), "frames": int(len(arr["raw_index"])),
                             "raw_frames": int(meta["n_frames"]),
                             "placement_id": meta.get("placement_id"),
@@ -153,7 +196,7 @@ def convert(episodes: list, out: pathlib.Path, name: str, manifest: dict = None)
                             "success": meta.get("success"), "retakes": meta.get("retakes"),
                             "meta_sha256": sha256(path / "meta.json"),
                             "data_sha256": sha256(path / "data.npz")})
-            print(f"[convert] ep {ep_index}: raw ep_{meta['episode_id']:06d} "
+            print(f"[convert] ep {ep_index}: raw {episode_label(meta)} "
                   f"{meta['n_frames']} raw frames -> {len(arr['raw_index'])} frames")
     finally:
         ds.finalize()
@@ -247,6 +290,10 @@ def verify(out: pathlib.Path, export_dir, check_image=None) -> bool:
             item = ds[start + k]
             if k == 0:
                 check(item["task"] == meta["instruction"], f"ep {ep}: task '{item['task']}'")
+                if meta.get("target"):        # 3 色の場面: task の色がメタデータの目標の色と一致する
+                    want = _CFG["convert"]["instruction"].format(color=meta["target"])
+                    check(item["task"] == want and src.get("target") == meta["target"],
+                          f"ep {ep}: task color == meta target '{meta['target']}'")
                 check(item["observation.state"].dtype == torch.float32
                       and tuple(item["observation.state"].shape) == (15,), f"ep {ep}: state float32 (15,)")
                 h, w, c = ds.meta.features[IMAGE_KEYS["overhead"]]["shape"]
@@ -282,7 +329,7 @@ def verify(out: pathlib.Path, export_dir, check_image=None) -> bool:
         check(np.all(acts[:, 3:6] == 0.0), f"ep {ep}: rotation actions all zero")
         jumps = int((np.abs(np.diff(states[:, 3:6], axis=0)) > 0.5).sum())
         check(jumps == 0, f"ep {ep}: orientation continuous (jumps {jumps})")
-        exports[src["raw_episode_id"]] = {"action": acts, "state": states, "raw_path": src["raw_path"]}
+        exports[src.get("raw_episode") or episode_label(meta)] = {"action": acts, "state": states, "raw_path": src["raw_path"]}
     for view, n in discriminating.items():
         check(n > 0, f"{view}: {n} sampled frame(s) where {spec.VIEW_TRANSFORMS[view]} differs from every other "
                      f"net transform (the image check can detect a wrong transform)")
@@ -306,7 +353,7 @@ def verify(out: pathlib.Path, export_dir, check_image=None) -> bool:
         export_dir = pathlib.Path(export_dir)
         export_dir.mkdir(parents=True, exist_ok=True)
         for eid, e in exports.items():
-            np.savez(export_dir / f"ep_{eid:06d}_lerobot.npz", action=e["action"],
+            np.savez(export_dir / f"{eid}_lerobot.npz", action=e["action"],
                      state=e["state"], fps=FPS, raw_path=e["raw_path"])
         print(f"[verify] exported actions for the 10 fps replay check to {export_dir}")
     print("[verify] " + ("PASS" if ok else "FAIL"))
@@ -317,6 +364,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="raw episodes -> LeRobot v3.0 dataset")
     ap.add_argument("episodes", nargs="*", help="raw episode directories")
     ap.add_argument("--raw-dir", help="convert every saved episode under this raw root")
+    ap.add_argument("--manifest", help="convert exactly the episodes listed in this manifest (B_提案書 §6)")
     ap.add_argument("--out", help="output dataset directory (must not exist)")
     ap.add_argument("--name", help="dataset name (repo_id local/NAME)")
     ap.add_argument("--verify", help="verify an existing converted dataset directory")
@@ -327,11 +375,15 @@ def main(argv=None) -> int:
     if args.verify:
         return 0 if verify(pathlib.Path(args.verify), args.export_actions, args.check_image) else 1
     episodes = [pathlib.Path(p) for p in args.episodes]
+    manifest = None
+    if args.manifest:
+        manifest = json.loads(pathlib.Path(args.manifest).read_text(encoding="utf-8"))
+        episodes += manifest_episodes(manifest)
     if args.raw_dir:
         episodes += raw_episodes(pathlib.Path(args.raw_dir))
     if not episodes or not args.out or not args.name:
-        ap.error("need --out, --name and episodes (paths or --raw-dir)")
-    convert(episodes, pathlib.Path(args.out), args.name)
+        ap.error("need --out, --name and episodes (paths, --manifest or --raw-dir)")
+    convert(episodes, pathlib.Path(args.out), args.name, manifest)
     return 0
 
 

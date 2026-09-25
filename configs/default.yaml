@@ -49,32 +49,45 @@ scene:
   cube_mass: 0.05
   cube_friction: [1.0, 0.005, 0.0001]
   colors: {red: [1, 0, 0, 1], green: [0, 1, 0, 1], blue: [0, 0, 1, 1]}
-  box: {pos: [0.45, 0.25, 0.0], inner_half: 0.06, wall_top_z: 0.06, success_inner_half: 0.05}
+  box: {pos: [0.45, 0.25, 0.0], inner_half: 0.06, wall_top_z: 0.06, success_inner_half: 0.05, floor_z: 0.01}
   region: {x: [0.33, 0.57], y: [-0.18, 0.08]}     # Step D で視野と到達性を見て確定
   min_center_dist: 0.09
   yaw_range_deg: 30
   layout_kinds: {empty: 0.57, prefilled_1: 0.14, prefilled_2: 0.29}
   start_at_retreat_prob: 0.33
-  box_slots: null            # 箱の中の置き場所の候補（Step D で決める。§14 の R3）
+  box_slots: [[0.03, 0.03], [0.03, -0.03], [-0.03, 0.03], [-0.03, -0.03]]   # 箱の中心からの相対（2x2 の格子、§14 の R3）
+  slot_occupied_radius: 0.03 # 他の立方体の中心が置き場所の中心からこの距離以内なら、その置き場所は埋まっている
+  prefilled_yaw_deg: 0.0     # 先客は置き場所の中心に向き 0 で置いてから静止させる
+  layout_max_tries: 10000    # 配置の棄却抽選の上限（超えたら止める）
   box_slot_clearance_m: {cube: 0.02, wall: 0.01}   # 着地した立方体どうしの隙間・壁との隙間の下限（mj_geomDistance）。指と壁の隙間は条件にしない（壁の上端より上で放すため）
-  settle_prefilled_s: 1.0
-  presentation_camera: {name: presentation, width: 1280, height: 720, pos: null, xyaxes: null}
+  settle_prefilled_s: 1.0    # 配置の後、記録の前に物理を回して静止させる時間（配置の種類によらず同じ）
+  presentation_camera: {name: presentation, width: 1280, height: 720, pos: [1.2, -0.75, 0.75],
+                        xyaxes: [0.72032, 0.693642, 0.0, -0.362773, 0.376726, 0.852334], fovy: 40}
 
 expert:
-  speed_scale: [0.9, 1.1]    # ±10%
+  speed_scale: [0.9, 1.1]    # ±10%（speed_ref に掛ける）
+  speed_ref: {xy: 0.18, z: 0.09}   # 基準の速さ [m/s]。1.1 倍しても DualSense の上限（pad.xy_speed 0.20・z_speed 0.10）を超えない
   gain_per_s: 4.0
   grasp_jitter_m: 0.003
-  approach_height: null      # 流用元は作業空間の上限 0.35 を経由。Step D で決める
+  approach_height: 0.25      # 接近の高さ（x_des）。指先は約 0.15 で、机上・箱の立方体の上を通る
   grasp_z: 0.115             # 流用元 LOW_Z（作業空間の下限）
   lift_m: 0.05
   carry_z: 0.25
   release_z: 0.18            # 流用元 RELEASE_Z
-  retreat_pose: null         # 箱の中が俯瞰カメラから見える位置（Step D）
+  retreat_pose: [0.33, 0.15, 0.30]   # 待機位置（x_des）。俯瞰カメラから見て立方体と箱の奥にあり、何も隠さない（Step D で分割描画で確認）。開始姿勢 retreat もここ
   idle_after_place_s: 1.5
   move_tol_m: 0.001
+  hand_still_speed: 0.005    # 閉じる・放す前に手（hand 原点）の速さがこれ未満であること [m/s]
   close_settle_s: 0.3        # 閉じ切りの判定に使う指の速さの持続時間
+  finger_rest_speed: 0.005   # 指の速さ（2 本の和）がこれ未満を「止まった」とする [m/s]
   slip_retry_max: 3
-  phase: {grasped_lift_min_m: 0.01, drop_dist_m: 0.035, rest_speed: 0.01, rest_hold_s: 0.3}
+  time_limit_s: 40.0         # 生成の 1 回の試みの上限（超えたら打ち切り）
+  phase: {grasped_lift_min_m: 0.01, drop_dist_m: 0.035, rest_speed: 0.01, rest_hold_s: 0.3,
+          above_tol_m: 0.006,      # 目標の真上（x_des の水平位置が目標の中心から、ずれ ±3 mm を含めてこの距離以内）
+          grasp_z_tol_m: 0.004,    # 把持の高さに着いた（x_des の z が grasp_z + この値以下）
+          release_z_tol_m: 0.004,  # 解放の高さに着いた（x_des の z が release_z + この値以下）
+          min_grip_gap_m: 0.02,    # 閉じた指の開き（2 本の和）がこれ未満なら何も掴んでいない
+          retreat_tol_m: 0.003}    # 待機位置に着いた（x_des が待機位置からこの距離以内）
 
 inject:
   A: {lateral_offset_m: [0.025, 0.035], raise_close_m: [0.015, 0.025], raise_ratio: 0.5, lift_m: [0.03, 0.05],
@@ -88,6 +101,8 @@ contact:
   robot_bodies: [hand, left_finger, right_finger]
   obstacles: [table_cubes_except_target, box_walls]
   distmax_m: 0.10            # これより遠い組は distmax を返す（計算の打ち切り）
+  # 最短距離は、native CCD を有効にし当て板を箱形のメッシュにした「距離の計算専用の模型の写し」で測る
+  # （recovla.sim.contact.distance_model。既定の mj_geomDistance は近い組で最大 30 mm 誤った。Step D で確認）
 
 safety_filter:               # 条件付き（接触率 5% 以上のときだけ作る）
   enabled: false
