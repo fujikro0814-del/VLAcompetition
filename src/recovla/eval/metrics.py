@@ -124,7 +124,7 @@ def trial_metrics(rec: TrialRecord, eval_cfg: dict) -> dict:
     t_fire = _num(induce.get("t_fire")) if fired else math.nan
     induced_color = _target_at(target, t, t_fire, steps)
 
-    collateral, collateral_induced = _collateral(rec, eval_cfg, target, t, t_fire, induced_color)
+    collateral, collateral_induced = _collateral(rec, eval_cfg, target, t, t_fire)
 
     reaction = recovery = math.nan
     if established and induced_color is not None:
@@ -218,13 +218,14 @@ def _obstacle_cols(meta: dict) -> dict:
     return {name: k for k, name in enumerate(meta.get("obstacles") or [])}
 
 
-def _collateral(rec: TrialRecord, eval_cfg: dict, target, t, t_fire, induced_color) -> tuple[bool, bool]:
-    """巻き添えと、誘発による移動（trial_record.md §4）。
+def _collateral(rec: TrialRecord, eval_cfg: dict, target, t, t_fire) -> tuple[bool, bool]:
+    """巻き添えと、誘発による移動（trial_record.md §4、掲示板 0015 の 2）。
 
     目標でない立方体が初期位置から水平に collateral_move_m 以上になったこま（越えた時点）ごとに、その移動の区間
     ＝越えたこまの前で最後に静止していた（速さ < success.rest_speed）こまの次から、越えたこままで、を見る。
-    - 区間に、誘発の後（t_fire 以後の窓）で落ちた目標の立方体との contact_cube_cube があり、それが区間の
-      contact_robot より先（同じこまを含む）なら「誘発による移動」
+    - 区間に、誘発の後（t_fire 以後の窓）の立方体どうしの接触（contact_cube_cube。相手の色は問わない）があり、
+      それが区間の最初の contact_robot より先か同じこまなら「誘発による移動」。玉突き（落ちた目標が A に当たり、
+      A がこの立方体に当たった）もこれに入る
     - そうでなく、区間に contact_robot があれば「巻き添え」
     """
     a = rec.arrays
@@ -248,10 +249,7 @@ def _collateral(rec: TrialRecord, eval_cfg: dict, target, t, t_fire, induced_col
         k = cols.get(f"cube_{color}")
         robot = contact_robot[:, k] if k is not None else np.zeros(n, dtype=bool)
         robot = robot & (target != c)
-        if induced_color is not None and induced_color != c:
-            by_drop = ccc[:, c, induced_color] & after_fire
-        else:
-            by_drop = np.zeros(n, dtype=bool)
+        by_drop = np.any(np.delete(ccc[:, c, :], c, axis=1), axis=1) & after_fire   # 自分以外の立方体との接触
         # 各こま i について、i 以前で最後に静止していたこま（なければ −1）
         last_rest = np.maximum.accumulate(np.where(rest[:, c], idx, -1))
         # 各こま i について、i 以前で最後に robot・by_drop があったこま（なければ −1）

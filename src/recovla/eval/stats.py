@@ -52,7 +52,8 @@ def paired_diff_ci(n11: int, n10: int, n01: int, n00: int, alpha: float = 0.05,
     φ 係数で結ぶ:
         下限 = 差 − √((p1 − l1)² − 2φ(p1 − l1)(u2 − p2) + (u2 − p2)²)
         上限 = 差 + √((u1 − p1)² − 2φ(u1 − p1)(p2 − l2) + (p2 − l2)²)
-    φ の補正（phi_correction）の扱いは掲示板の ask で本線に確かめている（文献との照合は未了）。
+    φ の補正（phi_correction=True が既定）は Newcombe の方法 10 の定義（掲示板 0015 の 1 で確定）。
+    Newcombe 1998 Table III の 4 例と照合済み（tests/eval/test_stats.py）。
     対が 0 なら (nan, nan, nan)。
     """
     n11, n10, n01, n00 = (int(v) for v in (n11, n10, n01, n00))

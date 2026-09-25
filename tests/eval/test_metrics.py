@@ -287,6 +287,29 @@ def test_collateral_both_kinds_are_counted_separately(tmp_path):
     assert row["collateral"] is True and row["collateral_induced"] is True
 
 
+def test_chain_collision_is_induced(tmp_path):
+    """玉突き: 落ちた赤が緑に当たり、緑が青に当たる。青の区間の立方体どうしの接触（t_fire 以後）が
+    手より先なので、青の移動も「誘発による移動」（掲示板 0015 の 2。青が赤に直接当たったかは問わない）。"""
+    tr = _p2_trial()
+    tr.cube_cube("red", "green", [LAND_I])
+    _push(tr, "green", LAND_I, 0.03)
+    tr.cube_cube("green", "blue", [LAND_I + 3])
+    _push(tr, "blue", LAND_I + 3, 0.03)
+    tr.touch("cube_blue", [LAND_I + 5])                    # 後から手も青に触れる
+    row = _metrics(tr, tmp_path)
+    assert row["collateral"] is False and row["collateral_induced"] is True
+
+
+def test_cube_cube_before_fire_is_not_induced(tmp_path):
+    """t_fire より前の立方体どうしの接触は誘発によるものでない。手が触れていれば巻き添え。"""
+    tr = _p2_trial()
+    tr.cube_cube("green", "blue", [40])
+    tr.touch("cube_blue", [41])
+    _push(tr, "blue", 40, 0.03)
+    row = _metrics(tr, tmp_path)
+    assert row["collateral"] is True and row["collateral_induced"] is False
+
+
 def test_hand_first_then_dropped_cube_is_collateral(tmp_path):
     tr = _p2_trial()
     tr.touch("cube_blue", [LAND_I - 1])

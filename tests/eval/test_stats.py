@@ -1,9 +1,8 @@
 """stats.py の検査（指示書 0012 §5 の 2〜5）。
 
-Newcombe (1998) の方法 10 は、文献（Statistics in Medicine 17, 2635–2650）に当たれなかったため
-（このクラウドの環境からは出版社・PubMed・論文の写しの置き場への接続が拒否された。2026-09-25）、
-文献の表の値とは照合していない。代わりに、式を別の順で組んだ独立な実装と一致することを確かめる。
-報告 0013 に「文献との照合は未了」と書いた。
+Newcombe (1998) の方法 10 は、文献（Statistics in Medicine 17, 2635–2650）の Table III の 4 例と照合する。
+表の値は監督が文献から引いて掲示板 0015 に書いたもの（このクラウドの環境からは論文に接続できなかったため）。
+あわせて、式を別の順で組んだ独立な実装と一致することも確かめる。
 """
 import itertools
 import math
@@ -133,6 +132,30 @@ def test_newcombe10_properties():
         # 高い信頼度ほど広い
         _, lo99, hi99 = stats.paired_diff_ci(*t, alpha=0.01)
         assert lo99 <= lo + 1e-12 and hi99 >= hi - 1e-12, t
+
+
+# Newcombe 1998 Table III（方法 10）の数値例。(n11, n10, n01, n00) → 差の 95% 区間（小数 4 桁）。掲示板 0015 の 1
+NEWCOMBE_1998_TABLE_III = [
+    ((36, 12, 2, 0), (0.0569, 0.3404)),
+    ((36, 14, 0, 0), (0.1528, 0.4167)),
+    ((2, 98, 0, 0), (0.9178, 0.9945)),
+    ((54, 0, 0, 0), (-0.0664, 0.0664)),
+]
+
+
+@pytest.mark.parametrize("table,ci", NEWCOMBE_1998_TABLE_III)
+def test_newcombe10_matches_newcombe_1998_table_iii(table, ci):
+    _, lo, hi = stats.paired_diff_ci(*table)
+    assert (round(lo, 4), round(hi, 4)) == ci
+
+
+def test_newcombe10_phi_correction_case():
+    """Table III の 4 例は n00 = 0 で φ の補正が効かないので、補正の効く例を別に置く。
+    (10, 0, 0, 10) → [−0.0898, 0.0898] は監督の独立な実装の値（掲示板 0015 の 1）。文献の値ではない。"""
+    d, lo, hi = stats.paired_diff_ci(10, 0, 0, 10)
+    assert (d, round(lo, 4), round(hi, 4)) == (0.0, -0.0898, 0.0898)
+    # 補正しなければ φ = 1 で幅が 0 に潰れる（補正が効いていることの確かめ）
+    assert stats.paired_diff_ci(10, 0, 0, 10, phi_correction=False) == pytest.approx((0.0, 0.0, 0.0), abs=1e-12)
 
 
 def test_newcombe10_no_pairs():
