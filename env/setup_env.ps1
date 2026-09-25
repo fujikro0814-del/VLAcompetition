@@ -140,7 +140,8 @@ function Test-Env {
 }
 
 function Install-Editable {
-    Invoke-Checked $Uv @('pip', 'install', '--python', $VenvPy, '--no-deps', '-e', $Root)
+    # --no-build-isolation: lock の setuptools で組み立てる（ビルド用に別の版を取りに行かない）
+    Invoke-Checked $Uv @('pip', 'install', '--python', $VenvPy, '--no-deps', '--no-build-isolation', '-e', $Root)
 }
 
 $stages = if ($Stage -eq 'all') { @('tools', 'python', 'torch', 'lock', 'extras', 'check', 'editable') } else { @($Stage) }

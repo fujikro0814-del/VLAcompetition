@@ -1,6 +1,6 @@
-"""Replay check for recorded episodes (C4). See teleop/replay.py.
+"""Replay check for recorded episodes (流用元 replay_check.py。変えたのは import だけ). See recovla.record.replay.
 
-    C:\\VLA\\pytools\\python311\\python.exe replay_check.py EPISODE_DIR [...]
+    .venv\\Scripts\\python.exe scripts\\replay_check.py EPISODE_DIR [...]
         [--modes step window last_step shifted] [--out DIR]
 
 Prints the trajectory / image comparison per mode. With --out, also writes
@@ -9,23 +9,19 @@ episode. The episode directories are only read.
 """
 import argparse
 import json
-import os
 import pathlib
 import shutil
 import sys
 import tempfile
 
-# Same as main.py: the embeddable python311 does not add this script's
-# directory to sys.path.
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import cv2
+import mujoco
+import numpy as np
 
-import cv2  # noqa: E402
-import mujoco  # noqa: E402
-import numpy as np  # noqa: E402
+from recovla.record import replay
+from recovla.sim import control, render
 
-from teleop import collect, replay  # noqa: E402
-
-VIDEO_FPS = 20
+VIDEO_FPS = round(1.0 / (control.RECORD_EVERY * control.CFG["sim"]["timestep"]))    # 20 (the raw frame rate)
 
 
 def verdict(mode: str, r: dict) -> str:
@@ -42,7 +38,7 @@ def verdict(mode: str, r: dict) -> str:
 
 def write_video(ep, rep, path: pathlib.Path) -> None:
     cams = list(rep["images"])
-    size = (2 * collect.IMAGE_SIZE, len(cams) * collect.IMAGE_SIZE)  # w, h
+    size = (2 * control.IMAGE_SIZE, len(cams) * control.IMAGE_SIZE)  # w, h
     # cv2.VideoWriter cannot open non-ASCII paths on Windows: write to a
     # temporary ASCII path, then move.
     tmp = pathlib.Path(tempfile.mkdtemp()) / "replay.mp4"
@@ -58,8 +54,8 @@ def lerobot_check(npz_files) -> int:
     """C5: actions as LeRobot returns them (10 fps, 0.1 s each) through the
     same tracker + IK; the hand must follow the raw trajectory within
     WINDOW_TOL_M, and the dataset's state must equal the raw state."""
-    model = mujoco.MjModel.from_xml_path(collect.app.SCENE_PATH)
-    renderer = mujoco.Renderer(model, collect.IMAGE_SIZE, collect.IMAGE_SIZE)
+    model = mujoco.MjModel.from_xml_path(control.SCENE_PATH)
+    renderer = mujoco.Renderer(model, control.IMAGE_SIZE, control.IMAGE_SIZE)
     failed = False
     try:
         for f in npz_files:
@@ -80,7 +76,7 @@ def lerobot_check(npz_files) -> int:
                   f"(recorded {ep.meta['success']})  dataset state vs raw {state_err:.1e} m  "
                   f"-> {'PASS' if ok else 'FAIL'}")
     finally:
-        collect.close_renderer(renderer)
+        render.close_renderer(renderer)
     return 1 if failed else 0
 
 
@@ -99,8 +95,8 @@ def main(argv=None) -> int:
     if not args.episodes:
         ap.error("give episode directories or --lerobot-actions")
 
-    model = mujoco.MjModel.from_xml_path(collect.app.SCENE_PATH)
-    renderer = mujoco.Renderer(model, collect.IMAGE_SIZE, collect.IMAGE_SIZE)
+    model = mujoco.MjModel.from_xml_path(control.SCENE_PATH)
+    renderer = mujoco.Renderer(model, control.IMAGE_SIZE, control.IMAGE_SIZE)
     failed = False
     try:
         for ep_dir in args.episodes:
@@ -132,7 +128,7 @@ def main(argv=None) -> int:
                 out.mkdir(parents=True, exist_ok=True)
                 (out / "report.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
     finally:
-        collect.close_renderer(renderer)
+        render.close_renderer(renderer)
     return 1 if failed else 0
 
 

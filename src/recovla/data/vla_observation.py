@@ -21,13 +21,11 @@ dimension).
 """
 import json
 import pathlib
-import sys
 
 import numpy as np
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-import vla_image_spec as spec  # noqa: E402
-import vla_state  # noqa: E402
+from recovla.data import vla_image_spec as spec
+from recovla.data import vla_state
 
 COPIED_CONVERSION = "conversion.json"     # at <output_dir>/, copied by the training launcher
 

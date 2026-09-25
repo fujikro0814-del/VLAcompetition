@@ -1,4 +1,4 @@
-"""Replay check for recorded episodes (C4, 2026-09-16).
+"""Replay check for recorded episodes (流用元 teleop/replay.py。変えたのは import と許容値の出所だけ).
 
 タスク_テレオペシステムのデータ収集対応_v2.md §5: executing the recorded
 actions in order through the same tracker + IK must reproduce the recorded
@@ -25,12 +25,14 @@ import pathlib
 import mujoco
 import numpy as np
 
-from teleop import collect, recorder
-from teleop.device import DeviceInput, DeviceState
+from recovla.common import config
+from recovla.record import recorder
+from recovla.sim import control
+from recovla.sim.device import DeviceInput, DeviceState
 
 MODES = ("step", "window", "last_step", "shifted")
-WINDOW_TOL_M = 0.005          # plan C4: hand trajectory within 5 mm
-IMAGE_TOL = 2                 # GPU jitter: +-1..2 LSB on a few pixels
+WINDOW_TOL_M = float(config.load("g0")["g0"]["replay_tol_m"])   # plan C4: hand trajectory within 5 mm
+IMAGE_TOL = int(config.load("g0")["g0"]["replay_image_tol"])    # GPU jitter: +-1..2 LSB on a few pixels
 
 
 @dataclasses.dataclass
@@ -137,13 +139,13 @@ def replay(ep: Episode, mode: str, renderer: mujoco.Renderer, model=None,
     and images per camera. mode "actions" executes `actions` (K, 7), each
     covering frame_stride raw frames (2 for 10 fps); frames are still
     captured at every raw frame."""
-    model = model or mujoco.MjModel.from_xml_path(collect.app.SCENE_PATH)
+    model = model or mujoco.MjModel.from_xml_path(control.SCENE_PATH)
     data = mujoco.MjData(model)
-    controller = collect.make_collect_controller(model, data)
+    controller = control.make_collect_controller(model, data)
     pad = ScriptedPad(controller)
-    start = collect.StartState(qpos=ep.data["start_qpos"], ctrl=ep.data["start_ctrl"],
+    start = control.StartState(qpos=ep.data["start_qpos"], ctrl=ep.data["start_ctrl"],
                                q_des=ep.data["start_q_des"])
-    collect.reset_episode(model, data, controller, pad, start, _placement(ep.meta))
+    control.reset_episode(model, data, controller, pad, start, _placement(ep.meta))
     cameras = tuple(ep.meta["cameras"]["names"])
     sampler = recorder.FrameSampler(model, controller, renderer, cameras)
     every = int(ep.meta["record_every"])

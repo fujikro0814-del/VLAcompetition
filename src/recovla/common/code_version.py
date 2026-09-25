@@ -1,25 +1,26 @@
-"""Code version of the VLA pipeline, recorded by the scripted generator, the training launcher and the
-closed-loop evaluator (scripted route check, 2026-09-17).
+"""Code version of the pipeline, recorded by the generator, the training launcher and the evaluator
+(流用元 code_version.py。変えたのは git の場所と対象ファイルの一覧だけ).
 
-git_commit is the HEAD of the pytools/panda_teleop repository (created 2026-09-17 with the portable MinGit in
-02_環境/git; git is not on PATH) and git_dirty tells whether the work tree differed from it, since a commit
+git_commit is the HEAD of the <ROOT> repository (git is not on PATH; the portable MinGit in
+<ROOT>\\.tools\\git is used) and git_dirty tells whether the work tree differed from it, since a commit
 alone does not identify uncommitted code. The SHA-256 of the files that decide recording, conversion,
-observation, training launch and evaluation is recorded as well (the same idea as meta.json
-"software.sha256" written by teleop/collect.py), so the version stays identifiable without git.
-numpy-free; runs in python311 and in the LeRobot venv.
+observation, training launch and evaluation is recorded as well, so the version stays identifiable
+without git. numpy-free.
 """
 import hashlib
 import pathlib
 import shutil
 import subprocess
 
-ROOT = pathlib.Path(__file__).resolve().parent
-PORTABLE_GIT = ROOT.parents[2] / "02_環境" / "git" / "cmd" / "git.exe"
+ROOT = pathlib.Path(__file__).resolve().parents[3]           # <ROOT>
+PORTABLE_GIT = ROOT / ".tools" / "git" / "cmd" / "git.exe"
 CODE_FILES = (
-    "teleop/collect.py", "teleop/recorder.py", "teleop/ledger.py", "teleop/controller_ik.py", "teleop/app.py",
-    "teleop/replay.py", "assets/panda/teleop_scene.xml", "assets/panda/panda.xml",
-    "vla_image_spec.py", "vla_state.py", "vla_observation.py", "convert_to_lerobot.py",
-    "train_launcher.py", "scripted_demo.py", "closed_loop_eval.py", "code_version.py",
+    "src/recovla/sim/control.py", "src/recovla/sim/controller_ik.py", "src/recovla/sim/device.py",
+    "src/recovla/sim/render.py", "src/recovla/record/recorder.py", "src/recovla/record/replay.py",
+    "assets/mjcf/scene_g0.xml", "assets/mjcf/panda/panda.xml",
+    "src/recovla/data/vla_image_spec.py", "src/recovla/data/vla_state.py", "src/recovla/data/vla_observation.py",
+    "src/recovla/data/convert.py", "src/recovla/policy/train_launcher.py", "src/recovla/eval/closed_loop.py",
+    "src/recovla/common/code_version.py", "src/recovla/common/config.py", "configs/default.yaml", "configs/g0.yaml",
 )
 
 

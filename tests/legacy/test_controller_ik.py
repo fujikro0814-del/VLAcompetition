@@ -1,22 +1,20 @@
 """Tests for teleop.controller_ik.TeleopControllerIK behavior."""
-import os
-
 import mujoco
 import numpy as np
 import pytest
 
-from teleop.controller_ik import TeleopControllerIK
-from teleop.device import DeviceInput, DeviceState
+from recovla.sim import control
+from recovla.sim.controller_ik import TeleopControllerIK
+from recovla.sim.device import DeviceInput, DeviceState
 
-SCENE = os.path.join(os.path.dirname(__file__), "..",
-                     "assets", "panda", "teleop_scene.xml")
+SCENE = control.SCENE_PATH
 
 HOME_QPOS = [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]
 
 
 @pytest.fixture()
 def model_data():
-    model = mujoco.MjModel.from_xml_path(os.path.abspath(SCENE))
+    model = mujoco.MjModel.from_xml_path(SCENE)
     data = mujoco.MjData(model)
     for i, q in enumerate(HOME_QPOS, start=1):
         data.qpos[model.joint(f"joint{i}").qposadr[0]] = q

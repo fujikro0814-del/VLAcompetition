@@ -1,13 +1,14 @@
-"""Convert raw teleop episodes (teleop/recorder.py) to a LeRobot v3.0 dataset (C5).
+"""Convert raw episodes (recovla.record.recorder) to a LeRobot v3.0 dataset (流用元 convert_to_lerobot.py).
 
-Run with the LeRobot environment, NOT the teleop python311 (lerobot 0.6.1
-needs Python >= 3.12 and numpy 2):
+変えたこと（B_提案書 §2.2）: recorder.DEFAULT_RAW_DIR への依存と、ラベル（03_収録\\labels）を要求する
+マニフェストを外した。新しいマニフェスト（§6）は生成の回ができる Step D で足す。episode_arrays と
+--verify はそのまま。
 
-    C:\\VLA\\02_環境\\lerobot\\.venv\\Scripts\\python.exe convert_to_lerobot.py
-        --out DIR --name NAME (--raw-dir RAW | EPISODE_DIR ... | --manifest M.json)
-    ... convert_to_lerobot.py --verify DIR [--export-actions NPZ_DIR] [--check-image PNG]
+    .venv\\Scripts\\python.exe -m recovla.data.convert
+        --out DIR --name NAME (--raw-dir RAW | EPISODE_DIR ...)
+    ... -m recovla.data.convert --verify DIR [--export-actions NPZ_DIR] [--check-image PNG]
 
-Only reads the raw episodes (03_収録/raw is never modified). Format follows
+Only reads the raw episodes (they are never modified). Format follows
 HuggingFaceVLA/libero (LeRobot v3.0, images embedded, 10 fps), approved
 2026-09-16:
 
@@ -46,19 +47,22 @@ import sys
 import numpy as np
 from PIL import Image, ImageDraw
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-import vla_image_spec as spec  # noqa: E402
-import vla_state  # noqa: E402
-from teleop import recorder  # noqa: E402  (only for DEFAULT_RAW_DIR: one definition of the path)
+from recovla.common import config
+from recovla.data import vla_image_spec as spec
+from recovla.data import vla_state
 # re-exported for existing callers/tests; the definitions live in vla_state
-from vla_state import Q_DOWN, STATE_NAMES, orientation_deviation, quat_mul  # noqa: E402,F401
+from recovla.data.vla_state import Q_DOWN, STATE_NAMES, orientation_deviation, quat_mul  # noqa: F401
+
+_CFG = config.load()
 
 # 2: per-view net image transforms from vla_image_spec, recorded in conversion.json (2026-09-17);
 # 1: both views flipped left-right, no recorded spec
 CONVERTER_VERSION = 2
-FPS = 10
-RAW_HZ = 20
+FPS = int(_CFG["convert"]["fps"])
+RAW_HZ = round(1.0 / (_CFG["sim"]["record_every"] * _CFG["sim"]["timestep"]))     # 20
 STRIDE = RAW_HZ // FPS
+if STRIDE != int(_CFG["sim"]["stride"]):
+    raise ValueError(f"configs: record rate {RAW_HZ} Hz / fps {FPS} != sim.stride {_CFG['sim']['stride']}")
 IMAGE_KEYS = spec.IMAGE_KEYS
 ACTION_NAMES = ["dx", "dy", "dz", "drx", "dry", "drz", "gripper"]
 ZERO_STD_EPS = 1e-8   # LeRobot MEAN_STD: (x - mean) / (std + eps)
@@ -117,79 +121,6 @@ def sha256(path: pathlib.Path) -> str:
 
 
 # ------------------------------------------------------------ conversion
-
-class ManifestError(ValueError):
-    """The manifest cannot be converted. Raised before any frame is written."""
-
-
-def raw_episodes_by_id(raw_root: pathlib.Path) -> dict:
-    return {json.loads((p / "meta.json").read_text(encoding="utf-8"))["episode_id"]: p
-            for p in raw_episodes(raw_root)}
-
-
-def read_labels(labels_root: pathlib.Path) -> dict:
-    """{episode_id: the latest line}. Same rule as the review screen: append only, latest wins."""
-    latest = {}
-    if not labels_root.is_dir():
-        return latest
-    for path in sorted(labels_root.glob("*.jsonl")):
-        for line in path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                row = json.loads(line)
-                latest[int(row["episode_id"])] = row
-            except (json.JSONDecodeError, KeyError, TypeError, ValueError):
-                continue
-    return latest
-
-
-def episodes_from_manifest(manifest_path, raw_root=None, labels_root=None):
-    """(episode dirs in manifest order, the manifest dict). Stops before converting when
-
-      * an episode id has no folder under the raw root,
-      * an episode was judged 失敗 (the task was not achieved), or
-      * an episode has no label at all,
-
-    each with the offending ids. A manifest is a file a person can write by hand, and the screen
-    is not the only way here, so the converter checks rather than trusting the caller.
-    """
-    manifest_path = pathlib.Path(manifest_path)
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    ids = [int(i) for i in manifest.get("episodes", [])]
-    if not ids:
-        raise ManifestError(f"{manifest_path}: no episodes listed")
-    raw_root = pathlib.Path(raw_root) if raw_root else recorder.DEFAULT_RAW_DIR
-    # manifests/<name>.json and labels/<day>.jsonl live side by side under the same folder
-    labels_root = pathlib.Path(labels_root) if labels_root else manifest_path.parent.parent / "labels"
-    found = raw_episodes_by_id(raw_root)
-    missing = [i for i in ids if i not in found]
-    if missing:
-        raise ManifestError(f"{manifest_path}: no recording under {raw_root} for episode(s) "
-                            f"{missing}")
-    labels = read_labels(labels_root)
-    unlabelled = [i for i in ids if i not in labels]
-    if unlabelled:
-        raise ManifestError(f"{manifest_path}: episode(s) {unlabelled} have no label in "
-                            f"{labels_root}; every episode in a manifest must be reviewed first")
-    invalid = [i for i in ids if labels[i].get("result") == "失敗"]
-    if invalid:
-        raise ManifestError(f"{manifest_path}: episode(s) {invalid} are labelled 失敗 "
-                            f"(the task was not achieved) and cannot be training data")
-    return [found[i] for i in ids], manifest
-
-
-def manifest_record(manifest_path, manifest: dict) -> dict:
-    """What goes into conversion.json: enough to see what was converted without opening the
-    manifest file again."""
-    return {"path": str(pathlib.Path(manifest_path).resolve()),
-            "name": manifest.get("name"), "created": manifest.get("created"),
-            "base_commit": manifest.get("base_commit"), "rule": manifest.get("rule"),
-            "n": manifest.get("n"), "teacher_frames": manifest.get("teacher_frames"),
-            "composition": manifest.get("composition"),
-            "sha256": sha256(pathlib.Path(manifest_path))}
-
 
 def convert(episodes: list, out: pathlib.Path, name: str, manifest: dict = None) -> None:
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
@@ -383,15 +314,9 @@ def verify(out: pathlib.Path, export_dir, check_image=None) -> bool:
 
 
 def main(argv=None) -> int:
-    ap = argparse.ArgumentParser(description="raw teleop episodes -> LeRobot v3.0 dataset")
+    ap = argparse.ArgumentParser(description="raw episodes -> LeRobot v3.0 dataset")
     ap.add_argument("episodes", nargs="*", help="raw episode directories")
     ap.add_argument("--raw-dir", help="convert every saved episode under this raw root")
-    ap.add_argument("--manifest", help="convert the episodes listed in a manifest "
-                                       "(03_収録\\manifests\\<name>.json); not with --raw-dir")
-    ap.add_argument("--raw-root", help="with --manifest: where to look the episode ids up "
-                                       "(default: the production raw folder)")
-    ap.add_argument("--labels-root", help="with --manifest: where the labels are "
-                                          "(default: the labels folder next to the manifests)")
     ap.add_argument("--out", help="output dataset directory (must not exist)")
     ap.add_argument("--name", help="dataset name (repo_id local/NAME)")
     ap.add_argument("--verify", help="verify an existing converted dataset directory")
@@ -401,21 +326,12 @@ def main(argv=None) -> int:
     args = ap.parse_args(argv)
     if args.verify:
         return 0 if verify(pathlib.Path(args.verify), args.export_actions, args.check_image) else 1
-    manifest = None
-    if args.manifest:
-        if args.raw_dir or args.episodes:
-            ap.error("--manifest names the episodes; do not also pass --raw-dir or episode paths")
-        episodes, loaded = episodes_from_manifest(args.manifest, args.raw_root, args.labels_root)
-        manifest = manifest_record(args.manifest, loaded)
-        print(f"[convert] manifest {manifest['name']} ({manifest['n']} episodes, "
-              f"base_commit {manifest['base_commit']})")
-    else:
-        episodes = [pathlib.Path(p) for p in args.episodes]
-        if args.raw_dir:
-            episodes += raw_episodes(pathlib.Path(args.raw_dir))
+    episodes = [pathlib.Path(p) for p in args.episodes]
+    if args.raw_dir:
+        episodes += raw_episodes(pathlib.Path(args.raw_dir))
     if not episodes or not args.out or not args.name:
-        ap.error("need --out, --name and episodes (paths, --raw-dir or --manifest)")
-    convert(episodes, pathlib.Path(args.out), args.name, manifest)
+        ap.error("need --out, --name and episodes (paths or --raw-dir)")
+    convert(episodes, pathlib.Path(args.out), args.name)
     return 0
 
 

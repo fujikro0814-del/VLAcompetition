@@ -1,0 +1,156 @@
+# すべての設定値（B_提案書 §5、承認 2026-09-25、掲示板 0005 の修正を反映）。
+# 流用元の値には出典を併記した。null は Step D 以降で測って決める値。
+# コードに数値を直書きしない（手順書 §1-5）。読み込みは recovla.common.config.load()。
+
+paths:                       # すべて <ROOT> からの相対
+  models_home: models/hf_home
+  policy_snapshot: models/hf_home/hub/models--lerobot--smolvla_libero/snapshots/31d453f7edd78c839a8bbc39744a292686daf0de
+  outputs: outputs
+  train_output: outputs/train          # 学習の出力先（起動器が <設定名>_<日時> を作る）
+  train_logs: outputs/train_logs       # 学習の標準出力の記録
+  scene_g0: assets/mjcf/scene_g0.xml
+  scene: assets/mjcf/scene_3cube.xml
+
+sim:                         # 流用元 collect.py / closed_loop_eval.py
+  timestep: 0.002            # モデルの値と照合する（食い違えば止める）
+  steps_per_pad_read: 10     # scripted_demo.STEPS_PER_LOOP
+  record_every: 25           # 20 Hz
+  stride: 2                  # 10 fps
+  image_size: 256
+  cameras: [overhead, wrist]
+  settle_s: 3.0
+  start_pos: [0.307, 0.0, 0.35]
+  home_qpos: [0.0, -0.785, 0.0, -2.356, 0.0, 1.571, 0.785]
+  finger_open: 0.04
+  fingertip_offset: 0.1034
+  table_top_z: 0.0
+  png_compression: 1         # 流用元 recorder.PNG_COMPRESSION（PNG は可逆。速さのため 1）
+  workspace: {x: [0.28, 0.62], y: [-0.30, 0.40], z: [0.115, 0.35]}
+
+controller:                  # 流用元 app.make_controller（DLS）と collect の上書き
+  ik_gain: 0.08
+  max_joint_step: 0.03
+  rot_weight: 0.5
+  lock_orientation: true
+  null_gain: 0.05
+  ik_damping: 0.05
+  tracker_omega: 20.0
+  max_target_vel: 0.8
+  q_des_leash: 0.10
+  max_dx_norm: 0.10
+  scale: 1.0
+
+pad:                         # 流用元 dualsense_device.PROFILES["collect"]
+  xy_speed: 0.20
+  z_speed: 0.10
+
+scene:
+  cube_size: 0.04
+  cube_mass: 0.05
+  cube_friction: [1.0, 0.005, 0.0001]
+  colors: {red: [1, 0, 0, 1], green: [0, 1, 0, 1], blue: [0, 0, 1, 1]}
+  box: {pos: [0.45, 0.25, 0.0], inner_half: 0.06, wall_top_z: 0.06, success_inner_half: 0.05}
+  region: {x: [0.33, 0.57], y: [-0.18, 0.08]}     # Step D で視野と到達性を見て確定
+  min_center_dist: 0.09
+  yaw_range_deg: 30
+  layout_kinds: {empty: 0.57, prefilled_1: 0.14, prefilled_2: 0.29}
+  start_at_retreat_prob: 0.33
+  box_slots: null            # 箱の中の置き場所の候補（Step D で決める。§14 の R3）
+  box_slot_clearance_m: {cube: 0.02, wall: 0.01}   # 着地した立方体どうしの隙間・壁との隙間の下限（mj_geomDistance）。指と壁の隙間は条件にしない（壁の上端より上で放すため）
+  settle_prefilled_s: 1.0
+  presentation_camera: {name: presentation, width: 1280, height: 720, pos: null, xyaxes: null}
+
+expert:
+  speed_scale: [0.9, 1.1]    # ±10%
+  gain_per_s: 4.0
+  grasp_jitter_m: 0.003
+  approach_height: null      # 流用元は作業空間の上限 0.35 を経由。Step D で決める
+  grasp_z: 0.115             # 流用元 LOW_Z（作業空間の下限）
+  lift_m: 0.05
+  carry_z: 0.25
+  release_z: 0.18            # 流用元 RELEASE_Z
+  retreat_pose: null         # 箱の中が俯瞰カメラから見える位置（Step D）
+  idle_after_place_s: 1.5
+  move_tol_m: 0.001
+  close_settle_s: 0.3        # 閉じ切りの判定に使う指の速さの持続時間
+  slip_retry_max: 3
+  phase: {grasped_lift_min_m: 0.01, drop_dist_m: 0.035, rest_speed: 0.01, rest_hold_s: 0.3}
+
+inject:
+  A: {lateral_offset_m: [0.025, 0.035], raise_close_m: [0.015, 0.025], raise_ratio: 0.5, lift_m: [0.03, 0.05],
+      confirm: {hand_rise_min_m: 0.03, cube_rise_max_m: 0.01}}
+  B: {min_dist_from_box_m: 0.15}
+  C: {min_clearance_m: 0.03}
+  landing: {max_tilt_deg: 10, min_clearance_m: 0.03, max_invalid_ratio: 0.2,
+            rest_speed: 0.01, rest_hold_s: 0.3, finger_gap_margin_m: 0.005}
+
+contact:
+  robot_bodies: [hand, left_finger, right_finger]
+  obstacles: [table_cubes_except_target, box_walls]
+  distmax_m: 0.10            # これより遠い組は distmax を返す（計算の打ち切り）
+
+safety_filter:               # 条件付き（接触率 5% 以上のときだけ作る）
+  enabled: false
+  d_min_m: null
+  d_detect_m: null
+  gamma: 0.85
+  tracking_lag_margin_m: 0.017   # 参照から手先までの遅れ 5〜17mm（落とし穴13）
+
+convert:
+  fps: 10
+  instruction: "put the {color} cube in the box"
+
+train:
+  scope: expert
+  batch_size: 32
+  seed: 1000
+  num_workers: 6
+  log_freq: 50
+  gpu_limit_gib: 14.0
+  rename_map: {observation.images.image: observation.images.camera1,
+               observation.images.image2: observation.images.camera2}
+  runs:
+    smoke: {steps: 1000}
+    K1: {steps: 8000, save_freq: 8000}
+    R1: {steps: 30000, save_freq: 5000}
+    N1: {steps: 30000, save_freq: 5000}
+    second_round: {steps: 10000, save_freq: 5000, optimizer_lr: 3.0e-5,
+                   warmup_steps: 200, decay_steps: 10000, decay_lr: 2.5e-6}   # §10
+
+runtime:
+  mode: rtc                  # sync | naive | rtc
+  exec_interval: 10
+  delay_steps: 2
+  rtc_guidance_horizon: 10   # 10 と 40 を比べる
+  rtc_schedule: EXP          # LINEAR と EXP を比べる。必ず明示（落とし穴16）
+  rtc_max_guidance_weight: 10.0
+
+eval:
+  time_limit_s: 30
+  success: {rest_speed: 0.01, rest_hold_s: 1.0}
+  error_lift_m: 0.02
+  collateral_move_m: 0.02
+  reaction_close_m: 0.02
+  recovery_lift_m: 0.02
+  P1: {delay_s: 0.3, lateral_offset_m: [0.025, 0.035], confirm_window_s: 2.0, confirm_lift_m: 0.02}
+  P2: {min_dist_from_box_m: 0.15, min_lift_m: 0.05}
+  P3: {min_clearance_m: 0.03}
+  induction_min_rate: 0.8
+
+seeds:                       # §9 の帯（学習用は 100000 未満、評価は 100000 以上）
+  eval_base: 100000
+  g0: [100000, 100019]       # G0 の照合だけ（予備実験と同じ種）
+  final_eval: [110000, 189999]
+  selection: [190000, 199999]
+
+planner:
+  model: claude-haiku-4-5
+  temperature: 0.0
+  max_tokens: 1024
+  timeout_s: 30
+  step_timeout_s: 30
+  retry: 1
+  completion_hold_s: 1.0
+  color_detect: null         # 色ごとの閾値（Step I）
+
+viz: {fps: 30}

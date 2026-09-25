@@ -1,10 +1,13 @@
 """Training launcher: one lerobot-train run on one converted dataset, described by one config JSON.
 
-Started by start_training.bat (LeRobot venv). What it fixes, from the data-management survey
+流用元 train_launcher.py。変えたのはパス（HF_HOME、出力先、ログ先、出発点のスナップショット）を
+configs/default.yaml の paths から取ることと、数値（GPU の上限、log_freq の既定）の出所だけ。起動器の検査はそのまま。
+
+What it fixes, from the data-management survey
 (<共有フォルダ>\\03_収録\\データ管理と学習データ選定_調査報告.md, 2026-09-17):
 
   lerobot-train.exe (python -m lerobot.scripts.train does not exist in LeRobot 0.6.1)
-  HF_HUB_OFFLINE=1, HF_HOME=<VLA>\\02_環境\\hf_home
+  HF_HUB_OFFLINE=1, HF_HOME=<ROOT>\\models\\hf_home (configs paths.models_home)
   --policy.path = local snapshot dir of lerobot/smolvla_libero (a repo id fails on Windows)
   --dataset.repo_id=local/<dataset folder> + --dataset.root (repo_id alone looks in HF_HOME)
   --rename_map for both views (a one-view map silently trains with one image)
@@ -36,7 +39,7 @@ Config JSON (unknown keys are rejected):
   extra_args   list of further "--key=value" lerobot-train arguments (launcher-owned keys refused)
   note         free text, copied to train_run.json
 
-    <venv>\\Scripts\\python.exe train_launcher.py CONFIG.json [--confirm] [--dry-run]
+    .venv\\Scripts\\python.exe -m recovla.policy.train_launcher CONFIG.json [--confirm] [--dry-run]
                                                  [--output-root DIR] [--log-root DIR]
 """
 import argparse
@@ -54,29 +57,30 @@ import subprocess
 import sys
 import tempfile
 
-HERE = pathlib.Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE))
-import code_version  # noqa: E402
-import vla_image_spec as spec  # noqa: E402
-import vla_observation  # noqa: E402
+from recovla.common import code_version, config
+from recovla.data import vla_image_spec as spec
+from recovla.data import vla_observation
+
+_CFG = config.load()
 
 LAUNCHER_VERSION = 2          # 2: log_freq, log summary, loss.csv/png, code version (2026-09-17)
-DEFAULT_LOG_FREQ = 50
+DEFAULT_LOG_FREQ = int(_CFG["train"]["log_freq"])
 # lerobot logs mem_gb = torch.cuda.max_memory_allocated() / 1024**3 per logging interval, i.e. GiB of
 # allocated tensors (the CUDA caching allocator reserves somewhat more).
-GPU_LIMIT_GIB = 14.0
+GPU_LIMIT_GIB = float(_CFG["train"]["gpu_limit_gib"])
 LOSS_CSV = "loss.csv"
 LOSS_PNG = "loss.png"
-VLA_ROOT = HERE.parents[2]                                   # C:\VLA
-HF_HOME = VLA_ROOT / "02_環境" / "hf_home"
-OUTPUT_ROOT = VLA_ROOT / "04_学習" / "checkpoints"
-LOG_ROOT = VLA_ROOT / "04_学習" / "logs"
-POLICY_REPO = "lerobot/smolvla_libero"
+HF_HOME = config.path(_CFG["paths"]["models_home"])
+OUTPUT_ROOT = config.path(_CFG["paths"]["train_output"])
+LOG_ROOT = config.path(_CFG["paths"]["train_logs"])
+POLICY_SNAPSHOT = config.path(_CFG["paths"]["policy_snapshot"])   # lerobot/smolvla_libero
 RUN_RECORD = "train_run.json"
 CONFIG_COPY = "train_launch_config.json"
 # policy camera slots of smolvla_libero <- dataset keys written by convert_to_lerobot.py
 RENAME_MAP = {spec.IMAGE_KEYS["overhead"]: "observation.images.camera1",
               spec.IMAGE_KEYS["wrist"]: "observation.images.camera2"}
+if RENAME_MAP != dict(_CFG["train"]["rename_map"]):
+    raise ValueError(f"configs train.rename_map {_CFG['train']['rename_map']} != {RENAME_MAP}")
 SCOPE_FLAGS = {"expert": ["--policy.train_expert_only=true", "--policy.freeze_vision_encoder=true"],
                "full": ["--policy.train_expert_only=false", "--policy.freeze_vision_encoder=false"]}
 MAX_BATCH_14GIB = {"expert": 62, "full": 12}                 # Step C, per-process cap 14 GiB
@@ -170,10 +174,11 @@ def build_command(trainer, policy_dir, cfg, output_dir, job_name) -> list:
 
 
 def policy_snapshot() -> pathlib.Path:
-    os.environ["HF_HOME"] = str(HF_HOME)
-    os.environ["HF_HUB_OFFLINE"] = "1"
-    from huggingface_hub import snapshot_download        # reads HF_HOME / HF_HUB_OFFLINE at import
-    return pathlib.Path(snapshot_download(POLICY_REPO))
+    """The local snapshot folder of lerobot/smolvla_libero under HF_HOME (a repo id fails on Windows)."""
+    if not (POLICY_SNAPSHOT / "config.json").is_file():
+        raise LaunchError(f"{POLICY_SNAPSHOT}: config.json not found; copy the starting model first "
+                          f"(scripts/01_import_from_vla.ps1 -Part assets)")
+    return POLICY_SNAPSHOT
 
 
 def check_symlinks(where) -> None:

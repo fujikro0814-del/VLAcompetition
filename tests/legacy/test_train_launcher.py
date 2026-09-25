@@ -1,4 +1,5 @@
-"""Tests for train_launcher.py (start_training.bat), 2026-09-17.
+"""Tests for recovla.policy.train_launcher (流用元 tests/test_train_launcher.py). 設定例
+train_config_example.json は持ち込まないので、その検査 1 件は外した（B_提案書 §2.2）.
 
 No GPU and no LeRobot needed: the dataset is a minimal fake with the meta files the launcher reads, and
 lerobot-train is replaced by a small script that behaves like it (refuses an existing output dir, creates
@@ -11,9 +12,9 @@ import sys
 
 import pytest
 
-import train_launcher as tl
-import vla_image_spec as spec
-import vla_observation
+from recovla.data import vla_image_spec as spec
+from recovla.data import vla_observation
+from recovla.policy import train_launcher as tl
 
 FAKE_TRAINER = r'''
 import pathlib, sys, time
@@ -102,11 +103,6 @@ def test_config_missing_required(tmp_path):
 def test_config_batch_over_limit_allowed_explicitly(tmp_path):
     cfg = tl.load_config(make_config(tmp_path, tmp_path / "ds", batch_size=64, allow_batch_over_14gib=True))
     assert cfg["batch_size"] == 64
-
-
-def test_example_config_is_valid_apart_from_dataset():
-    cfg = tl.load_config(tl.HERE / "train_config_example.json")
-    assert "CHANGE_ME" in cfg["dataset"]
 
 
 # --- command -----------------------------------------------------------------------------------------

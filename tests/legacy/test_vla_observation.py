@@ -10,8 +10,8 @@ import pathlib
 import numpy as np
 import pytest
 
-import vla_image_spec as spec
-import vla_observation as obs
+from recovla.data import vla_image_spec as spec
+from recovla.data import vla_observation as obs
 
 H, W = 6, 8
 
@@ -99,8 +99,8 @@ def test_evaluation_entry_equals_training_dataset_images(tmp_path):
     pytest.importorskip("lerobot")
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
-    import convert_to_lerobot as conv
-    from tests.test_convert_to_lerobot import make_raw_episode
+    from recovla.data import convert as conv
+    from tests.legacy.test_convert_to_lerobot import make_raw_episode
 
     raw_root = tmp_path / "raw"
     ep, meta, data = make_raw_episode(raw_root, n=21)

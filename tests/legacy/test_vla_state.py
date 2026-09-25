@@ -5,7 +5,7 @@ import re
 import numpy as np
 import pytest
 
-import vla_state
+from recovla.data import vla_state
 
 
 def frames(n=50, seed=0):
@@ -69,6 +69,6 @@ def test_shape_errors():
 def test_state_is_not_computed_outside_vla_state():
     root = pathlib.Path(vla_state.__file__).parent
     pattern = re.compile(r"def (quat_mul|orientation_deviation)\b|fingers\[:, ?1\] \*=|conj_down|Q_DOWN = ")
-    for name in ("convert_to_lerobot.py", "vla_observation.py"):
+    for name in ("convert.py", "vla_observation.py"):
         hits = [ln for ln in (root / name).read_text(encoding="utf-8").splitlines() if pattern.search(ln)]
         assert not hits, f"{name} defines state computation itself: {hits}"

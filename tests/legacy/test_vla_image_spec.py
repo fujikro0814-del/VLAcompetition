@@ -7,7 +7,7 @@ import re
 import numpy as np
 import pytest
 
-import vla_image_spec as spec
+from recovla.data import vla_image_spec as spec
 
 H, W = 5, 7
 
@@ -105,7 +105,7 @@ def test_record_roundtrip_and_rejections():
 def test_no_image_transform_written_outside_the_spec():
     root = pathlib.Path(spec.__file__).parent
     pattern = re.compile(r"fliplr\(|flipud\(|rot90\(|\[::-1\]|\[:, ?::-1\]|\[::-1, ?::-1\]")
-    for name in ("convert_to_lerobot.py", "vla_observation.py"):
+    for name in ("convert.py", "vla_observation.py"):
         hits = [ln for ln in (root / name).read_text(encoding="utf-8").splitlines() if pattern.search(ln)]
         assert not hits, f"{name} transforms images itself: {hits}"
 
@@ -113,5 +113,5 @@ def test_no_image_transform_written_outside_the_spec():
 def test_cameras_match_the_recorder():
     pytest.importorskip("mujoco")
     pytest.importorskip("cv2")
-    from teleop import collect
-    assert tuple(collect.CAMERAS) == spec.CAMERAS
+    from recovla.sim import control
+    assert tuple(control.CAMERAS) == spec.CAMERAS

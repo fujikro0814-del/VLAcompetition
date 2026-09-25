@@ -1,18 +1,19 @@
-"""Closed-loop evaluation, minimal version (scripted route check, 2026-09-17).
+"""Closed-loop evaluation, minimal version (流用元 closed_loop_eval.py、B_提案書 §2.2).
 
-Run with the LeRobot venv (mujoco 3.2.3 was added to it on 2026-09-17 for this):
+Step C で変えたのは import、数値の出所（configs）と、推論 1 回の時間の記録（動作は変えない）だけ。
+実行器の分離（sync / naive / rtc）は Step G で行う。
 
-    C:\\VLA\\02_環境\\lerobot\\.venv\\Scripts\\python.exe closed_loop_eval.py run --checkpoint CKPT --out DIR
+    .venv\\Scripts\\python.exe -m recovla.eval.closed_loop run --checkpoint CKPT --out DIR
         (--placement-ids 4 [--repeats 10] [--first-seed 100000] | --eval-seeds 100000 100019)
-    ... closed_loop_eval.py replay-dataset --dataset DIR [--episode 0] [--shift 1] --out DIR
-    ... closed_loop_eval.py check-observation --dataset DIR [--episode 0] --out DIR
-    ... closed_loop_eval.py open-loop --checkpoint CKPT --dataset DIR [--episode 0] --out DIR
+    ... -m recovla.eval.closed_loop replay-dataset --dataset DIR [--episode 0] [--shift 1] --out DIR
+    ... -m recovla.eval.closed_loop check-observation --dataset DIR [--episode 0] --out DIR
+    ... -m recovla.eval.closed_loop open-loop --checkpoint CKPT --dataset DIR [--episode 0] --out DIR
 
 Timing (Step 0 report §1): one 10 fps action covers 50 physics steps (RECORD_EVERY 25 x STRIDE 2, 0.1 s),
 as in the conversion (action k = x_des[raw 2k+2] - x_des[raw 2k]) and the Step D 10 fps replay.
 
-Entry: the action goes where the DualSense goes. ActionPad (a scripted_demo.ScriptPad) is the inner device of
-collect.VelocityCommandIntegrator; for 50 physics steps it holds velocity = action_xyz / 0.1 s, so the
+Entry: the action goes where the DualSense goes. ActionPad (a recovla.sim.device.ScriptPad) is the inner device of
+control.VelocityCommandIntegrator; for 50 physics steps it holds velocity = action_xyz / 0.1 s, so the
 integrator adds action_xyz / 50 per step and x_des moves by exactly action_xyz. The gripper target is the sign
 of action[6] (+1 close, -1 open); when it differs from the controller's state, square is pressed for the first
 physics step of the window (the controller toggles on the rising edge; one press closes fully). Tracker, IK
@@ -42,34 +43,33 @@ import contextlib
 import dataclasses
 import io
 import json
-import os
 import pathlib
 import shutil
 import sys
 import tempfile
+import time
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import cv2
+import mujoco
+import numpy as np
 
-import cv2  # noqa: E402
-import mujoco  # noqa: E402
-import numpy as np  # noqa: E402
+from recovla.common import code_version, config
+from recovla.data import vla_image_spec as spec
+from recovla.data import vla_observation, vla_state
+from recovla.record import recorder
+from recovla.sim import control, render
+from recovla.sim.device import ScriptPad, pad_state
 
-import code_version  # noqa: E402
-import scripted_demo  # noqa: E402
-import vla_image_spec as spec  # noqa: E402
-import vla_observation  # noqa: E402
-import vla_state  # noqa: E402
-from teleop import app, collect, recorder  # noqa: E402
-
-STRIDE = 2                                       # convert_to_lerobot.STRIDE (20 Hz raw -> 10 fps)
-STEPS_PER_ACTION = STRIDE * collect.RECORD_EVERY  # 50
-ACTION_DT = STEPS_PER_ACTION * 0.002             # checked against the model timestep in EvalRig
-TIME_LIMIT_S = 30.0
-REST_SPEED = 0.01
-REST_HOLD_S = 1.0
-TABLE_TOP_Z = collect.TABLE_TOP_Z
-BOX_PHYSICAL_INNER_HALF_XY = 0.06                # teleop_scene.xml walls at +-0.065, 5 mm thick
-EVAL_SEED_BASE = scripted_demo.EVAL_SEED_BASE
+_CFG = config.load()
+STRIDE = int(_CFG["sim"]["stride"])               # convert STRIDE (20 Hz raw -> 10 fps)
+STEPS_PER_ACTION = STRIDE * control.RECORD_EVERY  # 50
+ACTION_DT = STEPS_PER_ACTION * float(_CFG["sim"]["timestep"])   # checked against the model timestep in EvalRig
+TIME_LIMIT_S = float(_CFG["eval"]["time_limit_s"])
+REST_SPEED = float(_CFG["eval"]["success"]["rest_speed"])
+REST_HOLD_S = float(_CFG["eval"]["success"]["rest_hold_s"])
+TABLE_TOP_Z = control.TABLE_TOP_Z
+BOX_PHYSICAL_INNER_HALF_XY = float(_CFG["scene"]["box"]["inner_half"])   # scene walls at +-0.065, 5 mm thick
+EVAL_SEED_BASE = int(_CFG["seeds"]["eval_base"])
 TASK = recorder.INSTRUCTION
 
 
@@ -79,17 +79,17 @@ class EvalRig:
     """Simulation with the collection controller and the action pad in the DualSense's place."""
 
     def __init__(self):
-        self.model = mujoco.MjModel.from_xml_path(app.SCENE_PATH)
+        self.model = mujoco.MjModel.from_xml_path(control.SCENE_PATH)
         self.data = mujoco.MjData(self.model)
         if abs(STEPS_PER_ACTION * float(self.model.opt.timestep) - ACTION_DT) > 1e-12:
             raise RuntimeError(f"timestep {self.model.opt.timestep} does not give {ACTION_DT} s per action")
         with contextlib.redirect_stdout(io.StringIO()):
-            self.start = collect.settle_start_state(self.model)
-            self.controller = collect.make_collect_controller(self.model, self.data)
-        self.pad = scripted_demo.ScriptPad()
-        self.integrator = collect.make_integrator(self.pad, self.model, self.controller)
-        self.renderer = mujoco.Renderer(self.model, collect.IMAGE_SIZE, collect.IMAGE_SIZE)
-        self.sampler = recorder.FrameSampler(self.model, self.controller, self.renderer, collect.CAMERAS)
+            self.start = control.settle_start_state(self.model)
+            self.controller = control.make_collect_controller(self.model, self.data)
+        self.pad = ScriptPad()
+        self.integrator = control.make_integrator(self.pad, self.model, self.controller)
+        self.renderer = mujoco.Renderer(self.model, control.IMAGE_SIZE, control.IMAGE_SIZE)
+        self.sampler = recorder.FrameSampler(self.model, self.controller, self.renderer, control.CAMERAS)
         mujoco.mj_forward(self.model, self.data)
         self.box_pos = self.data.xpos[self.model.body(recorder.BOX_BODY).id].copy()
         self.cube_id = self.model.body(recorder.CUBE_BODY).id
@@ -99,11 +99,11 @@ class EvalRig:
         self.right_id = self.model.body("right_finger").id
 
     def close(self) -> None:
-        collect.close_renderer(self.renderer)
+        render.close_renderer(self.renderer)
 
     def reset(self, placement: recorder.Placement) -> None:
-        collect.reset_episode(self.model, self.data, self.controller, self.integrator, self.start, placement)
-        self.pad.state = scripted_demo.pad_state()
+        control.reset_episode(self.model, self.data, self.controller, self.integrator, self.start, placement)
+        self.pad.state = pad_state()
         self.integrator.refresh()
 
     def cube_linvel(self) -> np.ndarray:
@@ -183,7 +183,7 @@ class TrialLog:
         self.extra["action"].append(np.full(7, np.nan))
         self._left = self._right = False
         self._speed_max = 0.0
-        raw = dict(zip(collect.CAMERAS, images))
+        raw = dict(zip(control.CAMERAS, images))
         self.raw_video.append(np.hstack([raw["overhead"], raw["wrist"]]))
         return frame, raw
 
@@ -204,13 +204,13 @@ def execute_action(rig: EvalRig, action, on_step=None) -> None:
     vel = a[:3] / ACTION_DT
     press = gripper_target(a) != bool(rig.controller.gripper_closed)
     for j in range(STEPS_PER_ACTION):
-        rig.pad.state = scripted_demo.pad_state(vel=vel, button_grip=bool(press and j == 0))
+        rig.pad.state = pad_state(vel=vel, button_grip=bool(press and j == 0))
         rig.integrator.refresh()
         rig.controller.update(rig.integrator)
         mujoco.mj_step(rig.model, rig.data)
         if on_step is not None:
             on_step()
-    rig.pad.state = scripted_demo.pad_state()
+    rig.pad.state = pad_state()
     rig.integrator.refresh()
 
 
@@ -218,7 +218,7 @@ def run_trial(rig: EvalRig, placement: recorder.Placement, act, time_limit_s: fl
     """act(k, frame, raw_by_view) -> 7-d action for 10 fps step k (frame = recorder frame dict)."""
     rig.reset(placement)
     log = TrialLog(rig)
-    every = collect.RECORD_EVERY
+    every = control.RECORD_EVERY
     step = 0
     k = 0
     with contextlib.redirect_stdout(io.StringIO()):
@@ -278,11 +278,35 @@ class PolicyActions:
         self.input_check = None
         self.generator = None
         self.policy_frames = []
+        self.timing = []
 
     def start_trial(self, seed: int) -> None:
         self.policy.reset()
         self.generator = self.torch.Generator().manual_seed(int(seed))
         self.policy_frames = []
+        self.timing = []
+        self.input_check = None      # 試行ごとに最初の推論で入力照合を行う（Step C 完了条件 3「全試行で」）
+
+    def _queue_empty(self) -> bool:
+        queues = getattr(self.policy, "_queues", None) or {}
+        q = queues.get("action")
+        return q is None or len(q) == 0
+
+    def _sync(self) -> None:
+        if str(self.device).startswith("cuda"):
+            self.torch.cuda.synchronize()
+
+    def timing_summary(self) -> dict:
+        """select_action の実時間 [s]。inferred = その呼び出しで推論した（待ち行列が空だった）。"""
+        inf = [s for s, inferred in self.timing if inferred]
+        rest = [s for s, inferred in self.timing if not inferred]
+        return {"calls": len(self.timing), "inferences": len(inf),
+                "inference_s": inf,
+                "inference_mean_s": float(np.mean(inf)) if inf else None,
+                "inference_max_s": float(np.max(inf)) if inf else None,
+                "queued_call_mean_s": float(np.mean(rest)) if rest else None,
+                "note": "select_action wall time incl. torch.cuda.synchronize; the first inference of a "
+                        "process includes warm-up"}
 
     def check_inputs(self, obs: dict, batch: dict) -> dict:
         """Value-level check that each dataset view reaches its camera slot (rename_map pitfall)."""
@@ -324,8 +348,14 @@ class PolicyActions:
             np.round(obs[spec.IMAGE_KEYS[v]].transpose(1, 2, 0) * 255.0).astype(np.uint8)
             for v in ("overhead", "wrist")]))
         batch = self.prepare(obs)
+        noise = self.noise()
+        inferred = self._queue_empty()
+        self._sync()
+        t0 = time.perf_counter()
         with self.torch.no_grad():
-            action = self.policy.select_action(batch, noise=self.noise())
+            action = self.policy.select_action(batch, noise=noise)
+        self._sync()
+        self.timing.append((time.perf_counter() - t0, inferred))
         action = self.post(action)
         return action.detach().cpu().numpy().reshape(-1)[:7].astype(np.float64)
 
@@ -377,7 +407,7 @@ def save_trial(out_dir, index: int, log: TrialLog, attrs: dict, policy_frames=No
             "cube_half": recorder.CUBE_HALF,
         },
         "timing": {"physics_dt": float(log.rig.model.opt.timestep), "steps_per_action": STEPS_PER_ACTION,
-                   "record_every": collect.RECORD_EVERY},
+                   "record_every": control.RECORD_EVERY},
         "frame_fields": {
             "action": "10 fps action executed during the physics steps after this frame (NaN: none)",
             "contact_left_any/contact_right_any": "finger body touched the cube in at least one of the 25 "
@@ -433,7 +463,8 @@ def cmd_run(a) -> int:
                 "mode": "policy", "seed": seed, "placement": placement_attrs(placement),
                 "checkpoint": str(policy.checkpoint), "checkpoint_given": policy.checkpoint_given,
                 "code_version": version,
-                "policy_config": policy.config, "input_check": policy.input_check}, policy.policy_frames)
+                "policy_config": policy.config, "input_check": policy.input_check,
+                "inference_timing": policy.timing_summary()}, policy.policy_frames)
             results.append({"trial": i, "seed": seed, "placement_id": placement.placement_id,
                             "success": rec["success"], "success_time_s": rec["success_time_s"]})
             print(f"[eval] trial {i} seed {seed} placement {placement.placement_id}: "
@@ -546,8 +577,8 @@ def cmd_check_observation(a) -> int:
         rig.reset(raw_placement(meta))
         frame, images = rig.sampler.capture(rig.data, 0)
         render_diff = {v: int(np.abs(img.astype(int) - recorder.read_png(raw_path / v / "000000.png").astype(int)).max())
-                       for v, img in zip(collect.CAMERAS, images)}
-        obs0 = builder.build(dict(zip(collect.CAMERAS, images)), frame, TASK)
+                       for v, img in zip(control.CAMERAS, images)}
+        obs0 = builder.build(dict(zip(control.CAMERAS, images)), frame, TASK)
         item0 = ds[lo]
         live = {key: float((torch.from_numpy(obs0[key]) - item0[key]).abs().max())
                 for key in (*spec.IMAGE_KEYS.values(), "observation.state")}

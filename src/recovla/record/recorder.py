@@ -1,21 +1,19 @@
-"""Raw episode recording for VLA data collection (C3, 2026-09-16).
+"""Raw episode recording (流用元 teleop/recorder.py、B_提案書 §2.2).
 
-Spec: VLA_卒業研究_開発計画および引継ぎ資料_v15.docx 表3-7/表3-8 and
-タスク_テレオペシステムのデータ収集対応_v2.md, with the decisions approved
-on 2026-09-16 (see teleop/collect.py).
+変えたこと: 数値は configs から読む（値は流用元と同じ。立方体 1 個の配置の範囲は configs/g0.yaml）。
+流用元の収録フォルダの既定値（DEFAULT_RAW_DIR）、フォルダを数え上げる scan_raw、収録の記録
+SessionLog は持ち込まない（台帳・03_収録 との結合を外す）。
 
-Layout (03_収録/raw is never modified after recording):
+Layout of one saved episode:
 
-    <raw>/<YYYY-MM-DD>/ep_000123/
+    <day or run dir>/ep_000123/
         overhead/000000.png ...    256x256 RGB, one per frame
         wrist/000000.png ...
         data.npz                   per-frame and per-step arrays (below)
         meta.json
-    <raw>/<YYYY-MM-DD>/session_0007.jsonl   saves / discards / retakes
 
 An episode is written to ep_XXXXXX.partial while recording and renamed on
-save; a discard deletes the .partial directory. Discarded attempts are not
-kept, only counted (retakes), as the spec requires.
+save; a discard deletes the .partial directory.
 
 Frames: frame i is taken at physics step i * RECORD_EVERY (frame 0 = the
 reset state, before any step). Images and state come from the same instant:
@@ -47,29 +45,34 @@ import cv2
 import mujoco
 import numpy as np
 
+from recovla.common import config
+
+_CFG = config.load("g0")
+_G0 = _CFG["g0"]
+_PLACE = _G0["placement"]
+
 SCHEMA_VERSION = 1
-INSTRUCTION = "put the cube in the box"
-DEFAULT_RAW_DIR = pathlib.Path(__file__).resolve().parents[4] / "03_収録" / "raw"
+INSTRUCTION = _G0["instruction"]
 
 # Initial cube range (B-2) and fixed training placements (表3-5: 8-10
 # placements x repetitions, not a new random placement per episode).
-N_PLACEMENTS = 10
-CUBE_X_RANGE = (0.35, 0.55)
-CUBE_Y_RANGE = (-0.15, 0.05)
-CUBE_YAW_RANGE = (-np.pi / 4, np.pi / 4)
-CUBE_HALF = 0.02
-PLACEMENT_MIN_SEPARATION = 0.05   # [m] between training placements
-TRAIN_SEED_LIMIT = 3000           # training seeds 0-2999, evaluation >= 100000
-CUBE_BODY = "cube_green"
+N_PLACEMENTS = int(_PLACE["n"])
+CUBE_X_RANGE = tuple(float(v) for v in _PLACE["x_range"])
+CUBE_Y_RANGE = tuple(float(v) for v in _PLACE["y_range"])
+_YAW_HALF = np.pi / (180.0 / float(_PLACE["yaw_half_range_deg"]))    # 45 deg -> np.pi / 4.0 exactly as the source
+CUBE_YAW_RANGE = (-_YAW_HALF, _YAW_HALF)
+CUBE_HALF = float(_CFG["scene"]["cube_size"]) / 2.0
+PLACEMENT_MIN_SEPARATION = float(_PLACE["min_separation"])   # [m] between training placements
+TRAIN_SEED_LIMIT = int(_PLACE["train_seed_limit"])           # training seeds 0-2999, evaluation >= 100000
+CUBE_BODY = _PLACE["cube_body"]
 
-# Success = cube resting inside the goal box: same volume as teleop/game.py
-# CubeGame._cube_in_box (defaults inner_half_xy=0.05, wall_top_z=0.06).
+# Success = cube resting inside the goal box: same volume as the source's
+# CubeGame._cube_in_box (inner_half_xy=0.05, wall_top_z=0.06).
 BOX_BODY = "goal_box"
-BOX_INNER_HALF_XY = 0.05
-BOX_WALL_TOP_Z = 0.06
+BOX_INNER_HALF_XY = float(_CFG["scene"]["box"]["success_inner_half"])
+BOX_WALL_TOP_Z = float(_CFG["scene"]["box"]["wall_top_z"])
 
-PNG_COMPRESSION = 1               # fast; PNG is lossless at any level
-SESSION_EPISODE_LIMIT = 30        # 表3-8: about 30 per sitting
+PNG_COMPRESSION = int(_CFG["sim"]["png_compression"])        # fast; PNG is lossless at any level
 
 
 # ------------------------------------------------------------- placements
@@ -125,75 +128,12 @@ def cube_in_box(cube_pos, box_pos) -> bool:
                 and 0.0 < rel[2] < BOX_WALL_TOP_Z)
 
 
-# ------------------------------------------------------------- raw index
-
-@dataclasses.dataclass
-class RawIndex:
-    next_episode_id: int
-    next_session: int
-    saved_per_placement: dict
-
-
-def scan_raw(root: pathlib.Path) -> RawIndex:
-    """Episode ids and session numbers are global across dates.
-
-    Legacy (episode_id_scheme 1): ids from the folders present now, so moving folders reuses ids. The
-    collection session uses the episode ledger (teleop/ledger.py) since 2026-09-17; this stays for reading
-    old folders and for the work-area tools that measured the problem."""
-    root = pathlib.Path(root)
-    max_ep, max_session, counts = -1, 0, {}
-    if root.is_dir():
-        for day in root.iterdir():
-            if not day.is_dir():
-                continue
-            for p in day.iterdir():
-                if p.is_dir() and p.name.startswith("ep_"):
-                    try:
-                        max_ep = max(max_ep, int(p.name[3:].split(".")[0]))
-                    except ValueError:
-                        continue
-                    meta = p / "meta.json"
-                    if not p.name.endswith(".partial") and meta.is_file():
-                        pid = json.loads(meta.read_text(encoding="utf-8")).get("placement_id")
-                        if pid is not None:
-                            counts[pid] = counts.get(pid, 0) + 1
-                elif p.is_file() and p.name.startswith("session_") and p.suffix == ".jsonl":
-                    try:
-                        max_session = max(max_session, int(p.stem[8:]))
-                    except ValueError:
-                        continue
-    return RawIndex(max_ep + 1, max_session + 1, counts)
-
+# ------------------------------------------------------------- placement order
 
 def next_placement(placements: list, saved: dict) -> Placement:
     """Fewest saved episodes first, lowest id on ties: keeps the repetition
     counts balanced across sessions."""
     return min(placements, key=lambda p: (saved.get(p.placement_id, 0), p.placement_id))
-
-
-class SessionLog:
-    """session_XXXX.jsonl. Nothing is written to the raw directory until the
-    first episode event (save / discard): starting and quitting the app
-    without recording leaves 03_収録/raw untouched. The session number of such
-    a run is then reused by the next one."""
-
-    PASSIVE = ("session_start", "session_end")
-
-    def __init__(self, root: pathlib.Path, session: int, day: str):
-        self.path = pathlib.Path(root) / day / f"session_{session:04d}.jsonl"
-        self._pending = []
-
-    def write(self, event: str, **fields) -> None:
-        rec = {"event": event, "time": _now_iso(), **fields}
-        if not self.path.exists() and event in self.PASSIVE:
-            if event == "session_start":
-                self._pending.append(rec)
-            return
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self.path, "a", encoding="utf-8") as f:
-            for r in self._pending + [rec]:
-                f.write(json.dumps(r, ensure_ascii=False) + "\n")
-        self._pending = []
 
 
 def _now_iso() -> str:

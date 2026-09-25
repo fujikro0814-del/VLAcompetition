@@ -188,3 +188,28 @@ class MouseKeyboardInput(DeviceInput):
         # Do NOT destroy the window here: it is shared with WristCamera and
         # the app tears everything down with cv2.destroyAllWindows().
         self._running = False
+
+
+# ---------------------------------------------------------------------------
+# 流用元 scripted_demo.py の pad_state・ScriptPad（B_提案書 §2.2）。台本・方策・誘発は
+# この入口（pad.state = pad_state(...) -> integrator.refresh()）以外で腕を動かさない。
+
+def pad_state(**kw) -> DeviceState:
+    return DeviceState(pos=np.zeros(3), quat=np.array([1.0, 0.0, 0.0, 0.0]), button_clutch=True,
+                       **{"button_grip": False, "vel": np.zeros(3), **kw})
+
+
+class ScriptPad(DeviceInput):
+    """The DualSense's place in the chain: the integrator reads this once per pad read."""
+
+    def __init__(self):
+        self.state = pad_state()
+
+    def start(self) -> None:
+        pass
+
+    def stop(self) -> None:
+        pass
+
+    def read(self) -> DeviceState:
+        return self.state

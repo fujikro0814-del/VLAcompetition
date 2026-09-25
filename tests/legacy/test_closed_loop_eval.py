@@ -1,4 +1,4 @@
-"""Tests for closed_loop_eval.py (scripted route check evaluator, 2026-09-17).
+"""Tests for recovla.eval.closed_loop (流用元 tests/test_closed_loop_eval.py; imports only changed).
 
 Simulation parts need only mujoco (python311 and the LeRobot venv); the input check needs torch and is skipped
 without it. No trained policy is loaded here: the policy path is covered by the stage 0 wiring run.
@@ -9,9 +9,10 @@ import pathlib
 import numpy as np
 import pytest
 
-import closed_loop_eval as cle
-import vla_image_spec as spec
-from teleop import collect, recorder
+from recovla.data import vla_image_spec as spec
+from recovla.eval import closed_loop as cle
+from recovla.record import recorder
+from recovla.sim import control
 
 
 @pytest.fixture(scope="module")
@@ -28,7 +29,7 @@ def placement4():
 def test_timing_matches_conversion():
     assert cle.STEPS_PER_ACTION == 50 and cle.ACTION_DT == pytest.approx(0.1)
     pytest.importorskip("PIL")                     # convert_to_lerobot needs PIL (LeRobot venv only)
-    import convert_to_lerobot as conv
+    from recovla.data import convert as conv
     assert cle.STRIDE == conv.STRIDE
 
 
@@ -101,7 +102,7 @@ class _StubSampler:
     def capture(self, data, step):
         frame = {k: np.zeros(3) for k in cle.TrialLog.FRAME_KEYS}
         frame["step"] = step
-        return frame, [np.zeros((4, 4, 3), np.uint8)] * len(collect.CAMERAS)
+        return frame, [np.zeros((4, 4, 3), np.uint8)] * len(control.CAMERAS)
 
 
 class _StubRig:

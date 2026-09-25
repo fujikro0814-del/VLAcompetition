@@ -1,9 +1,8 @@
-"""Tests for convert_to_lerobot.py (C5). Needs the LeRobot environment:
+"""Tests for recovla.data.convert (流用元 tests/test_convert_to_lerobot.py). Needs lerobot.
 
-    C:\\VLA\\02_環境\\lerobot\\.venv\\Scripts\\python.exe -m pytest tests/test_convert_to_lerobot.py
-
-Skipped under the teleop python311 (no lerobot there). Builds a synthetic raw
-episode in tmp_path, so it never touches 03_収録.
+Builds a synthetic raw episode in tmp_path. 流用元の検査のうち、ラベルを要求するマニフェスト
+（03_収録 の labels）の 7 件は、その機能を外したので持ち込まない（B_提案書 §2.2・§6。新しい
+マニフェストは Step D で足す）。
 """
 import json
 import pathlib
@@ -14,7 +13,7 @@ import pytest
 pytest.importorskip("lerobot")
 from PIL import Image  # noqa: E402
 
-import convert_to_lerobot as conv  # noqa: E402
+from recovla.data import convert as conv  # noqa: E402
 
 
 def _axis_quat(axis, angle):
@@ -71,10 +70,10 @@ def test_orientation_deviation():
 
 
 def test_convert_and_verify(tmp_path):
-    raw = tmp_path / "03_収録" / "raw"
+    raw = tmp_path / "raw"
     for eid in (0, 1):
         make_raw_episode(raw, episode_id=eid, n=21 + 4 * eid)
-    out = tmp_path / "03_収録" / "lerobot" / "unit"
+    out = tmp_path / "lerobot" / "unit"
     episodes = conv.raw_episodes(raw)
     conv.convert(episodes, out, "unit")
     assert conv.verify(out, tmp_path / "exports") is True
@@ -88,101 +87,12 @@ def test_convert_and_verify(tmp_path):
         conv.convert(episodes, out, "unit")
 
 
-# ------------------------------------------------------------------- manifests
-
-def make_labelled_raw(tmp_path, ids=(0, 1, 2), results=None, label_ids=None):
-    """A raw folder plus the labels next to a manifests folder, as 03_収録 is laid out."""
-    root = tmp_path / "03_収録"
-    raw = root / "raw"
-    for i in ids:
+def test_the_ways_of_calling_the_converter(tmp_path):
+    """フォルダを並べる／--raw-dir の呼び出し（流用元の test_the_old_ways_of_calling_the_converter_still_work から、
+    ラベルの用意を除いたもの）。"""
+    raw = tmp_path / "raw"
+    for i in (0, 1):
         make_raw_episode(raw, episode_id=i, n=21 + 4 * i)
-    labels = root / "labels"
-    labels.mkdir(parents=True, exist_ok=True)
-    results = results or {}
-    with open(labels / "2026-09-16.jsonl", "w", encoding="utf-8") as f:
-        for i in (label_ids if label_ids is not None else ids):
-            f.write(json.dumps({"episode_id": i, "at": "2026-09-16T10:00:00", "by": "01",
-                                "vocab_version": 1, "result": results.get(i, "成功"),
-                                "stage": None, "recovery": "なし", "manner": [], "defects": [],
-                                "reason": ""}, ensure_ascii=False) + "\n")
-    (root / "manifests").mkdir(parents=True, exist_ok=True)
-    return root, raw
-
-
-def write_manifest(root, name, episodes, **extra):
-    record = {"name": name, "created": "2026-09-16", "base_commit": "a3f91c2",
-              "rule": "動作確認", "episodes": list(episodes), "n": len(episodes),
-              "teacher_frames": 999, "composition": {"total": len(episodes)}}
-    record.update(extra)
-    path = root / "manifests" / f"{name}.json"
-    path.write_text(json.dumps(record, ensure_ascii=False), encoding="utf-8")
-    return path
-
-
-def test_manifest_picks_the_listed_episodes_in_order(tmp_path):
-    root, raw = make_labelled_raw(tmp_path)
-    path = write_manifest(root, "A", [2, 0])
-    episodes, manifest = conv.episodes_from_manifest(path, raw_root=raw)
-    assert [p.name for p in episodes] == ["ep_000002", "ep_000000"]
-    assert manifest["name"] == "A"
-
-
-def test_manifest_stops_when_a_recording_is_missing(tmp_path):
-    root, raw = make_labelled_raw(tmp_path, ids=(0, 1))
-    path = write_manifest(root, "A", [0, 7, 9])
-    with pytest.raises(conv.ManifestError) as e:
-        conv.episodes_from_manifest(path, raw_root=raw)
-    assert "[7, 9]" in str(e.value)                    # 該当する番号を挙げる
-
-
-def test_manifest_stops_on_an_episode_that_did_not_achieve_the_task(tmp_path):
-    root, raw = make_labelled_raw(tmp_path, results={1: "失敗"})
-    path = write_manifest(root, "A", [0, 1, 2])
-    with pytest.raises(conv.ManifestError) as e:
-        conv.episodes_from_manifest(path, raw_root=raw)
-    assert "[1]" in str(e.value) and "失敗" in str(e.value)
-
-
-def test_manifest_stops_on_an_unlabelled_episode(tmp_path):
-    root, raw = make_labelled_raw(tmp_path, label_ids=(0, 2))
-    path = write_manifest(root, "A", [0, 1, 2])
-    with pytest.raises(conv.ManifestError) as e:
-        conv.episodes_from_manifest(path, raw_root=raw)
-    assert "[1]" in str(e.value) and "no label" in str(e.value)
-
-
-def test_manifest_is_recorded_in_conversion_json(tmp_path):
-    root, raw = make_labelled_raw(tmp_path, ids=(0, 1))
-    path = write_manifest(root, "A_all_valid", [0, 1])
-    episodes, manifest = conv.episodes_from_manifest(path, raw_root=raw)
-    out = tmp_path / "ds"
-    conv.convert(episodes, out, "unit_manifest", conv.manifest_record(path, manifest))
-    record = json.loads((out / "meta" / "conversion.json").read_text(encoding="utf-8"))["manifest"]
-    assert record["name"] == "A_all_valid" and record["n"] == 2
-    assert record["base_commit"] == "a3f91c2" and record["rule"] == "動作確認"
-    assert record["composition"] == {"total": 2}          # 中身を見にファイルを探しにいかなくてよい
-    assert record["sha256"] == conv.sha256(path)
-
-
-def test_normalisation_statistics_come_from_the_chosen_set(tmp_path):
-    """同じ生データでも、選んだ集合が違えば統計量は違う（全件変換して学習で絞る方式を採らない理由）。"""
-    root, raw = make_labelled_raw(tmp_path, ids=(0, 1, 2))
-    stats = {}
-    for name, ids in (("A", [0, 1]), ("B", [2])):
-        path = write_manifest(root, name, ids)
-        episodes, manifest = conv.episodes_from_manifest(path, raw_root=raw)
-        out = tmp_path / f"ds_{name}"
-        conv.convert(episodes, out, f"unit_{name}", conv.manifest_record(path, manifest))
-        stats[name] = json.loads((out / "meta" / "stats.json").read_text(encoding="utf-8"))
-    a = np.asarray(stats["A"]["observation.state"]["mean"], float)
-    b = np.asarray(stats["B"]["observation.state"]["mean"], float)
-    assert not np.allclose(a, b)
-    assert stats["A"]["observation.state"]["count"] != stats["B"]["observation.state"]["count"]
-
-
-def test_the_old_ways_of_calling_the_converter_still_work(tmp_path):
-    """--manifest を足しても、フォルダを並べる／--raw-dir の呼び出しは変わらない。"""
-    root, raw = make_labelled_raw(tmp_path, ids=(0, 1))
     listed = conv.main(["--out", str(tmp_path / "ds_list"), "--name", "list",
                         str(raw / "2026-09-16" / "ep_000000")])
     assert listed == 0
@@ -191,14 +101,6 @@ def test_the_old_ways_of_calling_the_converter_still_work(tmp_path):
     assert conv.main(["--out", str(tmp_path / "ds_dir"), "--name", "dir", "--raw-dir", str(raw)]) == 0
     record = json.loads((tmp_path / "ds_dir" / "meta" / "conversion.json").read_text(encoding="utf-8"))
     assert "manifest" not in record and len(record["sources"]) == 2
-
-
-def test_manifest_and_raw_dir_cannot_be_given_together(tmp_path):
-    root, raw = make_labelled_raw(tmp_path, ids=(0,))
-    path = write_manifest(root, "A", [0])
-    with pytest.raises(SystemExit):
-        conv.main(["--out", str(tmp_path / "ds"), "--name", "x", "--manifest", str(path),
-                   "--raw-dir", str(raw)])
 
 
 def test_dataset_images_are_transformed_per_view_at_value_level(tmp_path):

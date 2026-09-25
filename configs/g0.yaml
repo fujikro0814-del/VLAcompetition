@@ -1,0 +1,24 @@
+# G0（Step C 完了条件 2・3）用の上書き。旧場面（立方体 1 個）と旧評価の条件のまま（B_提案書 §5）。
+# recovla.common.config.load("g0") で default.yaml の上に重ねる。
+
+g0:
+  scene: assets/mjcf/scene_g0.xml
+  legacy_run: outputs/legacy/stage2_20260917-221354          # 予備実験の学習（conversion.json つき）
+  checkpoint: outputs/legacy/stage2_20260917-221354/checkpoints/019000/pretrained_model
+  legacy_eval: outputs/legacy/eval_stage2_closed_loop         # 予備実験の評価（summary.json、trial_*.json）
+  raw_episode: outputs/legacy/raw/ep_800000                   # 再生確認用の raw 1 本
+  placement_ids: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  repeats: 2
+  first_seed: 100000                                           # 種 100000〜100019（予備実験と同じ）
+  min_successes: 15                                            # 20 回で 15 回以上（手順書 Step C 完了条件 3）
+  replay_tol_m: 0.005                                          # 手先 5 mm（流用元 replay.WINDOW_TOL_M）
+  replay_image_tol: 2                                          # 画像 ±2（GPU の揺らぎ。流用元 replay.IMAGE_TOL）
+  instruction: "put the cube in the box"                      # 流用元 recorder.INSTRUCTION（予備実験の学習の指示）
+  placement:                                                   # 流用元 recorder.py の初期範囲（B-2）と学習配置
+    n: 10
+    x_range: [0.35, 0.55]
+    y_range: [-0.15, 0.05]
+    yaw_half_range_deg: 45                                     # ±pi/4
+    min_separation: 0.05
+    train_seed_limit: 3000                                     # 学習配置の種 0〜2999
+    cube_body: cube_green

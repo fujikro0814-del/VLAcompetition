@@ -1,7 +1,7 @@
 import numpy as np
 import mujoco
 
-from teleop.device import DeviceInput, DeviceState
+from recovla.sim.device import DeviceInput, DeviceState
 
 
 class TeleopControllerIK:

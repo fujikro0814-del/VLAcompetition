@@ -1,70 +1,81 @@
-"""Tests for teleop.replay (C4): a headless recorded episode must replay
-bit-exactly per step, within 5 mm from the 20 Hz actions, and the wrong
-action definitions must be detected."""
-import os
-import socket
+"""Tests for recovla.record.replay (流用元 tests/test_replay.py): a headless recorded episode must replay
+bit-exactly per step, within 5 mm from the 20 Hz actions, and the wrong action definitions must be detected.
 
+流用元の fixture は DualSense の模擬と台帳つきの収録（CollectSession）で 1 本を記録していた。台帳との
+結合を外したので、同じ入口（ScriptPad -> 積分器 -> 制御器）と同じ記録器（EpisodeWriter・FrameSampler）で、
+CollectSession の記録の手順（開始時に 1 こま、25 物理ステップごとに 1 こま、保存時に打ち切り）をここに書いた。
+検査そのもの（test_* の中身）は流用元のまま。
+"""
 import mujoco
 import numpy as np
 import pytest
 
-from teleop import collect, ledger, recorder, replay
-from teleop.dualsense_device import FakeDualSenseInput, RawPadState
-
-SCENE = os.path.join(os.path.dirname(__file__), "..",
-                     "assets", "panda", "teleop_scene.xml")
+from recovla.record import recorder, replay
+from recovla.sim import control, render
+from recovla.sim.device import ScriptPad, pad_state
 
 
 @pytest.fixture(scope="module")
 def model():
-    return mujoco.MjModel.from_xml_path(os.path.abspath(SCENE))
+    return mujoco.MjModel.from_xml_path(control.SCENE_PATH)
 
 
 @pytest.fixture(scope="module")
 def renderer(model):
-    r = mujoco.Renderer(model, collect.IMAGE_SIZE, collect.IMAGE_SIZE)
+    r = mujoco.Renderer(model, control.IMAGE_SIZE, control.IMAGE_SIZE)
     yield r
-    collect.close_renderer(r)
+    render.close_renderer(r)
 
 
 @pytest.fixture(scope="module")
 def episode(model, renderer, tmp_path_factory):
-    raw = tmp_path_factory.mktemp("03_収録") / "raw"
+    raw = tmp_path_factory.mktemp("raw")
     data = mujoco.MjData(model)
-    controller = collect.make_collect_controller(model, data)
-    pad = FakeDualSenseInput(profile="collect", deadzone=0.15)
-    integrator = collect.make_integrator(pad, model, controller)
+    controller = control.make_collect_controller(model, data)
+    pad = ScriptPad()
+    integrator = control.make_integrator(pad, model, controller)
     integrator.start()
-    start = collect.settle_start_state(model)
-    led = ledger.EpisodeLedger.init(raw.parent / "ledger", [(raw, "production")], backup_dir=None,
-                                    production_hosts=[socket.gethostname()])
-    session = collect.CollectSession(model, data, controller, integrator, start,
-                                     renderer, raw, "00", 8, episode_ledger=led, kind="production")
+    start = control.settle_start_state(model)
+    placement = recorder.training_placements()[4]
+    control.reset_episode(model, data, controller, integrator, start, placement)
+    sampler = recorder.FrameSampler(model, controller, renderer, control.CAMERAS)
+    every = control.RECORD_EVERY
+    timestep = float(model.opt.timestep)
+    writer = recorder.EpisodeWriter(raw, 0, "2026-09-25", control.CAMERAS, every, every * timestep)
+    grip = controller.gripper_indices[0]
+    writer.add_step(controller.desired_pos, float(data.ctrl[grip]))
+    writer.add_frame(*sampler.capture(data, 0))
+    step = {"n": 0}
 
-    def run(steps, **inputs):
-        buttons = {k: inputs.pop(k) for k in ("circle", "triangle", "square") if k in inputs}
-        raw_state = RawPadState(**inputs)
-        raw_state.buttons.update(buttons)
-        pad.backend.state = raw_state
-        session.handle_input(integrator.refresh())
+    def run(steps, **pad_kw):
+        pad.state = pad_state(**pad_kw)
+        integrator.refresh()
         for _ in range(steps):
             controller.update(integrator)
             mujoco.mj_step(model, data)
-            session.after_step()
+            step["n"] += 1
+            writer.add_step(controller.desired_pos, float(data.ctrl[grip]))
+            if step["n"] % every == 0:
+                writer.add_frame(*sampler.capture(data, step["n"]))
 
-    run(1, circle=True)
-    run(1)
-    run(300, ly=1.0, lx=-0.5)       # accelerate / move
-    run(137)                          # stop (not on a window boundary)
-    run(400, r2=1.0)                  # descend
-    run(1, square=True)               # close
+    run(300, vel=np.array([0.20, 0.10, 0.0]))     # accelerate / move
+    run(137)                                       # stop (not on a window boundary)
+    run(400, vel=np.array([0.0, 0.0, -0.10]))     # descend
+    run(1, button_grip=True)                       # close
     run(212)
-    run(350, l2=1.0, lx=1.0)          # lift and move
-    run(1, square=True)               # open
+    run(350, vel=np.array([0.0, 0.20, 0.10]))     # lift and move
+    run(1, button_grip=True)                       # open
     run(240)
-    run(collect.SAVE_HOLD_STEPS + 5, triangle=True)
-    session.close()
-    path = next(p for p in raw.glob("*/ep_*") if not p.name.endswith(".partial"))
+    n_keep = step["n"] // every + 1
+    last = writer.frames[n_keep - 1]
+    box = data.xpos[model.body(recorder.BOX_BODY).id]
+    meta = {"episode_id": 0, "placement_id": placement.placement_id, "placement_seed": placement.seed,
+            "cube_init": {"x": placement.x, "y": placement.y, "z": recorder.CUBE_HALF, "yaw": placement.yaw},
+            "success": recorder.cube_in_box(last["cube_pos"], box), "record_every": every,
+            "record_hz": round(1.0 / (every * timestep)), "duration_s": (n_keep - 1) * every * timestep,
+            "cameras": {"names": list(control.CAMERAS), "width": control.IMAGE_SIZE, "height": control.IMAGE_SIZE}}
+    extra = {"start_qpos": start.qpos, "start_ctrl": start.ctrl, "start_q_des": start.q_des}
+    path = writer.finalize(n_keep, meta, extra)
     return replay.load_episode(path)
 
 
@@ -101,7 +112,7 @@ def test_episode_directory_is_not_modified(episode, renderer, model):
 
 def test_scripted_pad_presses_once_per_toggle(model):
     data = mujoco.MjData(model)
-    controller = collect.make_collect_controller(model, data)
+    controller = control.make_collect_controller(model, data)
     pad = replay.ScriptedPad(controller)
     pad.reset(controller.target_pos)
     controller.gripper_closed = False
