@@ -245,14 +245,28 @@ def cmd_train10(a) -> int:
                                                                  for g in got)
         log = pathlib.Path(rec["log"]).read_text(encoding="utf-8", errors="replace")
         lrs = [float(v) for v in re.findall(r" lr:([0-9.eE+-]+)", log)]
+        # 学習率: ログは各手の scheduler.step() の後の値を 2 桁で出す（ピークは記録点の間に来る）。同じ設定で
+        # LeRobot の予定を作り直し、各手の後の値を同じ桁に丸めたものと比べる
+        import torch
+        from lerobot.optim.schedulers import CosineDecayWithWarmupSchedulerConfig
+        opt = torch.optim.SGD([torch.nn.Parameter(torch.zeros(1))], lr=float(lr["optimizer_lr"]))
+        sched = CosineDecayWithWarmupSchedulerConfig(num_warmup_steps=2, num_decay_steps=10,
+                                                     peak_lr=float(lr["optimizer_lr"]),
+                                                     decay_lr=float(lr["decay_lr"])).build(opt, 10)
+        expected = []
+        for _ in range(10):
+            opt.step()
+            sched.step()
+            expected.append(float(f"{opt.param_groups[0]['lr']:0.1e}"))
         report.update({
             "log_summary": rec.get("log_summary"), "checkpoint": str(ckpt), "checkpoint_exists": ckpt.is_dir(),
             "stats_bit_equal_to_replaced": stat_check, "stats_ok": all(stat_check.values()),
-            "logged_lr": lrs, "lr_peak_ok": bool(lrs) and abs(max(lrs) / float(lr["optimizer_lr"]) - 1.0) < 0.05,   # the log prints 2 digits
-            "lr_expected_peak": float(lr["optimizer_lr"]), "gpu_mem_allocated_max_gib":
+            "logged_lr": lrs, "expected_lr_after_each_step": expected, "lr_ok": lrs == expected,
+            "lr_settings": {"peak": float(lr["optimizer_lr"]), "decay_lr": float(lr["decay_lr"]),
+                            "warmup_steps": 2, "decay_steps": 10}, "gpu_mem_allocated_max_gib":
                 (rec.get("log_summary") or {}).get("gpu_mem_allocated_max_gib")})
     report["ok"] = bool(verified and dry == 0 and code == 0 and report.get("checkpoint_exists")
-                        and report.get("stats_ok") and report.get("lr_peak_ok"))
+                        and report.get("stats_ok") and report.get("lr_ok"))
     write_json(OUT / "train10_check.json", report)
     return 0 if report["ok"] else 1
 

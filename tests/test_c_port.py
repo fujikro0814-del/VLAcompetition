@@ -112,7 +112,7 @@ def test_condition_1_offline_start_model_checkpoint_and_training():
     assert t["log_summary"]["last_step_logged"] == 10
     # B_提案書 §10 の仕組み（meta/stats.json から読まれる、--policy.path で上書きされる、学習率の上書き）
     assert t["stats_ok"], t["stats_bit_equal_to_replaced"]
-    assert t["lr_peak_ok"], t["logged_lr"]
+    assert t["lr_ok"], (t["logged_lr"], t["expected_lr_after_each_step"])
 
 
 def test_condition_2_replay_of_the_copied_raw_episode():
