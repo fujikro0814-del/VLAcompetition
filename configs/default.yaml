@@ -89,13 +89,20 @@ expert:
           min_grip_gap_m: 0.02,    # 閉じた指の開き（2 本の和）がこれ未満なら何も掴んでいない
           retreat_tol_m: 0.003}    # 待機位置に着いた（x_des が待機位置からこの距離以内）
 
-inject:
+inject:                      # Step F（手順書 §7）。recovla.expert.inject
   A: {lateral_offset_m: [0.025, 0.035], raise_close_m: [0.015, 0.025], raise_ratio: 0.5, lift_m: [0.03, 0.05],
-      confirm: {hand_rise_min_m: 0.03, cube_rise_max_m: 0.01}}
+      confirm: {hand_rise_min_m: 0.03, cube_rise_max_m: 0.01},
+      lift_rise_margin_m: 0.002,   # 持ち上げの目標を hand_rise_min + この値以上にする（手先は目標に漸近するので、ちょうど 3 cm では確定しない）
+      lift_done_tol_m: 0.001,      # 手先の高さが持ち上げの目標からこの距離以内で、手が止まったら確定の判定をする
+      timeout_s: 6.0}              # 発動から確定の判定までの上限（超えたら「注入が効かなかった」）
   B: {min_dist_from_box_m: 0.15}
-  C: {min_clearance_m: 0.03}
+  C: {min_clearance_m: 0.03, drop_max_tries: 1000}   # ずらし先は scene.region の一様（配置の範囲なので届き、写る）
   landing: {max_tilt_deg: 10, min_clearance_m: 0.03, max_invalid_ratio: 0.2,
-            rest_speed: 0.01, rest_hold_s: 0.3, finger_gap_margin_m: 0.005}
+            rest_speed: 0.01, rest_hold_s: 0.3, finger_gap_margin_m: 0.005,
+            timeout_s: 5.0,              # 開いてから静止までの上限（超えたら着地が不自然）
+            view_margin_px: 8}           # 俯瞰カメラの画像の縁からこの画素数以上内側に写ること
+  recovery_time_limit_s: 40.0  # 保存を始めてからの立て直しの上限（expert.time_limit_s と同じ値）
+  landing_orientation_split_deg: 30   # 完了条件 1: 落下後の向き（指に対する、90° の対称性を除いた角）±30° 以内とそれ以上に分ける
 
 contact:
   robot_bodies: [hand, left_finger, right_finger]

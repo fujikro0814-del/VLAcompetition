@@ -8,6 +8,7 @@
 | `trial_record.md` | 評価の 1 試行の記録の形（評価器が書き、指標の関数が読む） | cloud/metrics、cloud/figures |
 | `results.md` | 結果の表（CSV）の形と、統計の関数の型 | cloud/metrics、cloud/figures |
 | `runner.md` | 方策の実行器の時間の流れ（sync・naive・rtc）と、その部品の型 | cloud/runner |
+| `inject.md` | 失敗の注入（A・B・C）と、途中からの保存、結果の 4 区分（Step F） | cloud/inject-sweep |
 
 ## すべての文書に共通の決まり
 

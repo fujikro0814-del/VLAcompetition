@@ -64,6 +64,62 @@ def box_pos(model) -> np.ndarray:
     return np.array(model.body(BOX_BODY).pos, dtype=float)
 
 
+def rect_corners(center_xy, half_xy, yaw: float = 0.0) -> np.ndarray:
+    """水平面の長方形の 4 隅（反時計回り）。"""
+    c, s = np.cos(yaw), np.sin(yaw)
+    hx, hy = float(half_xy[0]), float(half_xy[1])
+    local = np.array([[-hx, -hy], [hx, -hy], [hx, hy], [-hx, hy]])
+    return np.asarray(center_xy, float)[:2] + local @ np.array([[c, s], [-s, c]])
+
+
+def cube_footprint(pos, quat) -> np.ndarray:
+    """立方体の水平面の足跡（ヨーだけを使う。傾きが小さいときの近似。着地の検査は傾き 10° 以下のときだけ意味を持つ）。"""
+    return rect_corners(pos, (CUBE_HALF, CUBE_HALF), quat_yaw(quat))
+
+
+def _seg_point_dist(p, a, b) -> float:
+    ab = b - a
+    t = float(np.clip(np.dot(p - a, ab) / max(np.dot(ab, ab), 1e-18), 0.0, 1.0))
+    return float(np.linalg.norm(p - (a + t * ab)))
+
+
+def _separated(P, Q) -> bool:
+    """分離軸の判定（凸なので、両方の辺の法線だけを調べればよい）。"""
+    for poly in (P, Q):
+        for i in range(len(poly)):
+            e = poly[(i + 1) % len(poly)] - poly[i]
+            n = np.array([-e[1], e[0]])
+            if (P @ n).max() < (Q @ n).min() or (Q @ n).max() < (P @ n).min():
+                return True
+    return False
+
+
+def polygon_distance(P, Q) -> float:
+    """凸多角形どうしの水平の最短距離（重なれば 0）。mj_geomDistance の箱どうしは専用の関数を通り最大 19 mm 誤る
+    （recovla.sim.contact の説明）ので、着地の隙間はこちらで測る。"""
+    P, Q = np.asarray(P, float), np.asarray(Q, float)
+    if not _separated(P, Q):
+        return 0.0
+    d = min(_seg_point_dist(p, Q[j], Q[(j + 1) % len(Q)]) for p in P for j in range(len(Q)))
+    return float(min(d, min(_seg_point_dist(q, P[j], P[(j + 1) % len(P)]) for q in Q for j in range(len(P)))))
+
+
+def wall_footprints(model) -> dict:
+    """箱の壁 4 枚の水平面の足跡（世界座標）。"""
+    box = box_pos(model)
+    return {w: rect_corners(box[:2] + model.geom(w).pos[:2], model.geom(w).size[:2]) for w in BOX_WALLS}
+
+
+def box_outer_half(model) -> float:
+    """箱の外寸の半分（中心から壁の外面まで）。壁は箱の体の座標で、xp・xn は x、yp・yn は y の向き。"""
+    out = []
+    for w in BOX_WALLS:
+        g = model.geom(w)
+        axis = 0 if w.endswith(("xp", "xn")) else 1
+        out.append(abs(float(g.pos[axis])) + float(g.size[axis]))
+    return float(max(out))
+
+
 def in_box(pos, box) -> bool:
     """成功の体積の中か（静止は問わない）。流用元 recorder.cube_in_box と同じ体積。"""
     rel = np.asarray(pos, float) - np.asarray(box, float)
