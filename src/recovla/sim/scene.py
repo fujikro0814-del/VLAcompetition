@@ -5,7 +5,7 @@
 
 配置の決め方（すべて配置の乱数列 streams(seed)["layout"] から、この順に引く）:
   1. 配置の種類（kind を渡さないとき scene.layout_kinds の割合で。渡しても 1 つ引いて捨て、以後の列を揃える）
-  2. 開始姿勢（scene.start_at_retreat_prob で retreat、ほかは home）
+  2. 開始姿勢（scene.start_at_retreat_prob で retreat、ほかは home。start を渡したときも同じく 1 つ引いて捨てる）
   3. 先客の色と置き場所（先客 1 個・2 個のとき。色の並びと置き場所の並びを無作為に並べ替えて先頭から使う）
   4. 机上の立方体（残りの色、色の並びの順に）: 範囲 scene.region の一様、向き ±scene.yaw_range_deg の一様。
      すでに置いた机上の立方体との中心間距離が scene.min_center_dist 未満なら、その 1 個を引き直す
@@ -50,7 +50,7 @@ class Layout:
                    {c: int(s) for c, s in d["prefilled"].items()}, int(d.get("tries", 1)))
 
 
-def sample_layout(seed: int, kind: str = None, cfg: dict = None) -> Layout:
+def sample_layout(seed: int, kind: str = None, cfg: dict = None, start: str = None) -> Layout:
     sc = (cfg or _CFG)["scene"]
     rng = seeds.stream(seed, "layout")
     probs = np.array([float(sc["layout_kinds"][k]) for k in KINDS])
@@ -59,7 +59,10 @@ def sample_layout(seed: int, kind: str = None, cfg: dict = None) -> Layout:
     kind = kind or drawn
     if kind not in KINDS:
         raise ValueError(f"kind {kind!r} not in {KINDS}")
-    start = "retreat" if rng.random() < float(sc["start_at_retreat_prob"]) else "home"
+    drawn_start = "retreat" if rng.random() < float(sc["start_at_retreat_prob"]) else "home"
+    start = start or drawn_start                  # 渡したときも 1 つ引いて捨て、以後の列を揃える（K1 は home に固定）
+    if start not in STARTS:
+        raise ValueError(f"start {start!r} not in {STARTS}")
     color_order = [COLORS[i] for i in rng.permutation(len(COLORS))]
     slot_order = [int(i) for i in rng.permutation(len(sc["box_slots"]))]
     n = N_PREFILLED[kind]

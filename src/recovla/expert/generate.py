@@ -46,6 +46,7 @@ class EpisodeSpec:
     layout_kind: str = None        # None なら配置の乱数列から割合で決める
     kind: str = "n"                # n 通常、h 引き継ぎ
     handover_u: float = None       # 引き継ぎの時刻（通常の所要時間に対する割合）。kind "h" のとき
+    start: str = None              # 開始姿勢の上書き（None なら配置の乱数列から。K1 は "home"）
 
     def name(self, retry: int) -> str:
         return f"{self.kind}_{self.layout_seed}_{self.color}_r{retry}"
@@ -55,13 +56,13 @@ def instruction(color: str) -> str:
     return _CFG["convert"]["instruction"].format(color=color)
 
 
-def plan_specs(seed_ranges: dict, kind: str = "n") -> list:
+def plan_specs(seed_ranges: dict, kind: str = "n", start: str = None) -> list:
     """{配置の種類: range(配置の種)} から、各配置の机上の全色の指定を作る（組＝同じ配置の種）。"""
     specs = []
     for layout_kind, rng_ in seed_ranges.items():
         for seed in rng_:
-            lay = scene.sample_layout(seed, layout_kind)
-            specs += [EpisodeSpec(int(seed), c, layout_kind, kind) for c in lay.table_colors]
+            lay = scene.sample_layout(seed, layout_kind, start=start)
+            specs += [EpisodeSpec(int(seed), c, layout_kind, kind, start=start) for c in lay.table_colors]
     return specs
 
 
@@ -71,7 +72,7 @@ def run_attempt(rig, spec: EpisodeSpec, retry: int, run_dir=None, render: bool =
                 handover_at_s: float = None) -> dict:
     """1 回の試み。run_dir があれば記録し、成功なら保存、失敗なら捨てる。"""
     cfg = rig.cfg
-    layout = scene.sample_layout(spec.layout_seed, spec.layout_kind)
+    layout = scene.sample_layout(spec.layout_seed, spec.layout_kind, start=spec.start)
     rig.reset(layout)
     dt = rig.steps_per_read * rig.timestep
     params = S.sample_params(seeds.script_rng(spec.layout_seed, spec.color, retry), cfg)
@@ -242,7 +243,7 @@ def generate(specs: list, run_dir, workers: int = 1, render: bool = True, max_re
     }, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     groups = {}
     for s in specs:                                   # 同じ配置（組）を 1 つの仕事にまとめる。順は最初に現れた順
-        groups.setdefault((s.layout_seed, s.layout_kind, s.kind), []).append(s)
+        groups.setdefault((s.layout_seed, s.layout_kind, s.kind, s.start), []).append(s)
     jobs = [(g, str(run_dir), render, max_retry) for g in groups.values()]
     results = []
     t0 = time.perf_counter()

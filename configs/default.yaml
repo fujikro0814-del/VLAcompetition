@@ -152,6 +152,7 @@ eval:
   P2: {min_dist_from_box_m: 0.15, min_lift_m: 0.05}
   P3: {min_clearance_m: 0.03}
   induction_min_rate: 0.8
+  swap_mid_drop_m: 0.03      # E6: 判定した地点がどの立方体からもこれ以上離れていれば「中間落ち」（手順書 Step E の 3）
 
 seeds:                       # §9 の帯（学習用は 100000 未満、評価は 100000 以上）
   eval_base: 100000
