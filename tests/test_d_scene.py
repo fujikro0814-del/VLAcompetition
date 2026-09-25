@@ -25,8 +25,15 @@ def test_scene_premises():
     r = _need("scene")
     assert r["colors_match_config"] and r["presentation_camera_matches_config"]
     assert r["presentation_removed_ncam"]["with"] == r["presentation_removed_ncam"]["without"] + 1
-    assert r["recording_render_max_diff_with_vs_without_presentation"] == 0 and r["states_compared"] >= 9
-    assert r["visibility"]["worst_visible_fraction"] == 1.0
+    # 描画は同じ状態でもまれに 1 階調揺れる（Step D で確認）ので、流用元の画像の許容（2）で比べる
+    assert r["recording_render_max_diff_with_vs_without_presentation"] <= 2 and r["states_compared"] >= 9
+    v = r["visibility"]
+    assert v["worst_visible_fraction"] == 1.0
+    assert v["box_corners_in_image"]                                             # 広げた箱の四隅が画像の中（0030）
+    assert v["retreat_box_floor_visible_fraction"] == 1.0                        # 待機位置から箱の中が隠れない（0030）
+    reach = r["reach"]                                                            # 範囲の四隅と中心に届く
+    assert len(reach["points"]) == 5 and reach["max_horizontal_mm"] < 10.0 and reach["max_vertical_mm"] < 20.0
+    assert reach["max_tilt_deg"] < 2.0
 
 
 def test_condition_1_script_success_per_layout_kind():
@@ -79,6 +86,14 @@ def test_condition_6_no_contact_in_300_episodes():
     assert all(v["contact_episodes"] == 0 for v in r["episodes_with_obstacle_contact"].values())
     assert r["min_dist_per_frame_m"] and r["min_dist_by_phase_m"]                  # 分布（全体と段階ごと）を示す
     assert r["min_dist_per_episode_m"]["p0"] > 0.0
+
+
+def test_box_slot_clearance_all_landings():
+    """箱の中の着地の隙間の条件（立方体どうし 2 cm・壁 1 cm。掲示板 0030 で緩めずに使う）を、全ての着地が満たす。"""
+    r = _need("physics")
+    for kind, v in r["landing_by_kind"].items():
+        assert v["clearance_condition"] == {"cube": 0.02, "wall": 0.01}
+        assert v["clearance_condition_met"] == v["n"] > 0, (kind, v)
 
 
 def test_condition_7_generation_time_and_throughput():

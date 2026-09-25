@@ -68,7 +68,7 @@ TIME_LIMIT_S = float(_CFG["eval"]["time_limit_s"])
 REST_SPEED = float(_CFG["eval"]["success"]["rest_speed"])
 REST_HOLD_S = float(_CFG["eval"]["success"]["rest_hold_s"])
 TABLE_TOP_Z = control.TABLE_TOP_Z
-BOX_PHYSICAL_INNER_HALF_XY = float(_CFG["scene"]["box"]["inner_half"])   # scene walls at +-0.065, 5 mm thick
+BOX_PHYSICAL_INNER_HALF_XY = float(config.load("g0")["scene"]["box"]["inner_half"])   # G0 scene walls at +-0.065, 5 mm thick
 EVAL_SEED_BASE = int(_CFG["seeds"]["eval_base"])
 TASK = recorder.INSTRUCTION
 

@@ -49,13 +49,13 @@ scene:
   cube_mass: 0.05
   cube_friction: [1.0, 0.005, 0.0001]
   colors: {red: [1, 0, 0, 1], green: [0, 1, 0, 1], blue: [0, 0, 1, 1]}
-  box: {pos: [0.45, 0.25, 0.0], inner_half: 0.06, wall_top_z: 0.06, success_inner_half: 0.05, floor_z: 0.01}
-  region: {x: [0.33, 0.57], y: [-0.18, 0.08]}     # Step D で視野と到達性を見て確定
+  box: {pos: [0.45, 0.25, 0.0], inner_half: 0.08, wall_top_z: 0.06, success_inner_half: 0.07, floor_z: 0.01}   # 3 色の場面。内寸 16 cm（掲示板 0030。G0 は configs/g0.yaml の 12 cm のまま）
+  region: {x: [0.33, 0.57], y: [-0.21, 0.05]}     # Step D で確定。箱を 16 cm に広げた（0030）ので y の上限を 0.08 → 0.05 に下げ、幅 0.26 を保って負の側へずらした（0.06 以上では、把持のとき手の下端が箱の手前の壁の上端に触れた）
   min_center_dist: 0.09
   yaw_range_deg: 30
   layout_kinds: {empty: 0.57, prefilled_1: 0.14, prefilled_2: 0.29}
   start_at_retreat_prob: 0.33
-  box_slots: [[0.03, 0.03], [0.03, -0.03], [-0.03, 0.03], [-0.03, -0.03]]   # 箱の中心からの相対（2x2 の格子、§14 の R3）
+  box_slots: [[0.04, 0.04], [0.04, -0.04], [-0.04, 0.04], [-0.04, -0.04]]   # 箱の中心からの相対（2x2 の格子、§14 の R3。掲示板 0030 で ±4 cm）
   slot_occupied_radius: 0.03 # 他の立方体の中心が置き場所の中心からこの距離以内なら、その置き場所は埋まっている
   prefilled_yaw_deg: 0.0     # 先客は置き場所の中心に向き 0 で置いてから静止させる
   layout_max_tries: 10000    # 配置の棄却抽選の上限（超えたら止める）

@@ -1,6 +1,9 @@
 # G0（Step C 完了条件 2・3）用の上書き。旧場面（立方体 1 個）と旧評価の条件のまま（B_提案書 §5）。
 # recovla.common.config.load("g0") で default.yaml の上に重ねる。
 
+scene:
+  box: {inner_half: 0.06, success_inner_half: 0.05}   # G0 の場面（scene_g0.xml、内寸 12 cm、流用元のまま）。3 色の場面は掲示板 0030 で 16 cm に広げた
+
 g0:
   scene: assets/mjcf/scene_g0.xml
   legacy_run: outputs/legacy/stage2_20260917-221354          # 予備実験の学習（conversion.json つき）

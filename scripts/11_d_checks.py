@@ -123,6 +123,7 @@ def check_scene() -> None:
                         rig.pad_read(np.array([0.05, -0.05, -0.03]), False)
         # 視野: 机上の範囲の四隅と箱の置き場所の立方体が、開始姿勢（home・retreat）で俯瞰カメラから全部見える
         vis = visibility(rig)
+        reach_rows = reach(rig)
     finally:
         render.close_renderer(r0)
         rig.close()
@@ -130,7 +131,43 @@ def check_scene() -> None:
     write("scene", {"colors_match_config": True, "presentation_camera_matches_config": cam_ok,
                     "presentation_removed_ncam": {"with": int(m.ncam), "without": int(cams_without)},
                     "recording_render_max_diff_with_vs_without_presentation": max(diffs), "states_compared": states,
-                    "visibility": vis, "region": CFG["scene"]["region"], "retreat_pose": CFG["expert"]["retreat_pose"]})
+                    "visibility": vis, "reach": reach_rows,
+                    "region": CFG["scene"]["region"], "retreat_pose": CFG["expert"]["retreat_pose"]})
+
+
+def reach(rig) -> dict:
+    """範囲の四隅と中心へ、接近の高さを経て把持の高さまで x_des を動かし、止まった後の手先と x_des の差と傾きを測る
+    （立方体は範囲の外に退けておく）。"""
+    import mujoco
+    from recovla.sim.rig import quiet
+    rx, ry = CFG["scene"]["region"]["x"], CFG["scene"]["region"]["y"]
+    pts = [(x, y) for x in rx for y in ry] + [(sum(rx) / 2, sum(ry) / 2)]
+    e = CFG["expert"]
+    rows = []
+    for x, y in pts:
+        rig.reset(scene.Layout(0, "prefilled_2", "home", {"blue": (0.62, -0.28, 0.0)}, {"red": 0, "green": 3}))
+        for goal in ((x, y, e["approach_height"]), (x, y, e["grasp_z"])):
+            with quiet():
+                for _ in range(600):
+                    d = np.asarray(goal) - rig.integrator.x_cmd
+                    if np.linalg.norm(d) < 1e-4:
+                        break
+                    v = 4.0 * d
+                    n = np.linalg.norm(v[:2])
+                    if n > 0.18:
+                        v[:2] *= 0.18 / n
+                    v[2] = np.clip(v[2], -0.09, 0.09)
+                    rig.pad_read(v, False)
+                for _ in range(50):
+                    rig.pad_read(np.zeros(3), False)
+        h = rig.data.xpos[rig.hand_id]
+        R = rig.data.xmat[rig.hand_id].reshape(3, 3)
+        err = h - rig.integrator.x_cmd
+        rows.append({"xy": [x, y], "hand_minus_xdes_mm": [round(float(v) * 1000, 2) for v in err],
+                     "tilt_deg": round(float(np.degrees(np.arccos(abs(R[2, 2])))), 3)})
+    return {"points": rows, "max_horizontal_mm": max(np.hypot(*r["hand_minus_xdes_mm"][:2]) for r in rows),
+            "max_vertical_mm": max(abs(r["hand_minus_xdes_mm"][2]) for r in rows),
+            "max_tilt_deg": max(r["tilt_deg"] for r in rows)}
 
 
 def model_without_presentation():
@@ -169,7 +206,9 @@ def visibility(rig) -> dict:
     from recovla.sim import render
     try:
         for start in scene.STARTS:
-            for kind, cs, pre in [("corners", cs, {}) for cs in corner_sets] + [("box", ((0.45, -0.05),), {"red": 0, "green": 3})]:
+            box_cases = [("box_slots_0_3", ((0.45, -0.05),), {"red": 0, "green": 3}),
+                         ("box_slots_1_2", ((0.45, -0.05),), {"red": 1, "green": 2})]
+            for kind, cs, pre in [("corners", cs, {}) for cs in corner_sets] + box_cases:
                 d = rig.data
                 cubes = {c: (x, y, 0.5) for c, (x, y) in zip([c for c in COLORS if c not in pre], cs)}
                 lay = scene.Layout(0, "prefilled_2" if pre else "empty", start, cubes, pre)
@@ -188,10 +227,20 @@ def visibility(rig) -> dict:
                 worst = min(worst, min(vals))
                 rows.append({"start": start, "kind": kind, "visible_px": counts[0], "unoccluded_px": counts[1],
                              "visible_fraction": frac})
+        # 広げた箱の四隅（壁の外側の上端の角）が俯瞰カメラの画像の中にある（余白 8 画素）
+        box = frames.box_pos(m)
+        outer = frames.BOX_INNER_HALF + 0.01
+        corners_px = [frames.project(m, rig.data, "overhead", [box[0] + sx * outer, box[1] + sy * outer,
+                                                              frames.BOX_WALL_TOP_Z], 256, 256)
+                      for sx in (-1, 1) for sy in (-1, 1)]
+        in_image = all(c is not None and 8 <= c[0] <= 248 and 8 <= c[1] <= 248 for c in corners_px)
     finally:
         render.close_renderer(r)
+    retreat_floor = min(row["visible_fraction"]["box_floor"] for row in rows if row["start"] == "retreat")
     return {"worst_visible_fraction": worst, "min_visible_px": min(min(v for v in row["visible_px"].values())
-                                                                     for row in rows), "rows": rows}
+                                                                     for row in rows),
+            "box_corners_px": corners_px, "box_corners_in_image": bool(in_image),
+            "retreat_box_floor_visible_fraction": retreat_floor, "rows": rows}
 
 
 # ------------------------------------------------------------------------------------------- physics

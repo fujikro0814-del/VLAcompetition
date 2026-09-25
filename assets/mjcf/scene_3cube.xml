@@ -1,10 +1,11 @@
 <mujoco model="panda_scene_3cube">
   <!-- 3 色の場面（Step D、B_提案書 §7）。scene_g0.xml（流用元 teleop_scene.xml）から作った。
-       変えたのは次の 4 点だけで、机・箱・記録用カメラ・背景・腕は scene_g0.xml と同じ:
+       変えたのは次の 5 点だけで、机・記録用カメラ・背景・腕は scene_g0.xml と同じ:
          1. 立方体を 3 個（赤・緑・青）にし、体と形状に名前を付けた（cube_<色>、cube_<色>_geom）
          2. 発表用カメラ presentation を足した（記録用カメラの描画は変わらないことを tests/test_d_scene.py で確かめる）
          3. 発表用の 1280x720 を描けるように、画面外の描画領域を広げた（visual/global）
          4. keyframe の qpos を立方体 3 個の並びにした
+         5. 箱の内寸を 0.12 から 0.16 に広げた（掲示板 0030。壁の厚さ・高さ・中心は同じ）
        立方体の位置はここでは仮の値で、試行ごとに recovla.sim.scene.apply_layout が置き直す。
        色は configs/default.yaml の scene.colors と同じ値（tests で照合する）。 -->
   <option timestep="0.002" gravity="0 0 -9.81"/>
@@ -55,19 +56,20 @@
             rgba="0 0 1 1" mass="0.05" friction="1 0.005 0.0001"/>
     </body>
 
-    <!-- 箱（scene_g0.xml と同じ）。内寸 0.12 x 0.12、壁の上端 z=0.06、底の上面 z=0.01 -->
+    <!-- 箱。内寸 0.16 x 0.16（掲示板 0030 で scene_g0.xml の 0.12 から広げた。中心・壁の厚さ 5 mm・壁の上端 z=0.06・
+         底の上面 z=0.01・色は scene_g0.xml と同じ）。寸法は configs/default.yaml の scene.box と同じ（tests で照合する） -->
     <body name="goal_box" pos="0.45 0.25 0">
-      <geom name="box_bottom" type="box" size="0.07 0.07 0.005"
+      <geom name="box_bottom" type="box" size="0.09 0.09 0.005"
             pos="0 0 0.005" rgba="0.9 0.75 0.2 1"
             friction="1 0.005 0.0001"/>
-      <geom name="box_wall_xp" type="box" size="0.005 0.07 0.025"
-            pos="0.065 0 0.035" rgba="0.9 0.75 0.2 1"/>
-      <geom name="box_wall_xn" type="box" size="0.005 0.07 0.025"
-            pos="-0.065 0 0.035" rgba="0.9 0.75 0.2 1"/>
-      <geom name="box_wall_yp" type="box" size="0.07 0.005 0.025"
-            pos="0 0.065 0.035" rgba="0.9 0.75 0.2 1"/>
-      <geom name="box_wall_yn" type="box" size="0.07 0.005 0.025"
-            pos="0 -0.065 0.035" rgba="0.9 0.75 0.2 1"/>
+      <geom name="box_wall_xp" type="box" size="0.005 0.09 0.025"
+            pos="0.085 0 0.035" rgba="0.9 0.75 0.2 1"/>
+      <geom name="box_wall_xn" type="box" size="0.005 0.09 0.025"
+            pos="-0.085 0 0.035" rgba="0.9 0.75 0.2 1"/>
+      <geom name="box_wall_yp" type="box" size="0.09 0.005 0.025"
+            pos="0 0.085 0.035" rgba="0.9 0.75 0.2 1"/>
+      <geom name="box_wall_yn" type="box" size="0.09 0.005 0.025"
+            pos="0 -0.085 0.035" rgba="0.9 0.75 0.2 1"/>
     </body>
 
     <!-- 制御器の目標（描画されない group 5、衝突なし。scene_g0.xml と同じ） -->

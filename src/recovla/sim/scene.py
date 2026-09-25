@@ -118,9 +118,29 @@ def check_scene_colors(model) -> None:
             raise RuntimeError(f"scene color {color}: xml {got} != configs {want}")
 
 
+def check_box_geometry(model) -> None:
+    """場面の XML の箱が設定（scene.box）と同じ寸法であること: 壁の内面が中心から ±inner_half、壁の上端が
+    wall_top_z、底の上面が floor_z、箱の中心が pos。"""
+    box = _SCENE["box"]
+    b = model.body(frames.BOX_BODY)
+    got = {"pos": [float(v) for v in b.pos]}
+    for w, axis, sign in (("box_wall_xp", 0, 1), ("box_wall_xn", 0, -1), ("box_wall_yp", 1, 1), ("box_wall_yn", 1, -1)):
+        g = model.geom(w)
+        got[f"{w}_inner"] = float(sign * (g.pos[axis] - sign * g.size[axis]))
+        got[f"{w}_top"] = float(g.pos[2] + g.size[2])
+    fb = model.geom("box_bottom")
+    got["floor"] = float(fb.pos[2] + fb.size[2])
+    ok = np.allclose(got["pos"], box["pos"]) and abs(got["floor"] - float(box["floor_z"])) < 1e-9
+    for w in ("box_wall_xp", "box_wall_xn", "box_wall_yp", "box_wall_yn"):
+        ok &= abs(got[f"{w}_inner"] - float(box["inner_half"])) < 1e-9 and abs(got[f"{w}_top"] - float(box["wall_top_z"])) < 1e-9
+    if not ok:
+        raise RuntimeError(f"scene box {got} != configs scene.box {box}")
+
+
 def build_model(variant: str = "3cube") -> mujoco.MjModel:
     key = {"3cube": "scene", "g0": "scene_g0"}[variant]
     model = mujoco.MjModel.from_xml_path(str(config.path(_CFG["paths"][key])))
     if variant == "3cube":
         check_scene_colors(model)
+        check_box_geometry(model)
     return model
