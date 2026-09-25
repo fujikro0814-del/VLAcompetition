@@ -1,10 +1,12 @@
 # STATUS（本線が更新）
 
-最終更新: 2026-09-25 18:00（日本時間）/ 更新者: main（Step C 承認。境目の文書を main に入れた。次は Step D）
+最終更新: 2026-09-25 18:28（日本時間）/ 更新者: main（PR #1 を取り込み、0013 に対応。Step D に着手、台本は本線が書く＝0014）
 
 ## 注意
 
 リモートは既存の**公開**リポジトリ fujikro0814-del/VLAcompetition（0002・0004・0007）。push は必ず `scripts/push.ps1` から行い、検査（`scripts/check_before_push.ps1`）に通ったときだけ送る。
+
+支線の検査の既定の実行は `python -m pytest -m "not render and not windows and not needs_outputs"`（0013 の 3、`docs/interfaces/README.md`）。
 
 ## Step
 
@@ -13,7 +15,7 @@
 | A | 調査（コード変更なし） | 完了・承認済み（2026-09-25） | — | `docs/A_調査報告.md` |
 | B | 提案（コード変更なし） | 承認済み（2026-09-25、修正 4 点つき。3 は 0007 で取り消し） | — | `docs/B_提案書.md`、0001、0005、0007 |
 | C | 新しい場所と移植の確認 | 完了・承認済み（2026-09-25、0010） | G0（9/30） | `docs/C_報告.md`、0008、0009、0010 |
-| D | 3色の場面と通常デモ | 未着手 | G1 前半（10/3） | — |
+| D | 3色の場面と通常デモ | **実施中**（場面・配置・幾何の集約まで。台本は本線が書く＝0014） | G1 前半（10/3） | — |
 | E | K1：色の見極め | 未着手 | K1（10/5） | — |
 | F | 復帰デモの生成と分割 | 未着手 | G1 後半（10/8） | — |
 | G | 評価器の拡張 | 未着手 | — | — |
@@ -27,14 +29,23 @@
 
 | 枝 | 担当 | 状況 | 開始の条件 |
 |---|---|---|---|
-| `cloud/metrics` | — | **開始待ち**（境目の文書は main に入った。監督の指示書待ち） | `docs/interfaces/trial_record.md`・`results.md` |
-| `cloud/runner` | — | **開始待ち**（同上） | `docs/interfaces/runner.md` |
-| `cloud/expert` | — | 未開始 | Step D（場面と SimRig の骨組みが main に入った後） |
+| `cloud/setup-check` | クラウド | **完了・取り込み済み**（PR #1、0012・0013・0015） | — |
+| `cloud/metrics` | — | 開始待ち（監督の指示書は作成済み。人がクラウドに渡す＝0014） | `docs/interfaces/trial_record.md`・`results.md` |
+| `cloud/runner` | — | 開始待ち（同上。人がクラウドの環境に download.pytorch.org を許可してから＝0013 の 2、0014） | `docs/interfaces/runner.md` |
+| `cloud/expert` | — | **作らない**（台本は本線が書く＝0014） | — |
+| `cloud/inject-sweep` | — | 未開始（Step F の注入の調整。枠が空いた時点で） | 本線が Step F で注入と境目の文書を main に入れた後 |
 | `cloud/planner` | — | 未開始 | Step G の頃（監督の固定の試験データが main に入った後） |
 | `cloud/figures` | — | 未開始 | Step G の頃 |
+
+## 計算機の目安
+
+| 項目 | 値 | 出所 |
+|---|---|---|
+| クラウドの支線の環境 | 4 CPU（Xeon 2.80GHz）、主記憶 15.7 GiB、GPU・画面なし | 0012 |
+| 物理の速さ（クラウド、1 process、描画なし） | 制御器あり **実時間の 5.9 倍**（1 手 339 µs）、物理だけ 48.3 倍（41 µs） | 0012、`scripts/cloud/bench_physics.py` |
 
 ## 未解決の判断待ち（ask）
 
 | 番号 | 題 | 宛先 |
 |---|---|---|
-| — | なし（0011 で監督に cloud/metrics・cloud/runner の指示書をお願いしている） | — |
+| — | なし | — |

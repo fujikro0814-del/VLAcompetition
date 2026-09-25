@@ -17,6 +17,7 @@ import numpy as np
 import pytest
 
 from recovla.common import config
+from recovla.common.model_summary import model_summary
 from recovla.record import recorder
 from recovla.sim import control
 
@@ -30,6 +31,7 @@ LEGACY_EVAL = config.path(G0["legacy_eval"])
 # 流用元の teleop_scene.xml（panda.xml と同じフォルダ）をコンパイルした mj_saveModel のバイト列の SHA-256
 # （2026-09-25、mujoco 3.2.3 で計測。取り込みの前に .cache\import の流用元の XML から直接求めた値）
 SOURCE_SCENE_MJB_SHA256 = "9a328745ee468fe73bfa8be2a4b10c2dd8af57e3b1c778e669fdbdce60f7563f"
+SCENE_REFERENCE = ROOT / "tests" / "fixtures" / "scene_g0_reference.json"     # scripts/04_scene_reference.py
 
 
 def _need(path: pathlib.Path, how: str) -> dict:
@@ -40,6 +42,7 @@ def _need(path: pathlib.Path, how: str) -> dict:
 
 # ------------------------------------------------------------------------------ 移植の検査
 
+@pytest.mark.windows
 def test_environment_matches_the_lock():
     uv = ROOT / ".tools" / "uv" / "uv.exe"
     freeze = subprocess.run([str(uv), "pip", "freeze", "--python", sys.executable],
@@ -50,6 +53,7 @@ def test_environment_matches_the_lock():
     assert got == lock
 
 
+@pytest.mark.windows            # バイト列は OS・CPU で変わる（掲示板 0012・0013 の 4）。本線の Windows だけで回す
 def test_scene_compiles_to_the_same_model_as_the_source():
     m = mujoco.MjModel.from_xml_path(control.SCENE_PATH)
     buf = np.zeros(mujoco.mj_sizeModel(m), dtype=np.uint8)
@@ -58,6 +62,26 @@ def test_scene_compiles_to_the_same_model_as_the_source():
     control.check_timestep(m)
 
 
+def test_scene_compiles_to_the_reference_on_any_os():
+    """OS によらない検査（掲示板 0013 の 4）: 数は完全に、主な配列は許容誤差の中で、参照値と一致する。
+    参照値 tests/fixtures/scene_g0_reference.json は scripts/04_scene_reference.py が、上のバイト一致の検査が通る
+    本線の Windows で書いたもの。"""
+    ref = json.loads(SCENE_REFERENCE.read_text(encoding="utf-8"))
+    assert ref["mjb_sha256_windows"] == SOURCE_SCENE_MJB_SHA256          # 参照値は流用元と同じ場面から取った
+    got = model_summary(mujoco.MjModel.from_xml_path(control.SCENE_PATH))
+    assert got["counts"] == ref["counts"]
+    for k, want in ref["options"].items():
+        np.testing.assert_allclose(got["options"][k], want, rtol=1e-12, atol=0, err_msg=k)
+    for k, want in ref["arrays"].items():
+        g, w = np.asarray(got["arrays"][k]), np.asarray(want)
+        assert g.shape == w.shape, k
+        if np.issubdtype(g.dtype, np.integer):
+            assert np.array_equal(g, w), k
+        else:
+            np.testing.assert_allclose(g, w, rtol=1e-6, atol=1e-9, err_msg=k)
+
+
+@pytest.mark.needs_outputs
 def test_controller_and_recording_values_equal_the_legacy_raw_meta():
     """設定ファイルから作った制御器の調整値が、予備実験の raw（流用元が meta.json に書いた値）と同じ。"""
     meta = json.loads((LEGACY_RAW / "meta.json").read_text(encoding="utf-8"))
@@ -77,6 +101,7 @@ def test_controller_and_recording_values_equal_the_legacy_raw_meta():
     assert recorder.INSTRUCTION == meta["instruction"]
 
 
+@pytest.mark.needs_outputs
 def test_training_placements_equal_the_legacy_evaluation():
     """学習配置（種 0〜2999 から 10 個）が、予備実験の評価の記録と完全に同じ（G0 の比較の前提）。"""
     placements = {p.placement_id: p for p in recorder.training_placements()}
@@ -102,6 +127,7 @@ def test_no_ledger_and_no_vla_paths_in_the_code():
 
 # --------------------------------------------------------------------------- 完了条件 1〜4
 
+@pytest.mark.needs_outputs
 def test_condition_1_offline_start_model_checkpoint_and_training():
     r = _need(OUT / "offline_check.json", "scripts/02_g0_check.py offline")
     assert r["HF_HUB_OFFLINE"] == "1"
@@ -115,12 +141,14 @@ def test_condition_1_offline_start_model_checkpoint_and_training():
     assert t["lr_ok"], (t["logged_lr"], t["expected_lr_after_each_step"])
 
 
+@pytest.mark.needs_outputs
 def test_condition_2_replay_of_the_copied_raw_episode():
     r = _need(OUT / "replay_check.json", "scripts/02_g0_check.py replay")
     assert r["modes"]["window"]["ee_err_max_m"] < float(G0["replay_tol_m"])
     assert r["negative_controls_detected"]
 
 
+@pytest.mark.needs_outputs
 def test_condition_3_g0_closed_loop():
     r = _need(OUT / "eval_check.json", "scripts/02_g0_check.py eval")
     assert r["trials"] == int(G0["repeats"]) * len(G0["placement_ids"]) == 20
@@ -131,6 +159,7 @@ def test_condition_3_g0_closed_loop():
     assert r["inference"]["n"] > 0 and r["inference"]["mean_s_excluding_first"] is not None
 
 
+@pytest.mark.needs_outputs
 def test_condition_4_vla_listing_unchanged():
     r = _need(OUT / "vla_listing_check.json", "scripts/03_vla_listing.ps1")
     assert r["count_before"] == r["count_now"] and r["only_before"] == 0 and r["only_now"] == 0 and r["ok"]

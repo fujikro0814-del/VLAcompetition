@@ -95,6 +95,7 @@ def test_builder_accepts_matching_spec_and_builds(tmp_path):
         b.build({"wrist": raw["wrist"]}, p, "x")
 
 
+@pytest.mark.torch                               # LeRobotDataset を作る（掲示板 0013 の 3）
 def test_evaluation_entry_equals_training_dataset_images(tmp_path):
     pytest.importorskip("lerobot")
     from lerobot.datasets.lerobot_dataset import LeRobotDataset

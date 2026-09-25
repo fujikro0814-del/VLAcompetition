@@ -30,3 +30,7 @@
 - **欠けた値**: 数値は NaN、ない出来事の時刻は `null`（JSON）または NaN（npz）
 - **乱数**: 試行の種から名前つきの乱数列を作る（B_提案書 §9）。`ID = {layout: 0, induce: 1, noise: 2, script: 3, inject: 4, order: 5}`
 - **支線の検査**: GPU・学習済みモデル・C:\VLA・ネットワークなしで通ること（B_提案書 §15.1）
+  - 検査には pytest の目印を付ける（掲示板 0013 の 3。`pyproject.toml` に登録）: `render`（描画の文脈が要る）、`windows`（Windows 専用）、`needs_outputs`（Git 管理外の `outputs/` が要る）、`torch`（torch が要る）
+  - 支線の既定の実行: `python -m pytest -m "not render and not windows and not needs_outputs"`（描画の検査を含めて一括で回すと、描画の文脈のない環境では process ごと止まる。掲示板 0012）
+  - 支線が足す検査にも、当てはまる目印を付ける。目印のない検査は、どの OS・GPU なしでも通ること
+  - 場面の同一性は、Windows ではバイト一致（`windows`）、どこでも数と主な配列の許容誤差内の一致（`tests/fixtures/scene_g0_reference.json`）で確かめる（掲示板 0013 の 4）

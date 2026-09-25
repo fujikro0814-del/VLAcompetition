@@ -79,6 +79,7 @@ def episode(model, renderer, tmp_path_factory):
     return replay.load_episode(path)
 
 
+@pytest.mark.render
 def test_step_replay_is_bit_exact(episode, renderer, model):
     rep = replay.replay(episode, "step", renderer, model)
     r = replay.compare(episode, rep)
@@ -88,6 +89,7 @@ def test_step_replay_is_bit_exact(episode, renderer, model):
     assert r["img_wrist_max_diff"] <= replay.IMAGE_TOL
 
 
+@pytest.mark.render
 def test_window_actions_reproduce_trajectory(episode, renderer, model):
     assert episode.data["gripper_closed"].any()          # the script closed it
     rep = replay.replay(episode, "window", renderer, model)
@@ -97,6 +99,7 @@ def test_window_actions_reproduce_trajectory(episode, renderer, model):
     assert r["gripper_mismatch_frames"] == 0
 
 
+@pytest.mark.render
 @pytest.mark.parametrize("mode", ["last_step", "shifted"])
 def test_wrong_action_definitions_are_detected(episode, renderer, model, mode):
     rep = replay.replay(episode, mode, renderer, model)
@@ -104,6 +107,7 @@ def test_wrong_action_definitions_are_detected(episode, renderer, model, mode):
     assert r["ee_err_max_m"] >= replay.WINDOW_TOL_M
 
 
+@pytest.mark.render
 def test_episode_directory_is_not_modified(episode, renderer, model):
     before = {p: p.stat().st_mtime_ns for p in episode.path.rglob("*")}
     replay.replay(episode, "window", renderer, model)

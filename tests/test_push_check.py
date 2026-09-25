@@ -9,8 +9,10 @@ import subprocess
 
 import pytest
 
+pytestmark = pytest.mark.windows       # .tools の git.exe と PowerShell が要る（掲示板 0013 の 3）
+
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-GIT = ROOT / ".tools" / "git" / "cmd" / "git.exe"
+GIT =ROOT / ".tools" / "git" / "cmd" / "git.exe"
 CHECK = ROOT / "scripts" / "check_before_push.ps1"
 FAKE_PROXY = "198.51.100.7:3128"                 # 文書用のアドレス帯（RFC 5737）
 FAKE_KEY = "sk-ant-" + "api03-" + "A1b2C3d4E5f6G7h8I9j0K1l2M3n4"

@@ -69,6 +69,7 @@ def test_orientation_deviation():
     assert np.allclose(conv.orientation_deviation(-tilt), [[0, 0.1, 0]])
 
 
+@pytest.mark.torch
 def test_convert_and_verify(tmp_path):
     raw = tmp_path / "raw"
     for eid in (0, 1):
@@ -87,6 +88,7 @@ def test_convert_and_verify(tmp_path):
         conv.convert(episodes, out, "unit")
 
 
+@pytest.mark.torch
 def test_the_ways_of_calling_the_converter(tmp_path):
     """フォルダを並べる／--raw-dir の呼び出し（流用元の test_the_old_ways_of_calling_the_converter_still_work から、
     ラベルの用意を除いたもの）。"""
@@ -103,6 +105,7 @@ def test_the_ways_of_calling_the_converter(tmp_path):
     assert "manifest" not in record and len(record["sources"]) == 2
 
 
+@pytest.mark.torch
 def test_dataset_images_are_transformed_per_view_at_value_level(tmp_path):
     """overhead = raw mirrored left-right, wrist = raw upside down (Step E-C). Expected images use
     plain numpy slicing here, independent of vla_image_spec, and must differ from the old
@@ -132,6 +135,7 @@ def test_dataset_images_are_transformed_per_view_at_value_level(tmp_path):
                                         "wrist": "observation.images.image2"}
 
 
+@pytest.mark.torch
 def test_verify_writes_raw_vs_policy_image_and_rejects_version1(tmp_path, capsys):
     raw = tmp_path / "raw"
     ep, _, _ = make_raw_episode(raw, n=21, size=16)

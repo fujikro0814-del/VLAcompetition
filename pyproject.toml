@@ -15,3 +15,10 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 faulthandler_timeout = 300      # 止まったときにスタックを残す（掲示板 0010 の 3）
+# 検査の目印（掲示板 0013 の 3）。支線の既定の実行は -m "not render and not windows and not needs_outputs"
+markers = [
+    "render: 描画の文脈（OpenGL）が要る",
+    "windows: Windows 専用（.tools の git.exe・uv.exe、PowerShell、Windows で測った値との一致）",
+    "needs_outputs: Git 管理外の outputs/ が要る（本線の PC にだけある）",
+    "torch: torch が要る",
+]

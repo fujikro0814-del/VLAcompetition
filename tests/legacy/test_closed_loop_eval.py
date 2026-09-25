@@ -33,6 +33,7 @@ def test_timing_matches_conversion():
     assert cle.STRIDE == conv.STRIDE
 
 
+@pytest.mark.render                              # EvalRig makes a mujoco.Renderer (掲示板 0013 の 3)
 def test_action_moves_x_des_by_exactly_its_xyz(rig):
     rig.reset(placement4())
     x0 = rig.integrator.x_cmd.copy()
@@ -45,6 +46,7 @@ def test_action_moves_x_des_by_exactly_its_xyz(rig):
     assert rig.controller.gripper_closed is False
 
 
+@pytest.mark.render
 def test_gripper_sign_and_single_press(rig):
     rig.reset(placement4())
     close = np.array([0, 0, 0, 0, 0, 0, 1.0])
@@ -140,6 +142,7 @@ def test_contacts_are_any_within_the_window_not_the_last_value():
     assert arr["cube_speed_max"].tolist() == [0.0, 0.3, 0.0]
 
 
+@pytest.mark.render
 def test_trial_record_has_every_field(rig, tmp_path):
     hold = np.array([0, 0, 0, 0, 0, 0, -1.0])
     log = cle.run_trial(rig, placement4(), lambda k, frame, raw: hold, time_limit_s=0.5)
@@ -200,6 +203,7 @@ def test_run_refuses_existing_output_dir(tmp_path, monkeypatch):
     assert list(out.iterdir()) == []
 
 
+@pytest.mark.torch
 def test_input_check_catches_swapped_or_missing_views():
     torch = pytest.importorskip("torch")
     pa = cle.PolicyActions.__new__(cle.PolicyActions)
