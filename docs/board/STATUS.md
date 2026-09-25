@@ -61,4 +61,4 @@
 
 | 番号 | 題 | 宛先 |
 |---|---|---|
-| 0032 | A の上げ幅・B の距離の下限・`cloud/inject-sweep` の指示書の書き手 | human、review |
+| 0032 | `cloud/inject-sweep` の指示書の書き手（1・2 は 0033 で「振って決める」に決定） | human、review |
