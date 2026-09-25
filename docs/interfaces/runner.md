@@ -44,7 +44,7 @@
 - 推論 i（i ≥ 1）には、LeRobot の `predict_action_chunk(batch, noise=…, inference_delay=d, prev_chunk_left_over=L_i)` を使う
 - 前の塊の残り L_i: 前の塊のうち、推論を始めた時点 k_i でまだ実行していない部分
   - 前の塊の k_i での添字は j = o_{i−1} + (k_i − v_{i−1})。L_i = 前の塊[j : H]
-  - 空間は**後処理の前**（正規化された、方策の出力のまま、`(H, 32)` の詰め物つき）
+  - 空間は**後処理の前**（正規化された、`predict_action_chunk` の出力のまま、`(H, 7)`。lerobot 0.6.1 は詰め物の次元を外して返す。LeRobot 自身の実行器と同じ扱い。掲示板 0024 への 0025 の回答で A を採った）
   - 長さを E に揃える。長ければ先頭から E 行に切り詰め、短ければ 0 で詰める。同梱の `lerobot/rollout/inference/rtc.py` の `_normalize_prev_actions_length` と同じ扱い
 - RTC を有効にする場所: 読み込み後に `policy.config.rtc_config = RTCConfig(enabled=True, prefix_attention_schedule=…, max_guidance_weight=…, execution_horizon=E)` を入れて `policy.init_rtc_processor()` を呼ぶ（本線の担当）
 - `select_action`（方策の内部の待ち行列）は使わない
@@ -95,7 +95,7 @@ class Schedule:
     def log(self) -> list[dict]         # §4 の記録（推論ごと）
 ```
 
-A は行動の次元（方策の出力は詰め物込みで 32。実行するのは先頭 7）。
+A は行動の次元（`predict_action_chunk` の出力は 7。`Schedule` は A を問わないので、検査は A = 32 でもよい。掲示板 0025）。
 
 ## 4. 記録（推論ごと。`trial_record.md` の json `inference` と同じ形）
 
@@ -114,7 +114,8 @@ A は行動の次元（方策の出力は詰め物込みで 32。実行するの
 
 ## 5. 乱数
 
-- 推論 i の雑音は `SeedSequence(seed, spawn_key=(2, i))` から作る `torch.Generator` で引く（形 (1, H, 32)）
+- 推論 i の雑音は `SeedSequence(seed, spawn_key=(2, i))` から作る `torch.Generator` で引く（形 (1, H, 32)。雑音は詰め物の次元を含む）
+  - 変換は `torch.Generator("cpu").manual_seed(seeds.torch_seed(seeds.seed_sequence(seed, "noise", i)))`（`src/recovla/common/seeds.py`。`generate_state(1, dtype=uint64)[0]`。掲示板 0022 への 0025 の回答）
 - 方式が違っても、i 回目どうしは同じ雑音になる
 - 配置（spawn_key (0,)）と誘発（(1,)）は試行の開始時に全部引くので、方式によらず同じになる（Step G 完了条件 3）
 

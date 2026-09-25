@@ -5,6 +5,7 @@ torch が無い環境では飛ばす（cloud/runner の環境には、まだ tor
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.torch   # 検査の目印（掲示板 0013 の 3。取り込みのときに本線が足した）
 torch = pytest.importorskip("torch")
 rtc = pytest.importorskip("lerobot.rollout.inference.rtc")
 

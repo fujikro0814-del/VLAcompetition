@@ -57,7 +57,9 @@ CSV は UTF-8（BOM なし）、区切りはカンマ、1 行目が見出し。�
 | inference_mean_s | float | |
 | inference_p95_s | float | |
 
-列の名前は `trial_metrics` の返り値の名前と同じにする。
+列の名前は `trial_metrics` の返り値の名前と同じにする。`trial_metrics` は、trial_record.md §6 の指標だけでなく、**この表の全列を、この表と同じ並びで返す**（report.py はその辞書をそのまま 1 行にする。掲示板 0017・0019）。
+
+- `reaction_time_s`・`recovery_time_s` は、誘発が成立した試行（`induce.established`）だけで計算し、それ以外は NaN。`recovered` は成立していなければ空欄（掲示板 0019）
 
 ## 3. `summary.csv`（1 条件 1 行）
 
@@ -131,8 +133,11 @@ def wilson_interval(successes: int, trials: int, z: float = 1.959963984540054) -
     # 流用元のまま（trials <= 0 なら (None, None)）
 def mcnemar_exact(n10: int, n01: int) -> float
     # 両側の p 値。n10 + n01 == 0 なら 1.0。scipy.stats.binomtest(n10, n10 + n01, 0.5).pvalue
-def paired_diff_ci(n11: int, n10: int, n01: int, n00: int, alpha: float = 0.05) -> tuple[float, float, float]
-    # (差, 下限, 上限)。Newcombe (1998) の方法 10（各割合の Wilson 区間と φ 係数による補正）
+def paired_diff_ci(n11: int, n10: int, n01: int, n00: int, alpha: float = 0.05, *,
+                   phi_correction: bool = True) -> tuple[float, float, float]
+    # (差, 下限, 上限)。Newcombe (1998) の方法 10（各割合の Wilson 区間と φ 係数による補正）。対が 0 なら (nan, nan, nan)
+    # phi_correction（キーワード専用、既定 True）: φ の分子 A = n11·n00 − n10·n01 を、A > n/2 なら A − n/2、
+    #   0 ≤ A ≤ n/2 なら 0 に置き換える（方法 10 の定義。False は比較用に補正しない φ。掲示板 0019）
 def wilcoxon_paired(a: np.ndarray, b: np.ndarray) -> tuple[float, float, int]
     # (統計量, p, 対の数)。NaN を含む対は除く。対が 0 なら (nan, nan, 0)
 def pair_by_seed(rows_a: list[dict], rows_b: list[dict], key: str = "seed") -> list[tuple[dict, dict]]
