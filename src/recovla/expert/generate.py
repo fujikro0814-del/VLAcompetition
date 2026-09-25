@@ -96,7 +96,8 @@ def run_attempt(rig, spec: EpisodeSpec, retry: int, run_dir=None, render: bool =
     name = spec.name(retry)
     frames_log = []
     state = {"expert": expert, "writer": None, "start": None, "rec": False,
-             "pre_contact": np.zeros(len(contact.COLUMNS), dtype=bool)}
+             "pre_contact": np.zeros(len(contact.COLUMNS), dtype=bool),
+             "pre_cc": np.zeros((len(COLORS), len(COLORS)), dtype=bool)}
 
     def capture():
         first_frame = not frames_log
@@ -134,7 +135,9 @@ def run_attempt(rig, spec: EpisodeSpec, retry: int, run_dir=None, render: bool =
     def on_step(r):
         if not state["rec"]:
             if r.step % every == 0:                      # 記録の前: 接触の窓だけ読んで捨てる（注入の区間の接触を残す）
-                state["pre_contact"] |= r.meter.take_window()[0]
+                robot, cc = r.meter.take_window()
+                state["pre_contact"] |= robot
+                state["pre_cc"] |= cc
             return
         if state["writer"] is not None:
             state["writer"].add_step(r.controller.desired_pos, float(r.data.ctrl[r.grip_act]))
@@ -227,7 +230,11 @@ def run_attempt(rig, spec: EpisodeSpec, retry: int, run_dir=None, render: bool =
         summary["inject"] = {"params": inj.p.to_json(), "status": inj.status, "reason": inj.reason,
                              "t_fire": inj.t_fire, "t_confirm": inj.t_confirm, "info": inj.info,
                              "phase_first_t_before": pre_first,
-                             "contact_obstacle_before": bool(state["pre_contact"][mask].any())}
+                             "contact_obstacle_before": bool(state["pre_contact"][mask].any()),
+                             # 記録の前に目標の立方体が触れた立方体（B・C の落下で当たったかを見る）と、先客（箱の中）の色
+                             "cube_contact_before": [c for i, c in enumerate(COLORS)
+                                                     if state["pre_cc"][COLORS.index(spec.color), i]],
+                             "prefilled": sorted(layout.prefilled)}
         summary["t_record_start"] = round(t_rec0, 3) if state["rec"] else None
         summary["record_start_step"] = int(state["start"].step) if state["rec"] else None
         summary["recovery_duration_s"] = round(float(tr.t) - t_rec0, 3) if state["rec"] else None
