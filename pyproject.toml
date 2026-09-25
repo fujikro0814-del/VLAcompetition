@@ -14,3 +14,4 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+faulthandler_timeout = 300      # 止まったときにスタックを残す（掲示板 0010 の 3）
