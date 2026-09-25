@@ -144,17 +144,21 @@ def summarize(rows: list) -> list:
             continue
         n = len(rs)
         cnt = collections.Counter(category(a) for a in rs)
-        excluded = collections.Counter(a["failure"] for a in rs if category(a) == "excluded")
-        eff = cnt["success"] + cnt["recovery_failed"] + cnt["landing_invalid"]
-        valid = cnt["success"] + cnt["recovery_failed"]
+        excluded = collections.Counter(f"{a['failure']}:{a['inject']['reason']}" for a in rs if category(a) == "excluded")
+        n_excl = sum(excluded.values())
+        valid = cnt["success"] + cnt["recovery_failed"]            # 確定（注入が confirmed）
+        eff = valid + cnt["landing_invalid"]                        # 確定＋着地が不自然（0035 の 2 の分母）
         succ = [a for a in rs if a["success"]]
         within = sum(abs(a["inject"]["info"].get("yaw_rel_deg", 0.0)) <= split for a in succ)
         row = {
             "point": pt["id"], "kind": pt["kind"], "overrides": pt["overrides"], "n": n,
             "seeds": [min(a["layout_seed"] for a in rs), max(a["layout_seed"] for a in rs)],
-            "counts": {c: cnt[c] for c in CATS}, "excluded": dict(excluded),
+            "counts": {c: cnt[c] for c in CATS}, "excluded": dict(excluded), "excluded_n": n_excl,
+            "r0_below_min": sum(v for k, v in excluded.items() if k.endswith(":r0_below_min")),
             "wilson_of_n": {c: wilson(cnt[c], n) for c in CATS},
-            "not_effective_rate": [cnt["not_effective"], n, wilson(cnt["not_effective"], n)],
+            # 0035 の 1: 分母は n − 注入前の自然な失敗（区分の外）
+            "not_effective_rate": [cnt["not_effective"], n - n_excl, wilson(cnt["not_effective"], n - n_excl)],
+            "confirmed_rate": [valid, n, wilson(valid, n)],
             "landing_invalid_ratio": [cnt["landing_invalid"], eff, wilson(cnt["landing_invalid"], eff)],
             "recovery_success": [cnt["success"], valid, wilson(cnt["success"], valid)],
             "success_yaw_within": [within, len(succ)], "success_yaw_beyond": [len(succ) - within, len(succ)],
@@ -178,8 +182,53 @@ def summarize(rows: list) -> list:
     return out
 
 
+def rate(x) -> float:
+    k, n = x[0], x[1]
+    return k / n if n else float("nan")
+
+
+def decide(rows: list) -> dict:
+    """掲示板 0035 の決まり（振りの結果を見る前に固めた）で A・B の値を決める。"""
+    out = {}
+    # A: 上げる型の点のうち「効かず」の推定値 ≤ 10% の点が続く範囲をつなぐ。raise_ratio は 0.5 のまま
+    a_pts = [(r["overrides"]["A"]["raise_close_m"], rate(r["not_effective_rate"]))
+             for r in rows if r["kind"] == "A" and r["overrides"]["A"].get("raise_ratio") == 1.0]
+    a_pts.sort(key=lambda x: x[0][0])
+    runs, cur = [], []
+    for rng_, r in a_pts:
+        if r <= 0.10:
+            cur.append(rng_)
+        else:
+            if cur:
+                runs.append(cur)
+            cur = []
+    if cur:
+        runs.append(cur)
+    if runs:
+        best = max(runs, key=lambda run: (len(run), -run[0][0]))
+        out["A"] = {"raise_close_m": [best[0][0], best[-1][1]], "raise_ratio": 0.5,
+                    "runs": [[run[0][0], run[-1][1]] for run in runs], "rule": "0035 の 1"}
+    else:
+        out["A"] = {"raise_ratio": 0.0, "runs": [], "rule": "0035 の 1（10% 以下の点がない → 横ずらしだけ）"}
+    # B: 「不自然」の推定値 ≤ 20% の最小の下限。20% 以下がない、または「机上の他の立方体」が下限とともに増えたら ask
+    b = sorted((r for r in rows if r["kind"] == "B"), key=lambda r: r["overrides"]["B"]["min_dist_from_box_m"])
+    table_cube = [r["landing_invalid_breakdown"].get("table_cube", 0) for r in b]
+    ok = [r["overrides"]["B"]["min_dist_from_box_m"] for r in b if rate(r["landing_invalid_ratio"]) <= 0.20]
+    increasing = len(table_cube) >= 2 and table_cube[-1] > table_cube[0]
+    out["B"] = {"table_cube_by_point": dict(zip([r["point"] for r in b], table_cube)),
+                "points_at_or_below_20pct": ok, "table_cube_increasing": increasing}
+    if not ok or increasing:
+        out["B"]["decision"] = "ask"
+        out["B"]["why"] = ("20% 以下の点がない" if not ok else "") + (" 机上の他の立方体が下限とともに増えている" if increasing else "")
+    else:
+        out["B"]["decision"] = {"min_dist_from_box_m": min(ok)}
+    return out
+
+
 def cmd_sweep(a) -> None:
     n = 2 if a.smoke else a.n
+    if n > 200:
+        raise SystemExit("n は 200 以下（掲示板 0035 の 4。超えると B と C の種の範囲が重なる）")
     jobs = []
     for pt in points():
         base = SEED_BASE[pt["kind"]]
@@ -208,9 +257,10 @@ def cmd_sweep(a) -> None:
         if pool is not None:
             pool.close()
             pool.join()
+    pts = summarize(rows)
     write(name, {"n_per_point": n, "workers": a.workers, "wall_s": round(time.perf_counter() - t0, 1),
                  "seed_ranges": {k: [v, v + n - 1] for k, v in SEED_BASE.items()},
-                 "rows": str(rows_path.relative_to(config.ROOT)), "points": summarize(rows)})
+                 "rows": str(rows_path.relative_to(config.ROOT)), "points": pts, "decision": decide(pts)})
 
 
 # ------------------------------------------------------------------------ completion conditions 1〜4
