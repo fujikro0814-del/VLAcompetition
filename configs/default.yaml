@@ -139,6 +139,7 @@ train:
     K1: {steps: 8000, save_freq: 8000}
     K1_lora: {steps: 8000, save_freq: 8000}      # 掲示板 0040（LoRA の枝）
     smoke_lora: {steps: 50, save_freq: 50}       # 掲示板 0040 の条件 2（保存と推論の経路の一致を確かめる試し）
+    K1_cue: {steps: 8000, save_freq: 8000}       # 掲示板 0048（目標の手がかり 15 → 18 次元、行動エキスパートのみ）
     R1: {steps: 30000, save_freq: 5000}
     N1: {steps: 30000, save_freq: 5000}
     second_round: {steps: 10000, save_freq: 5000, optimizer_lr: 3.0e-5,
@@ -184,6 +185,10 @@ planner:
   step_timeout_s: 30
   retry: 1
   completion_hold_s: 1.0
-  color_detect: null         # 色ごとの閾値（Step I）
+  # 色の判定（recovla.perception.color。Step I と K1 の目標の手がかり＝決裁 0048 で共用）。学習データの種（K1 の
+  # 10000〜10099、100 エピソード・3561 こま）だけで決めた（scripts/23_color_fit.py、outputs/k1/color_fit.json）。
+  # 選択用・最終評価用の種では調整しない。3 色の画素の F1 の平均 0.937。写っていないのに検出したことは 0 回、
+  # 机の上の立方体なら 1 画素の検出からで位置の差の 95 百分位が 2 cm 以下 → min_pixels 1
+  color_detect: {min_value: 20, min_margin: 40, min_pixels: 1}
 
 viz: {fps: 30}

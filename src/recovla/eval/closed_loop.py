@@ -302,6 +302,7 @@ class PolicyActions:
 
     def start_trial(self, seed: int) -> None:
         self.policy.reset()
+        self.builder.reset()                  # 目標の手がかり（0048）の「最後に見えた値」を試行ごとに捨てる
         self.generator = self.torch.Generator().manual_seed(int(seed))
         self.policy_frames = []
         self.timing = []

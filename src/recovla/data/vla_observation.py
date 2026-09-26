@@ -63,14 +63,38 @@ def observation_images(raw_by_view: dict) -> dict:
 
 class PolicyObservationBuilder:
     """Construct once per evaluation run with the checkpoint being evaluated; the spec check runs
-    in the constructor, i.e. before the policy is ever called."""
+    in the constructor, i.e. before the policy is ever called.
+
+    Target cue (board 0048): if the training conversion.json has "target_cue", observation.state gets the
+    3 cue values (vla_state.CUE_NAMES) from the overhead raw render, computed by the same part and the
+    same thresholds as the converter (checked here against configs). Call reset() at the start of every
+    trial (the cue keeps the last seen position while the target is hidden)."""
 
     def __init__(self, checkpoint_dir):
         self.conversion = load_training_spec(checkpoint_dir)
         self.checkpoint_dir = pathlib.Path(checkpoint_dir)
+        self.cue = None
+        rec = self.conversion.get("target_cue")
+        if rec is not None:
+            from recovla.data.convert import cue_tracker
+            self.cue = cue_tracker()
+            if rec["thresholds"] != self.cue.thr.to_json() or rec["names"] != list(vla_state.CUE_NAMES):
+                raise spec.ImageSpecError(f"target_cue of the training data {rec['thresholds']} != runtime "
+                                          f"{self.cue.thr.to_json()}")
+        self.last_cue = None
 
-    def build(self, raw_by_view: dict, proprio: dict, task: str) -> dict:
+    def reset(self) -> None:
+        if self.cue is not None:
+            self.cue.reset()
+        self.last_cue = None
+
+    def build(self, raw_by_view: dict, proprio: dict, task: str, cue_color: str = None) -> dict:
         """raw_by_view: {view: raw render}; proprio: one frame of the recorder's fields
-        {ee_pos (3,), ee_quat (4,), fingers (2,), joints (7,)} read from the simulation."""
-        return {**observation_images(raw_by_view), "observation.state": vla_state.policy_state_frame(proprio),
-                "task": str(task)}
+        {ee_pos (3,), ee_quat (4,), fingers (2,), joints (7,)} read from the simulation.
+        cue_color: the color whose cue is computed (default: the color word of task; E6 swaps it alone)."""
+        state = vla_state.policy_state_frame(proprio)
+        if self.cue is not None:
+            from recovla.perception.color import color_of_instruction
+            self.last_cue = self.cue.update(raw_by_view["overhead"], cue_color or color_of_instruction(task))
+            state = vla_state.with_cue(state, self.last_cue)
+        return {**observation_images(raw_by_view), "observation.state": state, "task": str(task)}

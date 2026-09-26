@@ -149,15 +149,21 @@ def cmd_e6(a) -> None:
             cubes_xy = {c: frame["cube_pos"][i, :2].tolist() for i, c in enumerate(COLORS)}
             pol.input_check = None
             for ci, color in enumerate(COLORS):
+                # 目標の手がかり（決裁 0048）: 既定は指示と手がかりを一緒に差し替える（color が正解）。cue_only は
+                # 手がかりだけを color に差し替え、指示は次の色のまま（どちらに従うかを見る。正解は手がかりの色）
+                instr_color = COLORS[(ci + 1) % len(COLORS)] if a.cue_mode == "cue_only" else color
                 samples = []
                 for j in range(E6_SAMPLES):
                     gen = pol.torch.Generator().manual_seed(seeds.torch_seed(seeds.seed_sequence(seed, "noise", ci, j)))
-                    ch = pol.chunk_for(raw, frame, instruction(color), gen)
+                    ch = pol.chunk_for(raw, frame, instruction(instr_color), gen, cue_color=color)
                     samples.append(chunk_target(ch, frame["x_des"], cubes_xy))
                 votes = collections.Counter(s["nearest"] for s in samples)
                 maj = majority([s["nearest"] for s in samples])
-                rows.append({"seed": seed, "instruction": color, "votes": dict(votes), "majority": maj,
-                             "correct_majority": maj == color,
+                rows.append({"seed": seed, "instruction": color, "instruction_text_color": instr_color,
+                             "cue_color": color if pol.builder.cue is not None else None,
+                             "cue": None if pol.builder.last_cue is None else [float(v) for v in pol.builder.last_cue],
+                             "votes": dict(votes), "majority": maj,
+                             "correct_majority": maj == color, "follows_instruction_text_majority": maj == instr_color,
                              "correct_samples": sum(s["nearest"] == color for s in samples),
                              "mid_drop_samples": sum(s["mid_drop"] for s in samples), "samples": samples})
     finally:
@@ -177,6 +183,8 @@ def cmd_e6(a) -> None:
            "mid_drop_rate": sum(r["mid_drop_samples"] for r in rows) / total_samples,
            "closed_within_chunk_rate": sum(s["closed"] for r in rows for s in r["samples"]) / total_samples,
            "by_instruction": {c: sum(r["correct_majority"] for r in rows if r["instruction"] == c) / (n / 3) for c in COLORS},
+           "cue_mode": a.cue_mode, "has_target_cue": pol.builder.cue is not None,
+           "follows_instruction_text_majority": sum(r["follows_instruction_text_majority"] for r in rows) / n,
            "input_check_last": pol.input_check, "rows": rows}
     write("e6" + a.tag, res)
 
@@ -236,7 +244,29 @@ def cmd_closed(a) -> None:
                      "inference": pol.timing_summary(), "rows": rows})
 
 
-COMMANDS = {"gen": cmd_gen, "train": cmd_train, "e6": cmd_e6, "closed": cmd_closed}
+def cmd_convert_cue(a) -> None:
+    """生成し直さずに、同じ生の記録（gen<gen-tag> のマニフェスト）を目標の手がかりつき（18 次元）で変換し直す（0048 の 4）。"""
+    g = read("gen" + a.gen_tag)
+    manifest = config.path(g["manifest"])
+    name = f"K1cue{a.gen_tag}_{stamp()}"
+    ds = config.path(CFG["paths"]["outputs"]) / "datasets" / name
+    log = OUT / f"convert_{name}.log"
+    t0 = time.time()
+    with open(log, "w", encoding="utf-8") as f:
+        c1 = subprocess.run([sys.executable, "-m", "recovla.data.convert", "--manifest", str(manifest), "--out", str(ds),
+                             "--name", name, "--target-cue"], stdout=f, stderr=subprocess.STDOUT)
+        c2 = subprocess.run([sys.executable, "-m", "recovla.data.convert", "--verify", str(ds)],
+                            stdout=f, stderr=subprocess.STDOUT)
+    text = log.read_text(encoding="utf-8", errors="replace")
+    write("gen" + a.tag, {**{k: v for k, v in g.items() if k not in ("check", "written")},
+                          "dataset": str(ds.relative_to(config.ROOT)), "source_gen": "gen" + a.gen_tag,
+                          "target_cue": True, "convert_exit": c1.returncode, "verify_exit": c2.returncode,
+                          "verify_pass": "[verify] PASS" in text,
+                          "verify_fails": [l.strip() for l in text.splitlines() if l.strip().startswith("FAIL")],
+                          "convert_wall_s": round(time.time() - t0, 1), "log": str(log.relative_to(config.ROOT))})
+
+
+COMMANDS = {"gen": cmd_gen, "train": cmd_train, "e6": cmd_e6, "closed": cmd_closed, "convert-cue": cmd_convert_cue}
 
 
 def main(argv=None) -> int:
@@ -247,10 +277,16 @@ def main(argv=None) -> int:
     s.add_argument("--layouts", type=int, default=len(K1_SEEDS), help="配置の数（種 10000 から）。掲示板 0040 は 100")
     s.add_argument("--tag", default="", help="結果の名前に付ける（例 _100）。gen<tag>.json に書く")
     s = sub.add_parser("train")
-    s.add_argument("run", choices=["smoke", "K1", "smoke_lora", "K1_lora"])
+    s.add_argument("run", choices=["smoke", "K1", "smoke_lora", "K1_lora", "K1_cue"])
     s.add_argument("--gen-tag", default="", help="どの gen<tag>.json のデータで学習するか")
+    s = sub.add_parser("convert-cue")
+    s.add_argument("--gen-tag", default="_100", help="どの gen<tag>.json の生の記録を変換し直すか")
+    s.add_argument("--tag", default="_cue", help="結果を gen<tag>.json に書く")
     for name in ("e6", "closed"):
         s = sub.add_parser(name)
+        if name == "e6":
+            s.add_argument("--cue-mode", choices=["both", "cue_only"], default="both",
+                           help="both: 指示と手がかりを一緒に差し替え（正解は差し替えた色）。cue_only: 手がかりだけ（0048）")
         s.add_argument("--checkpoint", default=None, help="既定は train K1 の保存点（checkpoints/last）")
         s.add_argument("--limit", type=int, default=None, help="先頭から何配置・何試行だけ回す（通しの確認用）")
         s.add_argument("--tag", default="", help="結果の名前に付ける（通しの確認用。例 _smoke）")

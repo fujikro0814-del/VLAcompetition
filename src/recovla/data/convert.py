@@ -109,13 +109,50 @@ def manifest_episodes(manifest: dict) -> list:
     return paths
 
 
-def features(size: int = 256) -> dict:
+def state_names(target_cue: bool = False) -> list:
+    return list(STATE_NAMES) + (list(vla_state.CUE_NAMES) if target_cue else [])
+
+
+def features(size: int = 256, target_cue: bool = False) -> dict:
     img = {"dtype": "image", "shape": [size, size, 3], "names": ["height", "width", "channel"]}
+    names = state_names(target_cue)
     return {
         **{IMAGE_KEYS[view]: dict(img) for view in spec.CAMERAS},
-        "observation.state": {"dtype": "float32", "shape": [len(STATE_NAMES)], "names": STATE_NAMES},
+        "observation.state": {"dtype": "float32", "shape": [len(names)], "names": names},
         "action": {"dtype": "float32", "shape": [len(ACTION_NAMES)], "names": ACTION_NAMES},
     }
+
+
+# ------------------------------------------------------------- target cue (決裁 0048)
+
+def cue_tracker():
+    """学習と評価で同じ部品・同じ閾値（recovla.perception.color、configs の planner.color_detect）。"""
+    from recovla.perception import color as PC
+    from recovla.sim import scene
+    return PC.TargetCue(PC.overhead_calibration(scene.build_model("3cube")), PC.Thresholds.from_config())
+
+
+def cue_record(tracker) -> dict:
+    """conversion.json の target_cue。評価の入口（vla_observation）はこれを見て同じ手がかりを足す。"""
+    return {"version": 1, "names": list(vla_state.CUE_NAMES), "thresholds": tracker.thr.to_json(),
+            "plane_z": float(tracker.plane_z), "fallback_xy": [float(v) for v in tracker.fallback],
+            "calibration": tracker.calib.to_json(), "fixed_stats": vla_state.CUE_FIXED_STATS,
+            "definition": "overhead raw render → pixels of the instructed color (recovla.perception.color) → "
+                          "centroid → ray to the plane z = cube rest height → (x, y); flag 1 if >= min_pixels "
+                          "pixels, else 0 and the last seen (x, y) is kept (region centre if never seen). "
+                          "Recomputed at every 10 fps frame in episode order. No simulator truth."}
+
+
+def fix_cue_stats(out: pathlib.Path) -> None:
+    """旗など、学習データで一定になりうる次元の正規化の値を固定する（vla_state.CUE_FIXED_STATS）。"""
+    path = out / "meta" / "stats.json"
+    stats = json.loads(path.read_text(encoding="utf-8"))
+    names = state_names(True)
+    for name, fixed in vla_state.CUE_FIXED_STATS.items():
+        i = names.index(name)
+        for k, v in fixed.items():
+            stats["observation.state"][k][i] = v
+    path.write_text(json.dumps(stats, indent=4), encoding="utf-8")
 
 
 # ------------------------------------------------------------- raw side
@@ -163,25 +200,31 @@ def sha256(path: pathlib.Path) -> str:
 
 # ------------------------------------------------------------ conversion
 
-def convert(episodes: list, out: pathlib.Path, name: str, manifest: dict = None) -> None:
+def convert(episodes: list, out: pathlib.Path, name: str, manifest: dict = None, target_cue: bool = False) -> None:
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
     if out.exists():
         raise FileExistsError(f"{out} exists; converted datasets are rebuilt, not appended to")
     first_meta, _ = load_raw(episodes[0])
     ds = LeRobotDataset.create(repo_id=f"local/{name}", fps=FPS, features=features(
-        int(first_meta["cameras"]["width"])), root=out, robot_type="panda", use_videos=False)
+        int(first_meta["cameras"]["width"]), target_cue), root=out, robot_type="panda", use_videos=False)
+    tracker = cue_tracker() if target_cue else None
     sources = []
     try:
         for ep_index, path in enumerate(episodes):
             meta, data = load_raw(path)
             arr = episode_arrays(meta, data)
+            if tracker is not None:
+                tracker.reset()
             for k, i in enumerate(arr["raw_index"]):
-                images = spec.policy_images({view: read_raw_image(path / view / f"{i:06d}.png")
-                                             for view in spec.CAMERAS})
+                raw = {view: read_raw_image(path / view / f"{i:06d}.png") for view in spec.CAMERAS}
+                images = spec.policy_images(raw)
+                state = arr["state"][k]
+                if tracker is not None:
+                    state = vla_state.with_cue(state, tracker.update(raw["overhead"], meta["target"]))
                 ds.add_frame({
                     **images,
-                    "observation.state": arr["state"][k],
+                    "observation.state": state,
                     "action": arr["action"][k],
                     "task": meta["instruction"],
                 })
@@ -200,13 +243,16 @@ def convert(episodes: list, out: pathlib.Path, name: str, manifest: dict = None)
                   f"{meta['n_frames']} raw frames -> {len(arr['raw_index'])} frames")
     finally:
         ds.finalize()
+    if tracker is not None:
+        fix_cue_stats(out)
     (out / "meta" / "conversion.json").write_text(json.dumps({
         "converter_version": CONVERTER_VERSION,
         "converted_at": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
         "fps": FPS, "raw_hz": RAW_HZ, "stride": STRIDE,
         **spec.spec_record(),
         "images": "PNG from raw -> vla_image_spec net transform per view (image_transforms)",
-        "state": STATE_NAMES, "action": ACTION_NAMES,
+        "state": state_names(target_cue), "action": ACTION_NAMES,
+        **({"target_cue": cue_record(tracker)} if tracker is not None else {}),
         "action_definition": "xyz = x_des[raw 2k+2] - x_des[raw 2k] (m, world); rot = 0; "
                              "gripper = +1 closed / -1 open at raw frame 2k+2",
         "orientation": "world-frame axis-angle of ee_quat * conj(q_down), q_down = (0,1,0,0) "
@@ -258,8 +304,22 @@ def verify(out: pathlib.Path, export_dir, check_image=None) -> bool:
     check(ds.num_episodes == len(conv["sources"]), "episode count matches conversion.json")
     check(ds.num_frames == sum(s["frames"] for s in conv["sources"]), "frame count matches")
 
+    target_cue = "target_cue" in conv
+    names_state = state_names(target_cue)
+    check(ds.meta.features["observation.state"]["names"] == names_state and conv["state"] == names_state,
+          f"state names == {len(names_state)} (target_cue {target_cue})")
+    tracker = cue_tracker() if target_cue else None
+    if tracker is not None:
+        check(conv["target_cue"]["thresholds"] == tracker.thr.to_json(),
+              f"target_cue thresholds recorded == configs planner.color_detect {tracker.thr.to_json()}")
+    fixed = vla_state.CUE_FIXED_STATS if target_cue else {}
+
     # stats: finite, and normalization never divides by zero
     stats = ds.meta.stats
+    for n, want in fixed.items():
+        i = names_state.index(n)
+        got = {k: float(np.asarray(stats["observation.state"][k])[i]) for k in want}
+        check(got == want, f"observation.state {n} stats fixed to {want} (got {got})")
     for key in ("observation.state", "action"):
         mean = np.asarray(stats[key]["mean"], dtype=np.float64)
         std = np.asarray(stats[key]["std"], dtype=np.float64)
@@ -280,6 +340,11 @@ def verify(out: pathlib.Path, export_dir, check_image=None) -> bool:
     for src in conv["sources"]:
         meta, data = load_raw(pathlib.Path(src["raw_path"]))
         arr = episode_arrays(meta, data)
+        if tracker is not None:            # 手がかりを生の俯瞰画像から計算し直して、期待する 18 次元を作る
+            tracker.reset()
+            cues = [tracker.update(read_raw_image(pathlib.Path(src["raw_path"]) / "overhead" / f"{int(i):06d}.png"),
+                                   meta["target"]) for i in arr["raw_index"]]
+            arr["state"] = vla_state.with_cue(arr["state"], np.array(cues))
         ep = src["episode_index"]
         start = int(ds.meta.episodes[ep]["dataset_from_index"])
         stop = int(ds.meta.episodes[ep]["dataset_to_index"])
@@ -295,7 +360,8 @@ def verify(out: pathlib.Path, export_dir, check_image=None) -> bool:
                     check(item["task"] == want and src.get("target") == meta["target"],
                           f"ep {ep}: task color == meta target '{meta['target']}'")
                 check(item["observation.state"].dtype == torch.float32
-                      and tuple(item["observation.state"].shape) == (15,), f"ep {ep}: state float32 (15,)")
+                      and tuple(item["observation.state"].shape) == (len(names_state),),
+                      f"ep {ep}: state float32 ({len(names_state)},)")
                 h, w, c = ds.meta.features[IMAGE_KEYS["overhead"]]["shape"]
                 check(tuple(item[IMAGE_KEYS["overhead"]].shape) == (c, h, w),
                       f"ep {ep}: image tensor ({c}, {h}, {w})")
@@ -346,7 +412,7 @@ def verify(out: pathlib.Path, export_dir, check_image=None) -> bool:
         true_std = allv.std(axis=0)
         got = np.asarray(stats[key]["std"], dtype=np.float64)
         bad = [n for n, t, g in zip(ds.meta.features[key]["names"], true_std, got)
-               if abs(t - g) > max(1e-6, 1e-2 * t)]
+               if n not in fixed and abs(t - g) > max(1e-6, 1e-2 * t)]   # 固定した次元は上で確かめた
         check(not bad, f"{key} stats std == float64 std (mismatch: {bad})")
 
     if export_dir:
@@ -371,6 +437,8 @@ def main(argv=None) -> int:
     ap.add_argument("--export-actions", help="with --verify: write per-episode action npz here")
     ap.add_argument("--check-image", help="with --verify: raw-vs-policy-input PNG path "
                                           "(default: next to the dataset, <name>_verify_raw_vs_policy.png)")
+    ap.add_argument("--target-cue", action="store_true",
+                    help="add the target position cue to observation.state (15 -> 18; board 0048)")
     args = ap.parse_args(argv)
     if args.verify:
         return 0 if verify(pathlib.Path(args.verify), args.export_actions, args.check_image) else 1
@@ -383,7 +451,7 @@ def main(argv=None) -> int:
         episodes += raw_episodes(pathlib.Path(args.raw_dir))
     if not episodes or not args.out or not args.name:
         ap.error("need --out, --name and episodes (paths, --manifest or --raw-dir)")
-    convert(episodes, pathlib.Path(args.out), args.name, manifest)
+    convert(episodes, pathlib.Path(args.out), args.name, manifest, target_cue=args.target_cue)
     return 0
 
 

@@ -39,9 +39,12 @@ class ScenePolicy(PolicyActions):
         action = self.post(action)
         return action.detach().cpu().numpy().reshape(-1)[:7].astype(np.float64)
 
-    def chunk_for(self, raw_by_view, frame, task, generator) -> np.ndarray:
-        """1 つの観測から塊を 1 つ（後処理の後の (chunk_size, 7)）。雑音は渡された生成器から引く。"""
-        batch = self.prepare(self.builder.build(raw_by_view, frame, task))
+    def chunk_for(self, raw_by_view, frame, task, generator, cue_color=None) -> np.ndarray:
+        """1 つの観測から塊を 1 つ（後処理の後の (chunk_size, 7)）。雑音は渡された生成器から引く。
+        cue_color: 目標の手がかり（0048）を計算する色（既定は指示の色。E6 で手がかりだけを差し替えるとき）。
+        塊ごとに独立に見るので、手がかりの「最後に見えた値」は毎回捨てる。"""
+        self.builder.reset()
+        batch = self.prepare(self.builder.build(raw_by_view, frame, task, cue_color))
         noise = self.torch.randn((1, self.policy.config.chunk_size, self.policy.config.max_action_dim),
                                  generator=generator).to(self.device)
         with self.torch.no_grad():
