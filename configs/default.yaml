@@ -172,6 +172,18 @@ eval:
   P3: {min_clearance_m: 0.03}
   induction_min_rate: 0.8
   swap_mid_drop_m: 0.03      # E6: 判定した地点がどの立方体からもこれ以上離れていれば「中間落ち」（手順書 Step E の 3）
+  # 自然な失敗の検出（0069 の 5・0070 の 5。分類と R2 の甲の引き継ぎで同じ定義）。recovla.eval.failure_detect
+  failure_detect:
+    grasp_window_s: 2.0      # (i) 掴み損ね: 閉じてからこの時間内に lift_m 持ち上がらない（P1 と同じ）
+    lift_m: 0.02             # 持ち上がったとみなす高さ（机の上の静止の高さから）
+    rest_speed: 0.01         # (ii) 落下: 目標の速さがこれ未満で
+    rest_hold_s: 0.3         #          この時間続いた（Step F の着地の静止と同じ）
+    table_z_tol_m: 0.01      #          机の上＝静止の高さからこれ未満。それ以外は「その他の落下」（0070 の 5 (a)）
+    held_dist_m: 0.025       # 把持中＝グリッパが閉で、指先の中心と目標の中心がこれ未満（落下の静止から除く）
+    wrong_color_dist_m: 0.05 # (iii) 誤った色へ接近: グリッパが開で、指先の中心と目標外の机上の立方体の中心（3 次元）
+    stall_hand_speed: 0.01   # (iv) 停滞: 指先の速さがこれ未満
+    stall_finger_speed: 0.005   #        かつ指の速さ（2 本の和）がこれ未満が
+    stall_s: 3.0             #        この時間続いた
 
 seeds:                       # §9 の帯（学習用は 100000 未満、評価は 100000 以上）
   eval_base: 100000

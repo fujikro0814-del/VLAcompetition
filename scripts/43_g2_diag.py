@@ -338,6 +338,36 @@ def cmd_states(a) -> None:
     print(json.dumps(summ, ensure_ascii=False, indent=1))
 
 
+# ------------------------------------------------------------------ 0070 の 5 (b)
+
+def cmd_fdcheck(a) -> None:
+    """G2 で成功した試行（R1・N1 の自然）に失敗の検出 (i)〜(iv) を当て、成功の前に誤って発火した件数（0070 の 5 (b)）。"""
+    import collections
+    from recovla.eval import failure_detect as FD
+    res = {}
+    for cond in ("R1_nat", "N1_nat"):
+        rows = []
+        for p in sorted((OUTPUTS / "eval" / "G2" / cond).glob("trial_*.json")):
+            m = json.loads(p.read_text(encoding="utf-8"))
+            if not m["success"]:
+                continue
+            arr = np.load(p.with_suffix(".npz"))
+            evs = FD.detect_trial(arr, t_end=float(m["steps"][0]["t_success"]))
+            rows.append({"seed": m["seed"], "t_success": m["steps"][0]["t_success"],
+                         "events": [{"kind": e.kind, "t": e.t, **{k: v for k, v in e.info.items()
+                                                                   if not isinstance(v, list)}} for e in evs]})
+        fired = [r for r in rows if r["events"]]
+        res[cond] = {"successes": len(rows), "trials_with_false_fire": len(fired),
+                     "by_kind": dict(collections.Counter(e["kind"] for r in rows for e in r["events"])),
+                     "fired_rows": fired}
+        print(cond, {k: v for k, v in res[cond].items() if k != "fired_rows"}, flush=True)
+    RES_OUT.mkdir(parents=True, exist_ok=True)
+    (RES_OUT / "failure_detect_check.json").write_text(json.dumps({
+        "note": "0070 の 5 (b): 成功した試行で、成功の時刻より前に発火した検出。閾値は configs の eval.failure_detect",
+        "thresholds": CFG["eval"]["failure_detect"], "results": res, "written": time.strftime("%Y-%m-%d %H:%M:%S")},
+        ensure_ascii=False, indent=2, default=float), encoding="utf-8")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -347,8 +377,9 @@ def main(argv=None) -> int:
     s.add_argument("--model", choices=["R1", "N1"], default="R1")
     sub.add_parser("pilot")
     sub.add_parser("states")
+    sub.add_parser("fdcheck")
     a = ap.parse_args(argv)
-    {"hold": cmd_hold, "pilot": cmd_pilot, "states": cmd_states}[a.cmd](a)
+    {"hold": cmd_hold, "pilot": cmd_pilot, "states": cmd_states, "fdcheck": cmd_fdcheck}[a.cmd](a)
     return 0
 
 
