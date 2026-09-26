@@ -309,7 +309,7 @@ def main(argv=None) -> int:
     s.add_argument("--condition", required=True)
     s.add_argument("--checkpoint", required=True)
     s.add_argument("--model", default=None)
-    s.add_argument("--mode", choices=["sync", "naive", "rtc"], default="rtc")
+    s.add_argument("--mode", choices=["sync", "naive", "rtc"], default=CFG["runtime"]["mode"])
     s.add_argument("--s", type=int, default=int(CFG["runtime"]["exec_interval"]))
     s.add_argument("--d", type=int, default=CFG["runtime"]["delay_steps"])
     s.add_argument("--horizon", type=int, default=None)

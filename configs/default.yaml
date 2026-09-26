@@ -148,11 +148,11 @@ train:
                    warmup_steps: 200, decay_steps: 10000, decay_lr: 2.5e-6}   # §10
 
 runtime:
-  mode: rtc                  # sync | naive | rtc
+  mode: naive                # sync | naive | rtc。本線の非同期の設定を 2026-09-27 に決め直した（0075 の 1、scripts/48_rtc_redo.py、outputs/results/rtc_redo_decision.json）: rtc 範囲 40・rtc 範囲 10・naive d=4 のうち、立ち直りの合計 5・13・19 で naive（RTC なし）。以後 R2 の結果によらず変えない。G2 までの数字は rtc 範囲 40 のもの
   exec_interval: 10          # s。変えない（掲示板 0010）
   delay_steps: 4             # d。delay_rule で決めた（R1 の 3 万手、rtc・s=10、推論 109 回、p95 0.396 s → ceil = 4。outputs/results/dcal.json。0010・0063）。以後の全評価でこの値（「d=2」の箇所をすべて置き換える＝0063 の 1）
   delay_rule: {min_samples: 50, percentile: 95, action_dt_s: 0.1, max_d: 5}   # d = ceil(p95 / 0.1 s)、RTC あり、最初の 1 回を除く。d > 5 なら止めて報告
-  rtc_guidance_horizon: 40   # 2×2 で決めた（0062・0063 の決まり。outputs/results/rtc_decision.json、掲示板 0066）
+  rtc_guidance_horizon: 40   # 2×2 で決めた（0062・0063 の決まり。outputs/results/rtc_decision.json、掲示板 0066）。mode が rtc のときだけ使う（本線は 0075 の決め直しで naive）
   rtc_schedule: EXP          # 同上。必ず明示（落とし穴16）
   rtc_max_guidance_weight: 10.0
   # 評価器（方策の推論）の TF32（決裁 0042）。以後の評価はすべてこの設定で行う。学習（lerobot-train）は行列積の
