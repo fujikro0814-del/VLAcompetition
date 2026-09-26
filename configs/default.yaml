@@ -90,7 +90,8 @@ expert:
           retreat_tol_m: 0.003}    # 待機位置に着いた（x_des が待機位置からこの距離以内）
 
 inject:                      # Step F（手順書 §7）。recovla.expert.inject
-  A: {lateral_offset_m: [0.025, 0.035], raise_close_m: [0.015, 0.025], raise_ratio: 0.5, lift_m: [0.03, 0.05],
+  A: {lateral_offset_m: [0.025, 0.035], raise_ratio: 0.5, lift_m: [0.03, 0.05],
+      raise_close_m: [0.025, 0.05],  # 振り（outputs/f/sweep.json、掲示板 0035 の 1 の決まり・0036）で決めた。手順書の 1.5〜2.5 cm は 101/120 が効かなかった
       confirm: {hand_rise_min_m: 0.03, cube_rise_max_m: 0.01},
       lift_rise_margin_m: 0.002,   # 持ち上げの目標を hand_rise_min + この値以上にする（手先は目標に漸近するので、ちょうど 3 cm では確定しない）
       lift_done_tol_m: 0.001,      # 手先の高さが持ち上げの目標からこの距離以内で、手が止まったら確定の判定をする
