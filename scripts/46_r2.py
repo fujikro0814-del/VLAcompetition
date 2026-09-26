@@ -113,9 +113,14 @@ def _generate(kind, seeds_iter, quota, run_dir, log, videos=0):
 
 
 def cmd_gen(a) -> None:
+    from recovla.common import code_version
     kind = a.kind
+    cv = code_version.code_version()           # 始めた時点のコードの版（未 commit の変更がないことも記録に残す）
     run_dir = OUTPUTS / "gen" / f"R2_{kind}_{time.strftime('%Y%m%d-%H%M%S')}{a.tag}"
     run_dir.mkdir(parents=True, exist_ok=False)
+    (run_dir / "start.json").write_text(json.dumps({"kind": kind, "code_version": cv, "runtime": CFG["runtime"],
+                                                    "started": time.strftime("%Y-%m-%d %H:%M:%S")},
+                                                   ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     base = SEED_BASE[kind]
     with open(run_dir / "r2_generation.jsonl", "w", encoding="utf-8") as log:
         got = _generate(kind, range(base, base + SEED_SPAN), QUOTA[kind], run_dir, log, videos=VIDEOS_PER_KIND)
