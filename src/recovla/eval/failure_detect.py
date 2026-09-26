@@ -9,7 +9,7 @@
 |---|---|
 | grasp_miss（掴み損ね） | グリッパが閉じてから grasp_window_s 以内に目標が lift_m 持ち上がらない → 閉じてから grasp_window_s の時点 |
 | drop_table（落下） | 目標が lift_m 以上持ち上がった後、箱の外・把持されていない状態で、速さ rest_speed 未満が rest_hold_s 続いた。机の上（静止の高さ + table_z_tol_m 未満）で静止 |
-| drop_other（その他の落下） | 同上で、机の上以外（箱の縁、他の立方体の上など）で静止（0070 の 5 (a)） |
+| drop_other（その他の落下） | 同上で、机の上以外（箱の縁、他の立方体の上など）で other_rest_hold_s 静止（0070 の 5 (a)、0072 の 2） |
 | wrong_color（誤った色へ接近） | グリッパが開で、指先の中心と、目標外で箱の外の机上の立方体の中心の距離（3 次元）が wrong_color_dist_m 未満 |
 | stall（停滞） | 指先の速さ stall_hand_speed 未満かつ指の速さ stall_finger_speed 未満が stall_s 続いた |
 
@@ -93,8 +93,9 @@ class FailureDetector:
             self._rest_s += dt
         else:
             self._rest_s = 0.0
-        if self._rest_s >= c["rest_hold_s"] - 1e-9:
-            kind = "drop_table" if rise < c["table_z_tol_m"] else "drop_other"
+        on_table = rise < c["table_z_tol_m"]
+        if self._rest_s >= (c["rest_hold_s"] if on_table else c["other_rest_hold_s"]) - 1e-9:
+            kind = "drop_table" if on_table else "drop_other"
             out = out or self._emit(kind, t, target_pos=[float(v) for v in tp])
             self._was_lifted, self._rest_s = False, 0.0          # 次に持ち上げたら数え直す
             self._base_rise = max(0.0, rise)

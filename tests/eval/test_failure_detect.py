@@ -24,10 +24,13 @@ MOVING_TIP = lambda f: np.array([0.3 + 0.002 * f, 0.1, 0.2])       # noqa: E731 
 OPEN = lambda f: np.array([0.04, 0.04])                            # noqa: E731
 
 
+WINDOW = float(FD._CFG["eval"]["failure_detect"]["grasp_window_s"])
+
+
 def test_grasp_miss_after_window():
-    det = _run(80, MOVING_TIP, OPEN, lambda f: f >= 10, _cubes(), NOBOX)
+    det = _run(int((WINDOW + 1.0) / DT) + 10, MOVING_TIP, OPEN, lambda f: f >= 10, _cubes(), NOBOX)
     assert [e.kind for e in det.events] == ["grasp_miss"]
-    assert abs(det.first.t - (10 * DT + 2.0)) < 1e-9
+    assert abs(det.first.t - (10 * DT + WINDOW)) < 1e-9
 
 
 def test_no_grasp_miss_when_lifted():
@@ -45,9 +48,16 @@ def _carried(f, rest_z):
 def test_drop_on_table_and_other():
     for rest_z, kind in ((Z0, "drop_table"), (Z0 + 0.05, "drop_other")):
         z = lambda f, rz=rest_z: _carried(f, rz)                   # noqa: E731
-        det = _run(40, MOVING_TIP, OPEN, lambda f: False, _cubes(z), NOBOX)
+        det = _run(60, MOVING_TIP, OPEN, lambda f: False, _cubes(z), NOBOX)     # 静止 2 s（その他の落下は 1.0 s 要る）
         kinds = [e.kind for e in det.events]
         assert kinds == [kind], kinds
+
+
+def test_other_drop_needs_longer_rest():
+    """箱の縁などで 0.5 s 止まってから動く（箱に入る）ものは、その他の落下にしない（0072 の 2）。"""
+    z = lambda f: _carried(f, Z0 + 0.05) if f < 30 else Z0 + 0.05 - 0.004 * (f - 29)   # noqa: E731
+    det = _run(45, MOVING_TIP, OPEN, lambda f: False, _cubes(z), NOBOX)
+    assert "drop_other" not in [e.kind for e in det.events]
 
 
 def test_no_drop_while_held_or_in_box():
@@ -83,4 +93,4 @@ def test_detect_trial_respects_t_end():
               "gripper_closed": np.array([f >= 10 for f in range(n)]), "cube_pos": np.array([_cubes()(f) for f in range(n)]),
               "cube_in_box": np.zeros((n, 3), bool)}
     assert [e.kind for e in FD.detect_trial(arrays)] == ["grasp_miss"]
-    assert FD.detect_trial(arrays, t_end=2.0) == []
+    assert FD.detect_trial(arrays, t_end=10 * DT + WINDOW - 0.1) == []
