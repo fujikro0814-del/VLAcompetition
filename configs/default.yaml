@@ -96,7 +96,7 @@ inject:                      # Step F（手順書 §7）。recovla.expert.inject
       lift_rise_margin_m: 0.002,   # 持ち上げの目標を hand_rise_min + この値以上にする（手先は目標に漸近するので、ちょうど 3 cm では確定しない）
       lift_done_tol_m: 0.001,      # 手先の高さが持ち上げの目標からこの距離以内で、手が止まったら確定の判定をする
       timeout_s: 6.0}              # 発動から確定の判定までの上限（超えたら「注入が効かなかった」）
-  B: {min_dist_from_box_m: 0.15}
+  B: {min_dist_from_box_m: 0.19}   # 振り（outputs/f/sweep.json）と決裁 0040 で決めた。手順書の 0.15 は箱 16 cm では壁に近すぎる（不自然 36.7%）。評価の P2 は Step G で諮る
   C: {min_clearance_m: 0.03, drop_max_tries: 1000}   # ずらし先は scene.region の一様（配置の範囲なので届き、写る）
   landing: {max_tilt_deg: 10, min_clearance_m: 0.03, max_invalid_ratio: 0.2,
             rest_speed: 0.01, rest_hold_s: 0.3, finger_gap_margin_m: 0.005,
