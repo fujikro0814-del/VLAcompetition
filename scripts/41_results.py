@@ -15,6 +15,7 @@
 import argparse
 import json
 import math
+import os
 import pathlib
 import time
 
@@ -23,6 +24,9 @@ import numpy as np
 from recovla.common import config
 
 CFG = config.load()
+# lerobot・huggingface_hub を import する前に決める（ネットワークなし。02_g0_check.py と同じ）
+os.environ["HF_HOME"] = str(config.path(CFG["paths"]["models_home"]))
+os.environ["HF_HUB_OFFLINE"] = "1"
 EVAL_OUT = config.path(CFG["paths"]["outputs"]) / "eval"
 RES_OUT = config.path(CFG["paths"]["outputs"]) / "results"
 
@@ -117,7 +121,7 @@ def cmd_dcal(a) -> None:
                        execution_horizon=int(CFG["runtime"]["rtc_guidance_horizon"]))
     runner = SceneRunner(pol, rt, {"schedule": CFG["runtime"]["rtc_schedule"],
                                    "max_guidance_weight": CFG["runtime"]["rtc_max_guidance_weight"]})
-    walls, trials_run = [], 0
+    walls, parts, trials_run = [], [], 0
     rig = SimRig(render=True)
     try:
         for seed, lay, tgt in trial_list(f"selection:{a.seed}:{a.max_trials}"):
@@ -125,7 +129,9 @@ def cmd_dcal(a) -> None:
             T.run_trial(rig, lay, tgt, runner, {"trial": trials_run, "seed": seed, "experiment": "dcal",
                                                 "condition": "dcal"}, render=True)
             trials_run += 1
-            walls += [e["wall_s"] for e in runner.trace()["inference"] if e["wall_s"] is not None]
+            inf = [e for e in runner.trace()["inference"] if e["wall_s"] is not None]
+            walls += [e["wall_s"] for e in inf]
+            parts += [e["wall_breakdown_s"] for e in inf]
             if len(walls) - 1 >= a.n:
                 break
     finally:
@@ -135,7 +141,9 @@ def cmd_dcal(a) -> None:
     p95 = float(np.percentile(w, float(rule["percentile"])))
     d = int(math.ceil(p95 / float(rule["action_dt_s"])))
     res = {"n": int(w.size), "trials": trials_run, "seeds_used": used_seeds, "wall_mean_s": float(w.mean()), "wall_p95_s": p95,
-           "wall_max_s": float(w.max()), "d": d, "stop": d > int(rule["max_d"]), "rule": rule,
+           "wall_max_s": float(w.max()),
+           "breakdown_mean_s": {k: float(np.mean([p[k] for p in parts[1:]])) for k in ("preprocess", "policy")},
+           "d": d, "stop": d > int(rule["max_d"]), "rule": rule,
            "checkpoint": str(a.checkpoint), "tf32": pol.config.get("tf32"),
            "written": time.strftime("%Y-%m-%d %H:%M:%S")}
     RES_OUT.mkdir(parents=True, exist_ok=True)

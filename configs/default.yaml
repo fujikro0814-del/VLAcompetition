@@ -150,7 +150,7 @@ train:
 runtime:
   mode: rtc                  # sync | naive | rtc
   exec_interval: 10          # s。変えない（掲示板 0010）
-  delay_steps: null          # d。Step G の最初に delay_rule で決めて書く（掲示板 0010）
+  delay_steps: 4             # d。delay_rule で決めた（R1 の 3 万手、rtc・s=10、推論 109 回、p95 0.396 s → ceil = 4。outputs/results/dcal.json。0010・0063）。以後の全評価でこの値（「d=2」の箇所をすべて置き換える＝0063 の 1）
   delay_rule: {min_samples: 50, percentile: 95, action_dt_s: 0.1, max_d: 5}   # d = ceil(p95 / 0.1 s)、RTC あり、最初の 1 回を除く。d > 5 なら止めて報告
   rtc_guidance_horizon: 10   # 10 と 40 を比べる
   rtc_schedule: EXP          # LINEAR と EXP を比べる。必ず明示（落とし穴16）
