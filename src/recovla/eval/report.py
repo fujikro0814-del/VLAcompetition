@@ -87,6 +87,19 @@ def summary(rows: list) -> list:
     return out
 
 
+def establish_by_layout_kind(rows: list) -> list:
+    """条件 × 誘発 × 配置の種類ごとの成立率（E2 の報告。決裁 0059）。"""
+    out = []
+    keys = sorted({(r["condition"], r["induce"], r["layout_kind"]) for r in rows
+                   if r["induce"] not in ("none", None, "")}, key=str)
+    for cond, ind, lk in keys:
+        rs = [r for r in rows if r["condition"] == cond and r["induce"] == ind and r["layout_kind"] == lk]
+        est = sum(bool(r["induce_established"]) for r in rs)
+        out.append({"condition": cond, "induce": ind, "layout_kind": lk, "induced_n": len(rs), "established_n": est,
+                    "establish_rate": _rate(est, len(rs))})
+    return out
+
+
 def paired(rows: list, pairs: list) -> tuple:
     pb, pc = [], []
     for a, b in pairs:
@@ -224,7 +237,12 @@ def write_all(out_dir, rows: list, experiment: str, pairs: list = (), figs: bool
     for s in warn:
         md.append(f"\n**警告**: {s['condition']} の誘発の成立率 {s['establish_rate']:.2f} が "
                   f"{_CFG['eval']['induction_min_rate']} 未満（手順書 Step G の 3）\n")
-    md += ["\n## 対の比較（成否・復帰）\n", _md_table(pb, ["metric", "condition_a", "condition_b", "n_pairs", "rate_a", "rate_b",
+    by_kind = establish_by_layout_kind(rows)
+    if by_kind:
+        md += ["\n## 配置の種類ごとの誘発の成立率（決裁 0059。不成立の試行は差し替えない）\n",
+               _md_table(by_kind, ["condition", "induce", "layout_kind", "induced_n", "established_n", "establish_rate"])]
+    md += ["\n## 対の比較（成否・復帰。復帰は両方の条件で誘発が成立した種だけ）\n",
+           _md_table(pb, ["metric", "condition_a", "condition_b", "n_pairs", "rate_a", "rate_b",
                                                    "diff", "diff_lo", "diff_hi", "mcnemar_p"]),
            "\n## 対の比較（連続量）\n", _md_table(pc, ["metric", "condition_a", "condition_b", "n_pairs", "median_a",
                                                  "median_b", "median_diff", "wilcoxon_p"])]
