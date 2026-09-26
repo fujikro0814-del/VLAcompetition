@@ -81,14 +81,20 @@ def policy_state(ee_pos, ee_quat, fingers, joints) -> np.ndarray:
 # 常に 1）ので、正規化の値を固定する（CUE_FIXED_STATS。変換が meta/stats.json に書き、検証が例外として扱う）
 CUE_NAMES = ["cue_x", "cue_y", "cue_visible"]
 CUE_FIXED_STATS = {"cue_visible": {"mean": 0.5, "std": 0.5}}      # 1 → +1、0 → −1
+# 決裁 0050 の 2: 学習データで旗が 0 のこまが 1% 未満なら、旗は方策の入力から外して記録だけに残す（17 次元）
+CUE_NAMES_NO_FLAG = ["cue_x", "cue_y"]
 
 
-def with_cue(state: np.ndarray, cue: np.ndarray) -> np.ndarray:
-    """(N, 15) と (N, 3)（または (15,) と (3,)）→ 18 次元の float32。"""
+def cue_names(keep_flag: bool = True) -> list:
+    return list(CUE_NAMES if keep_flag else CUE_NAMES_NO_FLAG)
+
+
+def with_cue(state: np.ndarray, cue: np.ndarray, keep_flag: bool = True) -> np.ndarray:
+    """(N, 15) と (N, 3)（または (15,) と (3,)）→ 18 次元（keep_flag が偽なら旗を落として 17 次元）の float32。"""
     s, c = np.asarray(state, np.float32), np.asarray(cue, np.float32)
     if s.shape[-1] != STATE_DIM or c.shape[-1] != len(CUE_NAMES) or s.shape[:-1] != c.shape[:-1]:
         raise ValueError(f"state {s.shape} / cue {c.shape}")
-    return np.concatenate([s, c], axis=-1)
+    return np.concatenate([s, c if keep_flag else c[..., :2]], axis=-1)
 
 
 def policy_state_frame(frame: dict) -> np.ndarray:

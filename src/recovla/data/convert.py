@@ -109,11 +109,23 @@ def manifest_episodes(manifest: dict) -> list:
     return paths
 
 
-def state_names(target_cue: bool = False) -> list:
-    return list(STATE_NAMES) + (list(vla_state.CUE_NAMES) if target_cue else [])
+CUE_MODES = (None, "xyv", "xy")     # なし / 手がかり 3（旗を含む、18 次元）/ 旗を外した 2（17 次元、決裁 0050 の 2）
 
 
-def features(size: int = 256, target_cue: bool = False) -> dict:
+def _cue_mode(target_cue):
+    """旧来の真偽値（True は xyv）も受ける。"""
+    mode = "xyv" if target_cue is True else (None if target_cue is False else target_cue)
+    if mode not in CUE_MODES:
+        raise ValueError(f"target_cue {target_cue!r} not in {CUE_MODES}")
+    return mode
+
+
+def state_names(target_cue=None) -> list:
+    mode = _cue_mode(target_cue)
+    return list(STATE_NAMES) + ([] if mode is None else vla_state.cue_names(mode == "xyv"))
+
+
+def features(size: int = 256, target_cue=None) -> dict:
     img = {"dtype": "image", "shape": [size, size, 3], "names": ["height", "width", "channel"]}
     names = state_names(target_cue)
     return {
@@ -132,11 +144,13 @@ def cue_tracker():
     return PC.TargetCue(PC.overhead_calibration(scene.build_model("3cube")), PC.Thresholds.from_config())
 
 
-def cue_record(tracker) -> dict:
-    """conversion.json の target_cue。評価の入口（vla_observation）はこれを見て同じ手がかりを足す。"""
-    return {"version": 1, "names": list(vla_state.CUE_NAMES), "thresholds": tracker.thr.to_json(),
+def cue_record(tracker, mode: str = "xyv") -> dict:
+    """conversion.json の target_cue。評価の入口（vla_observation）はこれを見て同じ手がかりを足す。
+    names が方策の入力に入る手がかりの次元（xy のときは旗を外し、旗は sources の cue_flag0_frames にだけ残す）。"""
+    keep = mode == "xyv"
+    return {"version": 1, "mode": mode, "names": vla_state.cue_names(keep), "thresholds": tracker.thr.to_json(),
             "plane_z": float(tracker.plane_z), "fallback_xy": [float(v) for v in tracker.fallback],
-            "calibration": tracker.calib.to_json(), "fixed_stats": vla_state.CUE_FIXED_STATS,
+            "calibration": tracker.calib.to_json(), "fixed_stats": vla_state.CUE_FIXED_STATS if keep else {},
             "definition": "overhead raw render → pixels of the instructed color (recovla.perception.color) → "
                           "centroid → ray to the plane z = cube rest height → (x, y); flag 1 if >= min_pixels "
                           "pixels, else 0 and the last seen (x, y) is kept (region centre if never seen). "
@@ -144,10 +158,10 @@ def cue_record(tracker) -> dict:
 
 
 def fix_cue_stats(out: pathlib.Path) -> None:
-    """旗など、学習データで一定になりうる次元の正規化の値を固定する（vla_state.CUE_FIXED_STATS）。"""
+    """旗など、学習データで一定になりうる次元の正規化の値を固定する（vla_state.CUE_FIXED_STATS。xyv のときだけ）。"""
     path = out / "meta" / "stats.json"
     stats = json.loads(path.read_text(encoding="utf-8"))
-    names = state_names(True)
+    names = state_names("xyv")
     for name, fixed in vla_state.CUE_FIXED_STATS.items():
         i = names.index(name)
         for k, v in fixed.items():
@@ -200,20 +214,22 @@ def sha256(path: pathlib.Path) -> str:
 
 # ------------------------------------------------------------ conversion
 
-def convert(episodes: list, out: pathlib.Path, name: str, manifest: dict = None, target_cue: bool = False) -> None:
+def convert(episodes: list, out: pathlib.Path, name: str, manifest: dict = None, target_cue=None) -> None:
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
+    mode = _cue_mode(target_cue)
     if out.exists():
         raise FileExistsError(f"{out} exists; converted datasets are rebuilt, not appended to")
     first_meta, _ = load_raw(episodes[0])
     ds = LeRobotDataset.create(repo_id=f"local/{name}", fps=FPS, features=features(
-        int(first_meta["cameras"]["width"]), target_cue), root=out, robot_type="panda", use_videos=False)
-    tracker = cue_tracker() if target_cue else None
+        int(first_meta["cameras"]["width"]), mode), root=out, robot_type="panda", use_videos=False)
+    tracker = cue_tracker() if mode else None
     sources = []
     try:
         for ep_index, path in enumerate(episodes):
             meta, data = load_raw(path)
             arr = episode_arrays(meta, data)
+            flag0 = 0
             if tracker is not None:
                 tracker.reset()
             for k, i in enumerate(arr["raw_index"]):
@@ -221,7 +237,9 @@ def convert(episodes: list, out: pathlib.Path, name: str, manifest: dict = None,
                 images = spec.policy_images(raw)
                 state = arr["state"][k]
                 if tracker is not None:
-                    state = vla_state.with_cue(state, tracker.update(raw["overhead"], meta["target"]))
+                    c = tracker.update(raw["overhead"], meta["target"])
+                    flag0 += int(c[2] < 0.5)
+                    state = vla_state.with_cue(state, c, keep_flag=mode == "xyv")
                 ds.add_frame({
                     **images,
                     "observation.state": state,
@@ -238,12 +256,13 @@ def convert(episodes: list, out: pathlib.Path, name: str, manifest: dict = None,
                             "operator": meta.get("operator"), "session": meta.get("session"),
                             "success": meta.get("success"), "retakes": meta.get("retakes"),
                             "meta_sha256": sha256(path / "meta.json"),
-                            "data_sha256": sha256(path / "data.npz")})
+                            "data_sha256": sha256(path / "data.npz"),
+                            **({"cue_flag0_frames": flag0} if tracker is not None else {})})
             print(f"[convert] ep {ep_index}: raw {episode_label(meta)} "
                   f"{meta['n_frames']} raw frames -> {len(arr['raw_index'])} frames")
     finally:
         ds.finalize()
-    if tracker is not None:
+    if mode == "xyv":
         fix_cue_stats(out)
     (out / "meta" / "conversion.json").write_text(json.dumps({
         "converter_version": CONVERTER_VERSION,
@@ -251,8 +270,8 @@ def convert(episodes: list, out: pathlib.Path, name: str, manifest: dict = None,
         "fps": FPS, "raw_hz": RAW_HZ, "stride": STRIDE,
         **spec.spec_record(),
         "images": "PNG from raw -> vla_image_spec net transform per view (image_transforms)",
-        "state": state_names(target_cue), "action": ACTION_NAMES,
-        **({"target_cue": cue_record(tracker)} if tracker is not None else {}),
+        "state": state_names(mode), "action": ACTION_NAMES,
+        **({"target_cue": cue_record(tracker, mode)} if tracker is not None else {}),
         "action_definition": "xyz = x_des[raw 2k+2] - x_des[raw 2k] (m, world); rot = 0; "
                              "gripper = +1 closed / -1 open at raw frame 2k+2",
         "orientation": "world-frame axis-angle of ee_quat * conj(q_down), q_down = (0,1,0,0) "
@@ -304,15 +323,15 @@ def verify(out: pathlib.Path, export_dir, check_image=None) -> bool:
     check(ds.num_episodes == len(conv["sources"]), "episode count matches conversion.json")
     check(ds.num_frames == sum(s["frames"] for s in conv["sources"]), "frame count matches")
 
-    target_cue = "target_cue" in conv
-    names_state = state_names(target_cue)
+    mode = conv["target_cue"].get("mode", "xyv") if "target_cue" in conv else None
+    names_state = state_names(mode)
     check(ds.meta.features["observation.state"]["names"] == names_state and conv["state"] == names_state,
-          f"state names == {len(names_state)} (target_cue {target_cue})")
-    tracker = cue_tracker() if target_cue else None
+          f"state names == {len(names_state)} (target_cue {mode})")
+    tracker = cue_tracker() if mode else None
     if tracker is not None:
         check(conv["target_cue"]["thresholds"] == tracker.thr.to_json(),
               f"target_cue thresholds recorded == configs planner.color_detect {tracker.thr.to_json()}")
-    fixed = vla_state.CUE_FIXED_STATS if target_cue else {}
+    fixed = vla_state.CUE_FIXED_STATS if mode == "xyv" else {}
 
     # stats: finite, and normalization never divides by zero
     stats = ds.meta.stats
@@ -342,9 +361,11 @@ def verify(out: pathlib.Path, export_dir, check_image=None) -> bool:
         arr = episode_arrays(meta, data)
         if tracker is not None:            # 手がかりを生の俯瞰画像から計算し直して、期待する 18 次元を作る
             tracker.reset()
-            cues = [tracker.update(read_raw_image(pathlib.Path(src["raw_path"]) / "overhead" / f"{int(i):06d}.png"),
-                                   meta["target"]) for i in arr["raw_index"]]
-            arr["state"] = vla_state.with_cue(arr["state"], np.array(cues))
+            cues = np.array([tracker.update(read_raw_image(pathlib.Path(src["raw_path"]) / "overhead" / f"{int(i):06d}.png"),
+                                            meta["target"]) for i in arr["raw_index"]])
+            arr["state"] = vla_state.with_cue(arr["state"], cues, keep_flag=mode == "xyv")
+            check(int((cues[:, 2] < 0.5).sum()) == src.get("cue_flag0_frames", int((cues[:, 2] < 0.5).sum())),
+                  f"ep {src['episode_index']}: cue flag-0 frames recorded {src.get('cue_flag0_frames')}")
         ep = src["episode_index"]
         start = int(ds.meta.episodes[ep]["dataset_from_index"])
         stop = int(ds.meta.episodes[ep]["dataset_to_index"])
@@ -439,6 +460,8 @@ def main(argv=None) -> int:
                                           "(default: next to the dataset, <name>_verify_raw_vs_policy.png)")
     ap.add_argument("--target-cue", action="store_true",
                     help="add the target position cue to observation.state (15 -> 18; board 0048)")
+    ap.add_argument("--cue-without-flag", action="store_true",
+                    help="with --target-cue: leave the visibility flag out of the input (15 -> 17; board 0050-2)")
     args = ap.parse_args(argv)
     if args.verify:
         return 0 if verify(pathlib.Path(args.verify), args.export_actions, args.check_image) else 1
@@ -451,7 +474,8 @@ def main(argv=None) -> int:
         episodes += raw_episodes(pathlib.Path(args.raw_dir))
     if not episodes or not args.out or not args.name:
         ap.error("need --out, --name and episodes (paths, --manifest or --raw-dir)")
-    convert(episodes, pathlib.Path(args.out), args.name, manifest, target_cue=args.target_cue)
+    mode = ("xy" if args.cue_without_flag else "xyv") if args.target_cue else None
+    convert(episodes, pathlib.Path(args.out), args.name, manifest, target_cue=mode)
     return 0
 
 

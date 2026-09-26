@@ -74,13 +74,17 @@ class PolicyObservationBuilder:
         self.conversion = load_training_spec(checkpoint_dir)
         self.checkpoint_dir = pathlib.Path(checkpoint_dir)
         self.cue = None
+        self.cue_keep_flag = True
         rec = self.conversion.get("target_cue")
         if rec is not None:
             from recovla.data.convert import cue_tracker
             self.cue = cue_tracker()
-            if rec["thresholds"] != self.cue.thr.to_json() or rec["names"] != list(vla_state.CUE_NAMES):
-                raise spec.ImageSpecError(f"target_cue of the training data {rec['thresholds']} != runtime "
-                                          f"{self.cue.thr.to_json()}")
+            self.cue_keep_flag = "cue_visible" in rec["names"]          # 旗を入力から外した学習（0050 の 2）なら 17 次元
+            if (rec["thresholds"] != self.cue.thr.to_json()
+                    or rec["names"] != vla_state.cue_names(self.cue_keep_flag)):
+                raise spec.ImageSpecError(f"target_cue of the training data {rec['thresholds']} {rec['names']} != "
+                                          f"runtime {self.cue.thr.to_json()}")
+        self.cue_offset = None                    # 手がかりに足すずれ [m]（雑音の試験＝決裁 0052 の任意。既定はなし）
         self.last_cue = None
 
     def reset(self) -> None:
@@ -96,5 +100,8 @@ class PolicyObservationBuilder:
         if self.cue is not None:
             from recovla.perception.color import color_of_instruction
             self.last_cue = self.cue.update(raw_by_view["overhead"], cue_color or color_of_instruction(task))
-            state = vla_state.with_cue(state, self.last_cue)
+            if self.cue_offset is not None:       # 手がかりの (x, y) にだけ足す（保った値は部品の中のまま）
+                self.last_cue = self.last_cue.copy()
+                self.last_cue[:2] += np.asarray(self.cue_offset, np.float32)
+            state = vla_state.with_cue(state, self.last_cue, keep_flag=self.cue_keep_flag)
         return {**observation_images(raw_by_view), "observation.state": state, "task": str(task)}

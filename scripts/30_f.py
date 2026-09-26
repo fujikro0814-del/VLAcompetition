@@ -610,6 +610,51 @@ def cmd_gen_data(a) -> None:
         "stop": stop})
 
 
+# ------------------------------------------------------ R1・N1 に手がかりを足す（決裁 0050・0052）
+
+def cmd_convert_cue(a) -> None:
+    """同じ生の記録（data.json のマニフェスト）を、目標の手がかりつきで変換し直す（生成し直さない）。
+    旗を入力に残すかは、単体検査（scripts/24_cue_check.py --data → outputs/f/cue_check.json）の判定に従う。"""
+    d = json.loads((OUT / "data.json").read_text(encoding="utf-8"))
+    chk = json.loads((OUT / "cue_check.json").read_text(encoding="utf-8"))
+    keep = {k: v["keep_flag_in_input"] for k, v in chk["training_flag0"].items()}
+    if len(set(keep.values())) != 1:
+        raise SystemExit(f"R1 と N1 で旗の判定が違う {keep}（揃えるかを諮る）")
+    keep_flag = next(iter(keep.values()))
+    stamp_ = time.strftime("%Y%m%d-%H%M%S")
+    procs = {}
+    for name in ("R1", "N1"):
+        dname = f"{name}cue_{stamp_}"
+        ds = config.path(CFG["paths"]["outputs"]) / "datasets" / dname
+        log = OUT / f"convert_{dname}.log"
+        cmd = [sys.executable, "-m", "recovla.data.convert", "--manifest", str(config.path(d["datasets"][name]["manifest"])),
+               "--out", str(ds), "--name", dname, "--target-cue"] + ([] if keep_flag else ["--cue-without-flag"])
+        f = open(log, "w", encoding="utf-8")
+        procs[name] = (subprocess.Popen(cmd, stdout=f, stderr=subprocess.STDOUT), f, ds, log, dname)
+    t0 = time.perf_counter()
+    out = {}
+    for name, (p, f, ds, log, dname) in procs.items():
+        c1 = p.wait()
+        f.close()
+        with open(log, "a", encoding="utf-8") as f2:
+            c2 = subprocess.run([sys.executable, "-m", "recovla.data.convert", "--verify", str(ds)],
+                                stdout=f2, stderr=subprocess.STDOUT).returncode
+        text = log.read_text(encoding="utf-8", errors="replace")
+        info = json.loads((ds / "meta" / "info.json").read_text(encoding="utf-8")) if (ds / "meta" / "info.json").is_file() else {}
+        conv = json.loads((ds / "meta" / "conversion.json").read_text(encoding="utf-8")) if (ds / "meta" / "conversion.json").is_file() else {}
+        out[name] = {"dataset": str(ds.relative_to(config.ROOT)), "episodes": info.get("total_episodes"),
+                     "frames": info.get("total_frames"), "frames_15d": d["datasets"][name]["frames"],
+                     "state_names": conv.get("state"), "cue_flag0_frames": sum(s.get("cue_flag0_frames", 0)
+                                                                               for s in conv.get("sources", [])),
+                     "convert_exit": c1, "verify_exit": c2, "verify_pass": "[verify] PASS" in text,
+                     "verify_fails": [l.strip() for l in text.splitlines() if l.strip().startswith("FAIL")],
+                     "log": str(log.relative_to(config.ROOT))}
+    from recovla.common import code_version
+    write("data_cue", {"source": "data.json", "keep_flag_in_input": keep_flag, "flag_decision": chk["training_flag0"],
+                       "flag_rule": chk["flag_rule"], "datasets": out, "wall_s": round(time.perf_counter() - t0, 1),
+                       "code_version": code_version.code_version(), "thresholds": chk["thresholds"]})
+
+
 # ------------------------------------------------------------------ 目視用の資料（決裁 0045 の 2）
 
 REVIEW_PER_KIND = 10
@@ -740,9 +785,10 @@ def main(argv=None) -> int:
     s.add_argument("--smoke", action="store_true", help="各群から少しだけ（通しの確認）")
     s = sub.add_parser("review")
     s.add_argument("--smoke", action="store_true", help="data_smoke.json の回から作る")
+    sub.add_parser("convert-cue")
     a = ap.parse_args(argv)
     {"sweep": cmd_sweep, "check-gen": cmd_check_gen, "check-eval": cmd_check_eval, "plan": cmd_plan,
-     "gen-data": cmd_gen_data, "review": cmd_review}[a.cmd](a)
+     "gen-data": cmd_gen_data, "review": cmd_review, "convert-cue": cmd_convert_cue}[a.cmd](a)
     return 0
 
 

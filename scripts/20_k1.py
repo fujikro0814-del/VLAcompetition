@@ -21,6 +21,7 @@ CFG = config.load()
 OUT = config.path(CFG["paths"]["outputs"]) / "k1"
 K1_SEEDS = range(10000, 10030)
 E6_SEEDS = range(190000, 190033)
+CUE_NOISE_KEY = 52             # 手がかりの雑音の向き: seed_sequence(試行の種, "induce", 52)（決裁 0052。誘発の列の枝）
 CLOSED_SEEDS = range(191000, 191030)
 
 
@@ -193,6 +194,7 @@ def cmd_e6(a) -> None:
 
 def cmd_closed(a) -> None:
     import numpy as np
+    from recovla.common import seeds
     from recovla.eval import metrics, scene_trial as T
     from recovla.eval.closed_loop import write_mp4
     from recovla.policy.scene_policy import ScenePolicy
@@ -210,6 +212,11 @@ def cmd_closed(a) -> None:
     try:
         for i, (seed, lay, tgt) in enumerate(zip(seeds_, lays, targets)):
             pol.start_trial(seed)
+            offset = None
+            if a.cue_offset_m:               # 手がかりの雑音の試験（決裁 0052 の任意）: 大きさ一定、向きは種ごとに一様
+                ang = float(seeds.generator(seeds.seed_sequence(seed, "induce", CUE_NOISE_KEY)).uniform(0, 2 * np.pi))
+                offset = np.array([np.cos(ang), np.sin(ang)]) * float(a.cue_offset_m)
+                pol.builder.cue_offset = offset
             meta, arr, video = T.run_trial(rig, lay, tgt, pol, {
                 "trial": i, "seed": seed, "experiment": "K1_closed_loop", "condition": "K1_sync_n50",
                 "model": {"name": "K1", "checkpoint": str(ckpt)},
@@ -223,10 +230,20 @@ def cmd_closed(a) -> None:
             m = metrics.trial_metrics(metrics.load_trial(p), CFG["eval"])
             z = arr["cube_pos"][:, :, 2]
             lifted = [c for c, k in zip(("red", "green", "blue"), range(3)) if (z[:, k] - z[0, k]).max() >= lift]
+            # 最初に閉じた時点の、指先の中心と目標の立方体の中心の水平のずれ（雑音の試験で、ずれの向きへの射影を見る）
+            closed_i = np.flatnonzero(arr["gripper_closed"])
+            grasp_err = None
+            if closed_i.size:
+                k0 = int(closed_i[0])
+                ti = ("red", "green", "blue").index(tgt)
+                grasp_err = (arr["fingertip"][k0, :2] - arr["cube_pos"][k0, ti, :2]).tolist()
             rows.append({"trial": i, "seed": seed, "target": tgt, "success": m["success"], "lifted": lifted,
                          "lifted_any": bool(lifted), "lifted_wrong": bool(set(lifted) - {tgt}), "error": m["error"],
                          "contacts_n": m["contacts_n"], "stage_reached": m["stage_reached"],
-                         "t_success_s": m["t_success_s"]})
+                         "t_success_s": m["t_success_s"], "cue_offset_m": None if offset is None else offset.tolist(),
+                         "grasp_err_xy_m": grasp_err,
+                         "grasp_err_along_offset_m": None if (offset is None or grasp_err is None) else
+                         float(np.dot(grasp_err, offset / np.linalg.norm(offset)))})
             print(f"[k1] closed {i:2d} seed {seed} target {tgt:5s} success {m['success']} lifted {lifted} contacts {m['contacts_n']}")
     finally:
         rig.close()
@@ -292,6 +309,8 @@ def main(argv=None) -> int:
         s.add_argument("--tag", default="", help="結果の名前に付ける（通しの確認用。例 _smoke）")
         if name == "closed":
             s.add_argument("--videos", type=int, default=6, help="動画を書く試行の数（先頭から）")
+            s.add_argument("--cue-offset-m", type=float, default=0.0,
+                           help="手がかりの (x, y) に足すずれの大きさ [m]（向きは種ごとに一様。決裁 0052 の任意）")
     a = ap.parse_args(argv)
     COMMANDS[a.cmd](a)
     return 0
