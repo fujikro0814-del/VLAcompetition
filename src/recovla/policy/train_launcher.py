@@ -43,7 +43,9 @@ Config JSON (unknown keys are rejected):
                (--peft.full_training_modules). Board 0040
   first_frames_weight  {"frames": 20, "weight": 5}: draw the first N frames of every episode W times as often
                (recovla.policy.train_wrapped). Board 0038/0040
-  With lora or first_frames_weight, lerobot-train runs through recovla.policy.train_wrapped, which also
+  cue_augment  {"prob": 0.5, "max_m": 0.02}: shift the target cue (x, y) of each training sample with
+               probability prob by U(0, max_m) in a uniform direction (board 0054). Actions unchanged
+  With lora, first_frames_weight or cue_augment, lerobot-train runs through recovla.policy.train_wrapped, which also
   writes the in-memory policy's output on a fixed input (recovla_reference.pt) at every save.
 
     .venv\\Scripts\\python.exe -m recovla.policy.train_launcher CONFIG.json [--confirm] [--dry-run]
@@ -94,7 +96,7 @@ SCOPE_FLAGS = {"expert": ["--policy.train_expert_only=true", "--policy.freeze_vi
 MAX_BATCH_14GIB = {"expert": 62, "full": 12}                 # Step C, per-process cap 14 GiB
 REQUIRED = ("dataset", "train_scope", "batch_size", "steps")
 OPTIONAL = ("save_freq", "seed", "log_freq", "num_workers", "extra_args", "note", "allow_batch_over_14gib",
-            "lora", "first_frames_weight")
+            "lora", "first_frames_weight", "cue_augment")
 OWNED = ("--policy.path", "--policy.push_to_hub", "--policy.repo_id", "--policy.device",
          "--policy.train_expert_only", "--policy.freeze_vision_encoder", "--dataset.root",
          "--dataset.repo_id", "--rename_map", "--output_dir", "--job_name", "--batch_size", "--steps",
@@ -135,8 +137,14 @@ def check_first_frames_weight(path, w) -> None:
         raise LaunchError(f"{path}: first_frames_weight needs frames >= 1 and weight > 0")
 
 
+def check_cue_augment(path, c) -> None:
+    if (not isinstance(c, dict) or set(c) != {"prob", "max_m"} or not 0.0 < float(c["prob"]) <= 1.0
+            or not 0.0 < float(c["max_m"]) <= 0.1):
+        raise LaunchError(f"{path}: cue_augment must be {{prob in (0, 1], max_m in (0, 0.1]}}, got {c!r}")
+
+
 def wrapped(cfg) -> bool:
-    return "lora" in cfg or "first_frames_weight" in cfg
+    return "lora" in cfg or "first_frames_weight" in cfg or "cue_augment" in cfg
 
 
 def wrapper_prefix(cfg, python=None) -> list:
@@ -145,6 +153,9 @@ def wrapper_prefix(cfg, python=None) -> list:
     w = cfg.get("first_frames_weight")
     if w:
         out += [f"--first-frames={w['frames']}", f"--first-weight={w['weight']}"]
+    c = cfg.get("cue_augment")
+    if c:
+        out += [f"--cue-aug-prob={c['prob']}", f"--cue-aug-max-m={c['max_m']}"]
     return out + ["--"]
 
 
@@ -186,6 +197,8 @@ def load_config(path) -> dict:
         check_lora(path, cfg["lora"])
     if "first_frames_weight" in cfg:
         check_first_frames_weight(path, cfg["first_frames_weight"])
+    if "cue_augment" in cfg:
+        check_cue_augment(path, cfg["cue_augment"])
     return cfg
 
 

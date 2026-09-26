@@ -111,3 +111,60 @@ def test_lora_config_rejects(tmp_path, over, words):
 
 def test_plain_config_is_not_wrapped(tmp_path):
     assert not tl.wrapped(config(tmp_path))
+
+
+# --- cue augmentation (board 0054) -------------------------------------------------------------------------
+
+from recovla.policy.train_wrapped import CueAugment   # noqa: E402
+
+
+def test_cue_augment_distribution_matches_spec():
+    """足したずれの分布が指定どおり: 確率 0.5、大きさ U(0, 2 cm)、向き一様（二項・一様の 4 標準偏差以内）。"""
+    aug = CueAugment(1000, 0.5, 0.02, (15, 16), (0.07, 0.1))
+    offs, ons = [], []
+    for _ in range(400):
+        o, on = aug.draw(32)
+        offs.append(o)
+        ons.append(on)
+    off, on = np.concatenate(offs), np.concatenate(ons)
+    n = len(on)
+    assert abs(on.mean() - 0.5) < 4 * np.sqrt(0.25 / n)
+    assert np.all(off[~on] == 0.0)
+    mag = np.linalg.norm(off[on], axis=1)
+    m = on.sum()
+    assert mag.min() >= 0 and mag.max() <= 0.02
+    assert abs(mag.mean() - 0.01) < 4 * 0.02 / np.sqrt(12 * m)                 # 一様の平均と標準誤差
+    hist = np.histogram(mag, bins=10, range=(0, 0.02))[0]
+    assert np.all(np.abs(hist - m / 10) < 4 * np.sqrt(m / 10))
+    ang = np.arctan2(off[on, 1], off[on, 0]) % (2 * np.pi)
+    ah = np.histogram(ang, bins=12, range=(0, 2 * np.pi))[0]
+    assert np.all(np.abs(ah - m / 12) < 4 * np.sqrt(m / 12))
+    s = aug.stats()
+    assert s["samples"] == n and s["applied"] == m and sum(s["magnitude_hist_20"]) == m
+    # 同じ種なら同じ列
+    a2 = CueAugment(1000, 0.5, 0.02, (15, 16), (0.07, 0.1))
+    assert np.array_equal(a2.draw(32)[0], offs[0])
+
+
+def test_cue_augment_touches_only_cue_dims_in_normalized_space():
+    import torch
+    aug = CueAugment(7, 1.0, 0.02, (15, 16), (0.05, 0.1))
+    st = torch.zeros((4, 17))
+    out = aug.apply({"observation.state": st.clone(), "action": torch.ones((4, 50, 7))})
+    d = out["observation.state"]
+    assert torch.all(d[:, :15] == 0)                                             # 手がかり以外は変えない
+    assert torch.all(out["action"] == 1)                                         # お手本の行動は変えない
+    rng = np.random.default_rng(np.random.SeedSequence([7, 54]))
+    on = rng.random(4) < 1.0
+    mag, ang = rng.uniform(0, 0.02, 4), rng.uniform(0, 2 * np.pi, 4)
+    assert np.allclose(d[:, 15].numpy(), np.cos(ang) * mag / 0.05, atol=1e-6)   # 標準偏差で割って足す
+    assert np.allclose(d[:, 16].numpy(), np.sin(ang) * mag / 0.1, atol=1e-6)
+
+
+def test_launcher_passes_cue_augment(tmp_path):
+    cfg = config(tmp_path, cue_augment={"prob": 0.5, "max_m": 0.02})
+    assert tl.wrapped(cfg)
+    pre = tl.wrapper_prefix(cfg, python="py")
+    assert "--cue-aug-prob=0.5" in pre and "--cue-aug-max-m=0.02" in pre and pre[-1] == "--"
+    with pytest.raises(tl.LaunchError, match="cue_augment"):
+        config(tmp_path, cue_augment={"prob": 0.5, "max_m": 0.5})

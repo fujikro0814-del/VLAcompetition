@@ -1,6 +1,10 @@
 """lerobot-train を包む（掲示板 0038・0040）。LeRobot のファイルは書き換えず、モジュールの名前を差し替えるだけ。
 
-    python -m recovla.policy.train_wrapped [--first-frames N --first-weight W] [--reference] -- <lerobot-train の引数>
+    python -m recovla.policy.train_wrapped [--first-frames N --first-weight W] [--reference]
+                                           [--cue-aug-prob P --cue-aug-max-m M] -- <lerobot-train の引数>
+
+3. 学習時の手がかりのずらし（--cue-aug-prob・--cue-aug-max-m。決裁 0054）: CueAugment を参照。前処理の後・更新の前に
+   足す（update_policy を包む）。保存のたびに cue_aug_stats.json に、足した数・大きさと向きの度数を書く
 
 1. 重みつきの並べ方（--first-frames・--first-weight）: lerobot-train が作る EpisodeAwareSampler を、各エピソードの
    最初の N こまを W 倍の重みで引く WeightedEpisodeAwareSampler に差し替える。1 周の長さは同じ（全こま数）で、
@@ -21,6 +25,72 @@ from lerobot.datasets.sampler import EpisodeAwareSampler
 
 REFERENCE_FILE = "recovla_reference.pt"
 SAMPLER_STATS = "sampler_stats.json"
+CUE_AUG_STATS = "cue_aug_stats.json"
+CUE_AUG_KEY = 54               # ずらしの乱数列: SeedSequence([学習の種, 54])（決裁 0054）
+
+
+class CueAugment:
+    """学習時の手がかりのずらし（決裁 0054）。試料ごとに確率 prob で、手がかりの (x, y) に大きさ U(0, max_m)・向き
+    U(0, 2π) のずれを足す（残りはそのまま）。前処理（正規化）の後に足すので、ずれは次元の標準偏差で割って足す。
+    お手本の行動は変えない。評価と推論では使わない。乱数は学習の種から作る 1 本の列（主プロセスだけで引く）。"""
+
+    last = None
+
+    def __init__(self, seed: int, prob: float, max_m: float, idx: tuple, std: tuple):
+        self.rng = np.random.default_rng(np.random.SeedSequence([int(seed), CUE_AUG_KEY]))
+        self.seed, self.prob, self.max_m = int(seed), float(prob), float(max_m)
+        self.idx, self.std = tuple(int(i) for i in idx), tuple(float(s) for s in std)
+        self.n = 0
+        self.applied = 0
+        self.mag_hist = np.zeros(20, np.int64)          # 0〜max_m を 20 に分けた度数（足したものだけ）
+        self.ang_hist = np.zeros(12, np.int64)          # 向きを 30° ごと
+        self.mag_sum = 0.0
+        CueAugment.last = self
+
+    def draw(self, n: int):
+        """(n, 2) のずれ [m] と、足したかの (n,) 真偽。"""
+        on = self.rng.random(n) < self.prob
+        mag = self.rng.uniform(0.0, self.max_m, n)
+        ang = self.rng.uniform(0.0, 2 * np.pi, n)
+        off = np.stack([np.cos(ang), np.sin(ang)], axis=1) * mag[:, None] * on[:, None]
+        self.n += n
+        self.applied += int(on.sum())
+        self.mag_hist += np.histogram(mag[on], bins=20, range=(0.0, self.max_m))[0]
+        self.ang_hist += np.histogram(ang[on], bins=12, range=(0.0, 2 * np.pi))[0]
+        self.mag_sum += float(mag[on].sum())
+        return off, on
+
+    def apply(self, batch: dict) -> dict:
+        import torch
+        st = batch["observation.state"]
+        off, _ = self.draw(st.shape[0])
+        add = torch.zeros_like(st)
+        for j, (i, s) in enumerate(zip(self.idx, self.std)):
+            add[..., i] = torch.as_tensor(off[:, j] / s, dtype=st.dtype, device=st.device).reshape(
+                (st.shape[0],) + (1,) * (st.ndim - 2))
+        batch["observation.state"] = st + add
+        return batch
+
+    def stats(self) -> dict:
+        return {"seed": self.seed, "key": CUE_AUG_KEY, "prob": self.prob, "max_m": self.max_m,
+                "state_index": list(self.idx), "state_std": list(self.std), "samples": self.n,
+                "applied": self.applied, "applied_share": (self.applied / self.n) if self.n else None,
+                "magnitude_mean_m": (self.mag_sum / self.applied) if self.applied else None,
+                "magnitude_hist_20": self.mag_hist.tolist(), "angle_hist_12": self.ang_hist.tolist()}
+
+
+def cue_augment_for(lerobot_args: list, prob: float, max_m: float) -> CueAugment:
+    """lerobot-train の引数から学習の種とデータセットを読み、手がかりの次元と標準偏差を取る。"""
+    args = dict(a[2:].split("=", 1) for a in lerobot_args if a.startswith("--") and "=" in a)
+    root = pathlib.Path(args["dataset.root"])
+    conv = json.loads((root / "meta" / "conversion.json").read_text(encoding="utf-8"))
+    stats = json.loads((root / "meta" / "stats.json").read_text(encoding="utf-8"))
+    names = conv["state"]
+    if "cue_x" not in names:
+        raise SystemExit(f"{root}: the dataset has no target cue (state {names})")
+    idx = (names.index("cue_x"), names.index("cue_y"))
+    std = tuple(float(stats["observation.state"]["std"][i]) for i in idx)
+    return CueAugment(int(args.get("seed", 1000)), prob, max_m, idx, std)
 REFERENCE_NOISE_SEED = 20260926
 REFERENCE_ITEMS = 3                  # データセットの最初の 3 エピソードの最初のこま
 
@@ -103,8 +173,18 @@ def main(argv=None) -> int:
     ap.add_argument("--first-frames", type=int, default=None)
     ap.add_argument("--first-weight", type=float, default=None)
     ap.add_argument("--reference", action="store_true")
+    ap.add_argument("--cue-aug-prob", type=float, default=None)
+    ap.add_argument("--cue-aug-max-m", type=float, default=None)
     a = ap.parse_args(argv[:cut])
     import lerobot.scripts.lerobot_train as LT
+
+    if a.cue_aug_prob is not None:
+        aug = cue_augment_for(argv[cut + 1:], a.cue_aug_prob, a.cue_aug_max_m)
+        original_update = LT.update_policy
+
+        def update_policy(train_metrics, policy, batch, *args, **kw):
+            return original_update(train_metrics, policy, aug.apply(batch), *args, **kw)
+        LT.update_policy = update_policy
 
     if a.first_frames is not None:
         ff, fw = a.first_frames, float(a.first_weight)
@@ -122,6 +202,9 @@ def main(argv=None) -> int:
         if s is not None:
             (pathlib.Path(checkpoint_dir) / SAMPLER_STATS).write_text(
                 json.dumps({"step": int(step), **s.stats()}, indent=2), encoding="utf-8")
+        if CueAugment.last is not None:
+            (pathlib.Path(checkpoint_dir) / CUE_AUG_STATS).write_text(
+                json.dumps({"step": int(step), **CueAugment.last.stats()}, indent=2), encoding="utf-8")
         if a.reference:
             pre = kw.get("preprocessor", args[2] if len(args) > 2 else None)
             info = write_reference(pretrained, cfg, policy, pre)

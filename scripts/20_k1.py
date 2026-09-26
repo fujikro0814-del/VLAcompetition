@@ -96,6 +96,8 @@ def cmd_train(a) -> None:
         cfg["lora"] = dict(CFG["train"]["lora"])
         cfg["first_frames_weight"] = dict(CFG["train"]["first_frames_weight"])
         cfg["log_freq"] = min(cfg["log_freq"], int(run_cfg["steps"]))
+    if a.run.endswith("_aug"):                                      # 掲示板 0054: 学習時の手がかりのずらし
+        cfg["cue_augment"] = dict(CFG["train"]["cue_augment"])
     cfg_path = OUT / f"train_{a.run}_{stamp()}.json"
     OUT.mkdir(parents=True, exist_ok=True)
     cfg_path.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -294,7 +296,7 @@ def main(argv=None) -> int:
     s.add_argument("--layouts", type=int, default=len(K1_SEEDS), help="配置の数（種 10000 から）。掲示板 0040 は 100")
     s.add_argument("--tag", default="", help="結果の名前に付ける（例 _100）。gen<tag>.json に書く")
     s = sub.add_parser("train")
-    s.add_argument("run", choices=["smoke", "K1", "smoke_lora", "K1_lora", "K1_cue"])
+    s.add_argument("run", choices=["smoke", "K1", "smoke_lora", "K1_lora", "K1_cue", "K1_cue_aug"])
     s.add_argument("--gen-tag", default="", help="どの gen<tag>.json のデータで学習するか")
     s = sub.add_parser("convert-cue")
     s.add_argument("--gen-tag", default="_100", help="どの gen<tag>.json の生の記録を変換し直すか")
