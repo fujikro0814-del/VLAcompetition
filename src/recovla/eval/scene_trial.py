@@ -150,7 +150,9 @@ def run_trial(rig, layout, target: str, act, trial: dict, time_limit_s: float = 
                 prev = cid[f_i]
         arrays.update({"chunk_id": cid, "chunk_index": cix, "chunk_switch": sw,
                        "chunk_k_valid": tr_["chunk_k_valid"], "chunk_xdes_pred": tr_["chunk_xdes_pred"],
-                       "chunk_grip_pred": tr_["chunk_grip_pred"]})
+                       "chunk_grip_pred": tr_["chunk_grip_pred"],
+                       # 推論ごとの手がかり [k_obs, x, y, 旗]。真値は同じ行動の番号のこま 2·k_obs の cube_pos（決裁 0057）
+                       "cue_at_inference": tr_.get("cue_at_inference", np.zeros((0, 4)))})
         inference = tr_["inference"]
     success = state["success_t"] is not None
     t_end = float(arrays["sim_time"][-1])

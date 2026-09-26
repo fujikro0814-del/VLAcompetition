@@ -168,7 +168,7 @@ eval:
   reaction_close_m: 0.02
   recovery_lift_m: 0.02
   P1: {delay_s: 0.3, lateral_offset_m: [0.025, 0.035], confirm_window_s: 2.0, confirm_lift_m: 0.02}
-  P2: {min_dist_from_box_m: 0.15, min_lift_m: 0.05}
+  P2: {min_dist_from_box_m: 0.19, min_lift_m: 0.05}   # 決裁 0057: データの B と揃える（手順書の 0.15 m では下見の成立 12/20）。学習の範囲の外への汎化は測らない
   P3: {min_clearance_m: 0.03}
   induction_min_rate: 0.8
   swap_mid_drop_m: 0.03      # E6: 判定した地点がどの立方体からもこれ以上離れていれば「中間落ち」（手順書 Step E の 3）

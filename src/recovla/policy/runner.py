@@ -85,6 +85,7 @@ class SceneRunner:
         self.post = {}
         self.exec_log = []                              # k ごとの (塊の番号 i, 添字)
         self.chunk_rows = []                            # 推論ごと: k_obs・k_valid・x_des（観測の時点）・塊（後処理の後）
+        self.cue_rows = []                              # 推論ごと: [k_obs, 手がかりの x, y, 旗]（記録だけ）
 
     def reset(self) -> None:
         self.sched.reset()
@@ -99,6 +100,9 @@ class SceneRunner:
             batch = self.pol.prepare(self.pol.builder.build(raw_by_view, frame, task))
             self.pol._sync()
             t1 = time.perf_counter()
+            cue = self.pol.builder.last_cue          # 方策に渡した手がかり（記録だけ。決裁 0057 の所見）
+            if cue is not None:
+                self.cue_rows.append([float(k), float(cue[0]), float(cue[1]), float(cue[2])])
             i = len(self.sched.log) - 1
             cfgp = _base_policy(self.pol.policy).config
             noise = t.randn((1, cfgp.chunk_size, cfgp.max_action_dim),
@@ -144,7 +148,8 @@ class SceneRunner:
                       "wall_breakdown_s": e["wall_breakdown_s"]} for e in self.sched.log]
         return {"exec": list(self.exec_log), "chunk_k_valid": np.array([r["k_valid"] for r in self.chunk_rows], np.int32),
                 "chunk_k_obs": np.array([r["k_obs"] for r in self.chunk_rows], np.int32),
-                "chunk_xdes_pred": xdes, "chunk_grip_pred": grip, "inference": inference}
+                "chunk_xdes_pred": xdes, "chunk_grip_pred": grip, "inference": inference,
+                "cue_at_inference": np.array(self.cue_rows, dtype=np.float64).reshape(-1, 4)}
 
     def runtime_record(self) -> dict:
         rt = _CFG["runtime"]

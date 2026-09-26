@@ -176,8 +176,16 @@ def cmd_induce_script(a) -> None:
                                            {"trial": 0, "seed": seed, "experiment": "induce_script", "condition": kind},
                                            render=False, inducer=ind)
                 r = meta["induce"]
+                land = (r.get("info") or {}).get("landing") or {}
+                clear = land.get("clearance_m") or {}
+                near = sorted(k for k, v in clear.items() if v < float(CFG["inject"]["landing"]["min_clearance_m"]))
+                ti = ("red", "green", "blue").index(tgt)
                 rows.append({"seed": seed, "fired": r["fired"], "established": r["established"], "reason": r["reason"],
-                             "success": meta["success"]})
+                             "success": meta["success"], "t_fire": r["t_fire"], "layout_kind": lay.kind,
+                             "landing_fail": land.get("landing_fail"), "too_close_to": near,
+                             "tilt_deg": land.get("tilt_deg"),
+                             "final_target_speed": float(np.linalg.norm(arr["cube_linvel"][-1, ti])),
+                             "final_target_z": float(arr["cube_pos"][-1, ti, 2]), "info": r.get("info")})
             n = len(rows)
             res[kind] = {"n": n, "fired": sum(r["fired"] for r in rows), "established": sum(r["established"] for r in rows),
                          "success": sum(r["success"] for r in rows),

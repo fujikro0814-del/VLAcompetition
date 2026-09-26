@@ -193,7 +193,15 @@ class Inducer:
                 self.reason = "landing_invalid:" + ",".join(land["landing_fail"])
             self.stage = "done"
         elif tr.t - self.t_fire > float(lc["timeout_s"]):
-            self.reason, self.stage = "no_rest", "done"
+            # 原因を分けて記録する（決裁 0057 の 1）: 他の立方体の上に乗って止まった／それ以外（動き続けた・宙に留まった）
+            t_ = tr.target
+            on_cube = [COLORS[i] for i in range(len(COLORS)) if i != t_
+                       and np.hypot(*(tr.target_pos[:2] - tr.cube_pos[i, :2])) < frames.CUBE_SIZE
+                       and tr.target_pos[2] > tr.cube_pos[i, 2] + frames.CUBE_HALF]
+            self.info["timeout_state"] = {"target_pos": [float(v) for v in tr.target_pos],
+                                          "target_speed": float(tr.target_speed), "on_cube": on_cube}
+            self.reason = "landed_on_cube" if on_cube else "no_rest"
+            self.stage = "done"
 
     @property
     def releasing(self) -> bool:
