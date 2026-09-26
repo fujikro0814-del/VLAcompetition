@@ -142,6 +142,57 @@ def cmd_dcal(a) -> None:
     print(json.dumps(res, indent=1))
 
 
+def cmd_induce_script(a) -> None:
+    """誘発の下見（Step G 完了条件 4 の、方策の代わりに台本を使った版。GPU なし）。種類ごとに n 回、発動・成立の割合。
+    本番の完了条件 4 は、学習の後に方策で同じ数を回す（run --induce）。"""
+    import collections
+    import numpy as np
+    from recovla.common import seeds
+    from recovla.eval import induce as I
+    from recovla.eval import scene_trial as T
+    from recovla.expert import script as S
+    from recovla.sim.rig import SimRig
+
+    class ScriptPolicy:
+        def __init__(self, rig, target, seed):
+            self.rig, self.target = rig, target
+            self.ex = S.Expert(S.sample_params(seeds.script_rng(seed, target, 0)), T.ACTION_DT)
+
+        def __call__(self, k, frame, raw, task):
+            cmd = self.ex.act(self.rig.truth(self.target))
+            out = np.zeros(7)
+            out[:3] = cmd.vel * T.ACTION_DT
+            out[6] = 1.0 if bool(self.rig.controller.gripper_closed) != bool(cmd.press) else -1.0
+            return out
+
+    rig = SimRig(render=False)
+    res = {}
+    try:
+        for kind in I.KINDS:
+            rows = []
+            for seed, lay, tgt in trial_list(f"induced:{a.seed}:{a.n}"):
+                ind = I.Inducer(kind, seed, lay, tgt, rig)
+                meta, arr, _ = T.run_trial(rig, lay, tgt, ScriptPolicy(rig, tgt, seed),
+                                           {"trial": 0, "seed": seed, "experiment": "induce_script", "condition": kind},
+                                           render=False, inducer=ind)
+                r = meta["induce"]
+                rows.append({"seed": seed, "fired": r["fired"], "established": r["established"], "reason": r["reason"],
+                             "success": meta["success"]})
+            n = len(rows)
+            res[kind] = {"n": n, "fired": sum(r["fired"] for r in rows), "established": sum(r["established"] for r in rows),
+                         "success": sum(r["success"] for r in rows),
+                         "reasons": dict(collections.Counter(r["reason"] for r in rows if not r["established"])),
+                         "establish_rate": sum(r["established"] for r in rows) / n, "rows": rows}
+            print(kind, {k: v for k, v in res[kind].items() if k != "rows"}, flush=True)
+    finally:
+        rig.close()
+    RES_OUT.mkdir(parents=True, exist_ok=True)
+    (RES_OUT / "induce_script.json").write_text(json.dumps({
+        "note": "台本（真値を読む Expert）を方策の代わりにした誘発の下見。種は Step G の検査の帯", "seed": a.seed,
+        "induction_min_rate": CFG["eval"]["induction_min_rate"], "results": res,
+        "written": time.strftime("%Y-%m-%d %H:%M:%S")}, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -166,8 +217,11 @@ def main(argv=None) -> int:
     s.add_argument("--n", type=int, default=int(CFG["runtime"]["delay_rule"]["min_samples"]))
     s.add_argument("--seed", type=int, default=198000, help="Step G の検査の帯 198000〜198999（B_提案書 §9）")
     s.add_argument("--max-trials", type=int, default=30)
+    s = sub.add_parser("induce-script")
+    s.add_argument("--seed", type=int, default=198100, help="Step G の検査の帯 198000〜198999")
+    s.add_argument("--n", type=int, default=20)
     a = ap.parse_args(argv)
-    {"run": cmd_run, "report": cmd_report, "dcal": cmd_dcal}[a.cmd](a)
+    {"run": cmd_run, "report": cmd_report, "dcal": cmd_dcal, "induce-script": cmd_induce_script}[a.cmd](a)
     return 0
 
 

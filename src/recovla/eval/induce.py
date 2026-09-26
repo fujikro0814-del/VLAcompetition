@@ -130,6 +130,8 @@ class Inducer:
                 self.stage = "rise"
             else:
                 return a
+        if self.stage == "done":                  # 成立の判定が済んだ: 方策に戻す
+            return a
         self.active = True
         if self.stage == "dropped":
             a[:3] = 0.0

@@ -95,4 +95,7 @@ def test_inducer_fires_and_is_recorded(rig, kind):
         assert ind["kind"] == kind and ind["fired"], ind
         assert arr["induce_active"].any()
         got.append(ind["established"])
+        if ind["established"]:                 # 成立の後は方策に操作を戻す（誘発はもう行動を上書きしない）
+            after = arr["sim_time"] > float(ind["t_established"]) + 0.15
+            assert not arr["induce_active"][after].any(), (kind, seed, ind)
     assert sum(got) >= 3, got                  # 4 回中 3 回以上成立（台本の相手なので、ほぼ成立する）
