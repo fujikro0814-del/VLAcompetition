@@ -590,8 +590,12 @@ def cmd_gen_data(a) -> None:
     n_dropped = [len(normal) - len(normal_rows), len(normal), wilson(len(normal) - len(normal_rows), len(normal))] \
         if not a.smoke else None
     stop = any(v[1] and v[0] / v[1] > DROPPED_STOP for v in dropped_by_kind.values())
+    from recovla.common import code_version
     write("data_smoke" if a.smoke else "data", {
         "run": runrel, "generation_wall_s": round(gen_wall, 1), "workers": a.workers,
+        # 決裁 0044: 生成に使ったコミットと設定の値
+        "code_version": code_version.code_version(),
+        "config_used": {"inject": CFG["inject"], "expert": CFG["expert"], "scene": CFG["scene"], "sim": CFG["sim"]},
         "normal": {"composition": comp(normal_rows), "dropped": n_dropped},
         "recovery": {"by_kind": rec_by_kind, "cells": cell_rows, "dropped_by_kind": dropped_by_kind,
                      "composition": comp(chosen)},

@@ -52,6 +52,7 @@ def test_cond5_r1_n1_data():
     """5: R1 と N1 で配置と目標の集合が一致し（通常の部分は同じエピソード）、構成が計画どおりで、変換の検証が通る。
     フレーム数の差が 1 割を超えたら報告する（ここでは超えていないことを確かめる。超えたら報告して判断を仰ぐ）。"""
     r = _need("data", "gen-data")
+    assert r["code_version"]["git_commit"] and r["config_used"]["inject"]["B"]["min_dist_from_box_m"] == 0.19   # 0044
     assert r["same_layouts_and_targets"] and r["normal_part_identical"]
     for name in ("R1", "N1"):
         d = r["datasets"][name]
