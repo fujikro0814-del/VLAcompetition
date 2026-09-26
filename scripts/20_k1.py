@@ -168,7 +168,8 @@ def cmd_e6(a) -> None:
         by_seed[r["seed"]].append(r["majority"])
     dependent = sum(1 for v in by_seed.values() if len(set(v)) > 1 or None in v)
     total_samples = n * E6_SAMPLES
-    res = {"checkpoint": str(ckpt), "layouts": len(by_seed), "pairs": n, "samples_per_pair": E6_SAMPLES,
+    res = {"checkpoint": str(ckpt), "policy_config": pol.config, "layouts": len(by_seed), "pairs": n,
+           "samples_per_pair": E6_SAMPLES,
            "accuracy_majority": sum(r["correct_majority"] for r in rows) / n,
            "accuracy_samples": sum(r["correct_samples"] for r in rows) / total_samples,
            "ties": sum(r["majority"] is None for r in rows),
@@ -204,7 +205,8 @@ def cmd_closed(a) -> None:
             meta, arr, video = T.run_trial(rig, lay, tgt, pol, {
                 "trial": i, "seed": seed, "experiment": "K1_closed_loop", "condition": "K1_sync_n50",
                 "model": {"name": "K1", "checkpoint": str(ckpt)},
-                "runtime": {"mode": "sync", "exec_interval": 50, "delay_steps": 0, "safety_filter": False}})
+                "runtime": {"mode": "sync", "exec_interval": 50, "delay_steps": 0, "safety_filter": False,
+                            "tf32": pol.config["tf32"]}})
             meta["input_check"] = pol.input_check
             meta["inference"] = [{"i": j, "wall_s": s} for j, (s, inferred) in enumerate(pol.timing) if inferred]
             p = T.write_trial(out, i, meta, arr)
@@ -223,7 +225,8 @@ def cmd_closed(a) -> None:
     n = len(rows)
     lifted_n = sum(r["lifted_any"] for r in rows)
     wrong_n = sum(r["lifted_wrong"] for r in rows)
-    write("closed" + a.tag, {"checkpoint": str(ckpt), "out": str(out.relative_to(config.ROOT)), "trials": n,
+    write("closed" + a.tag, {"checkpoint": str(ckpt), "policy_config": pol.config,
+                             "out": str(out.relative_to(config.ROOT)), "trials": n,
                      "successes": sum(r["success"] for r in rows), "lifted_any": lifted_n,
                      "lifted_any_rate": lifted_n / n, "lifted_wrong": wrong_n,
                      "wrong_among_lifted": (wrong_n / lifted_n) if lifted_n else None,

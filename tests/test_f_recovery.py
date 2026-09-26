@@ -22,8 +22,12 @@ def _need(name: str, how: str) -> dict:
 
 @pytest.mark.parametrize("kind", KINDS)
 def test_cond1_recovery_rate_and_landing(kind):
-    """1: 種類ごとに、成功 ÷（注入が効き、着地が正常だった数）≥ 90%、着地が不自然な割合 ≤ 2 割。"""
-    t = _need("check", "check-gen と check-eval")["table"][kind]
+    """1: 種類ごとに、成功 ÷（注入が効き、着地が正常だった数）≥ 90%、着地が不自然な割合 ≤ 2 割。
+    数え方は決裁 0042: 各指定の最初の試み（作り直しの前）。作り直しを含む数と捨てた指定の割合は別に出す。"""
+    r = _need("check", "check-gen と check-eval")
+    t = r["table"][kind]
+    assert "all_attempts" in t and "dropped_ratio" in t, "check.json が古い（30_f.py check-eval --table-only で作り直す）"
+    assert t["attempts"] == t["specs"]                                    # 最初の試みだけを数えている
     k, n, _ = t["recovery_success"]
     assert n > 0 and k / n >= 0.9, t
     k, n, _ = t["landing_invalid_ratio"]
@@ -42,6 +46,21 @@ def test_cond3_replay_from_saved_state():
     for kind in KINDS:
         assert sum(1 for row in r["cond3_rows"] if row["episode"].startswith(kind + "_")) >= 3, kind
     assert r["cond3_pass"], [(row["episode"], row["step"]["pass"], row["window"]["pass"]) for row in r["cond3_rows"]]
+
+
+def test_cond5_r1_n1_data():
+    """5: R1 と N1 で配置と目標の集合が一致し（通常の部分は同じエピソード）、構成が計画どおりで、変換の検証が通る。
+    フレーム数の差が 1 割を超えたら報告する（ここでは超えていないことを確かめる。超えたら報告して判断を仰ぐ）。"""
+    r = _need("data", "gen-data")
+    assert r["same_layouts_and_targets"] and r["normal_part_identical"]
+    for name in ("R1", "N1"):
+        d = r["datasets"][name]
+        assert d["convert_exit"] == 0 and d["verify_exit"] == 0 and d["verify_pass"], d
+    assert all(c["short"] == 0 for c in r["recovery"]["cells"]), r["recovery"]["cells"]
+    assert r["recovery"]["composition"]["n"] == sum(c["need"] for c in r["recovery"]["cells"])
+    assert r["datasets"]["R1"]["episodes"] == r["datasets"]["N1"]["episodes"]
+    assert r["frame_diff_ratio_R1_N1"] is not None and r["frame_diff_ratio_R1_N1"] <= 0.10, r["frame_diff_ratio_R1_N1"]
+    assert not r["stop"], r["recovery"]["dropped_by_kind"]
 
 
 def test_cond4_videos():

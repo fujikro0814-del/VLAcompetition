@@ -2,7 +2,9 @@
 
     .venv\\Scripts\\python.exe scripts\\30_f.py sweep [--workers 8] [--n 120] [--smoke]   # 注入の値の振り（掲示板 0033・0034）
     ... check-gen [--workers 8] [--n 60] [--smoke]   # 完了条件 1〜4 の試験の生成（描画あり、作り直しあり）
-    ... check-eval [--smoke]                         # 完了条件 1〜4 の測定 → outputs/f/check.json（tests/test_f_recovery.py が判定）
+    ... check-eval [--smoke] [--table-only]          # 完了条件 1〜4 の測定 → outputs/f/check.json（tests/test_f_recovery.py が判定）
+    ... plan                                         # R1・N1 の生成の計画 → outputs/f/plan.json
+    ... gen-data [--workers 8] [--smoke]             # R1・N1 のデータ（見積もりの承認の後）→ outputs/f/data.json（完了条件 5）
 
 振り（描画なし、作り直しなし＝retry 0）:
   A: 閉じる高さの上げ幅の中心 2.0〜4.5 cm（幅 ±0.5 cm、上げる型だけ＝raise_ratio 1）と、横ずらしだけ（raise_ratio 0）
@@ -19,6 +21,8 @@ import json
 import multiprocessing
 import os
 import pathlib
+import subprocess
+import sys
 import time
 
 from recovla.common import config
@@ -298,6 +302,45 @@ def latest_run(prefix: str) -> pathlib.Path:
     return runs[-1]
 
 
+COND1_RULE = ("決裁 0042: 各指定の最初の試み（作り直しの前）で数える。着地が不自然の割合 = 不自然 ÷（確定＋不自然）"
+              " ≤ inject.landing.max_invalid_ratio、立て直しの成功率 = 成功 ÷ 確定 ≥ 0.9。作り直しを含む全部の試みの数と、"
+              "捨てた指定の割合は別の指標として出す")
+
+
+def _kind_counts(rs: list) -> dict:
+    split = float(CFG["inject"]["landing_orientation_split_deg"])
+    cnt = collections.Counter(category(t) for t in rs)
+    valid = cnt["success"] + cnt["recovery_failed"]
+    eff = valid + cnt["landing_invalid"]
+    succ = [t for t in rs if t["success"]]
+    within = sum(abs(t["inject"]["info"].get("yaw_rel_deg", 0.0)) <= split for t in succ)
+    return {"attempts": len(rs), "counts": {c: cnt[c] for c in CATS},
+            "excluded": dict(collections.Counter(t["failure"] for t in rs if category(t) == "excluded")),
+            "recovery_success": [cnt["success"], valid, wilson(cnt["success"], valid)],
+            "landing_invalid_ratio": [cnt["landing_invalid"], eff, wilson(cnt["landing_invalid"], eff)],
+            "success_yaw_within": [within, len(succ)], "success_yaw_beyond": [len(succ) - within, len(succ)]}
+
+
+def check_table(results: list) -> dict:
+    """種類ごとに、最初の試みの 4 区分（完了条件 1 の判定に使う）と、作り直しを含む全部の試みの 4 区分、捨てた指定。"""
+    table = {}
+    for kind in CHECK_SEED_BASE:
+        rk = [r for r in results if r["kind"] == kind]
+        first = _kind_counts([r["attempts"][0] for r in rk])
+        n, saved = len(rk), sum(1 for r in rk if r["success"])
+        table[kind] = {**first, "all_attempts": _kind_counts([t for r in rk for t in r["attempts"]]),
+                       "specs": n, "specs_saved": saved, "specs_dropped": n - saved,
+                       "dropped_ratio": [n - saved, n, wilson(n - saved, n)]}
+    return table
+
+
+def cond1_pass(table: dict) -> bool:
+    lim = float(CFG["inject"]["landing"]["max_invalid_ratio"])
+    return all(t["recovery_success"][1] > 0 and t["recovery_success"][0] / t["recovery_success"][1] >= 0.9
+               and (t["landing_invalid_ratio"][1] == 0 or t["landing_invalid_ratio"][0] / t["landing_invalid_ratio"][1] <= lim)
+               for t in table.values())
+
+
 def cmd_check_eval(a) -> None:
     import numpy as np
     from recovla.common import seeds
@@ -306,24 +349,15 @@ def cmd_check_eval(a) -> None:
     from recovla.sim.rig import SimRig
     run = latest_run("f_check_smoke" if a.smoke else "f_check")
     results = [json.loads(l) for l in (run / "generation.jsonl").read_text(encoding="utf-8").splitlines() if l.strip()]
-    attempts = [dict(t, point=t["kind"]) for r in results for t in r["attempts"]]
-    # 1: 試みごとの 4 区分（作り直しの各回を 1 回と数える）
-    split = float(CFG["inject"]["landing_orientation_split_deg"])
-    table = {}
-    for kind in CHECK_SEED_BASE:
-        rs = [t for t in attempts if t["kind"] == kind]
-        cnt = collections.Counter(category(t) for t in rs)
-        valid = cnt["success"] + cnt["recovery_failed"]
-        eff = valid + cnt["landing_invalid"]
-        succ = [t for t in rs if t["success"]]
-        within = sum(abs(t["inject"]["info"].get("yaw_rel_deg", 0.0)) <= split for t in succ)
-        table[kind] = {"attempts": len(rs), "counts": {c: cnt[c] for c in CATS},
-                       "excluded": dict(collections.Counter(t["failure"] for t in rs if category(t) == "excluded")),
-                       "recovery_success": [cnt["success"], valid, wilson(cnt["success"], valid)],
-                       "landing_invalid_ratio": [cnt["landing_invalid"], eff, wilson(cnt["landing_invalid"], eff)],
-                       "success_yaw_within": [within, len(succ)], "success_yaw_beyond": [len(succ) - within, len(succ)],
-                       "specs": sum(1 for r in results if r["kind"] == kind),
-                       "specs_saved": sum(1 for r in results if r["kind"] == kind and r["success"])}
+    table = check_table(results)
+    if a.table_only:                      # 描画を使わずに 1 だけ作り直す（学習中。2〜4 は前の測定のまま）
+        p = OUT / ("check_smoke.json" if a.smoke else "check.json")
+        old = json.loads(p.read_text(encoding="utf-8"))
+        old.update(table=table, cond1_pass=cond1_pass(table), cond1_rule=COND1_RULE,
+                   table_rewritten=time.strftime("%Y-%m-%d %H:%M:%S"))
+        p.write_text(json.dumps(old, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+        print(f"[f] rewrote table in {p}", flush=True)
+        return
     # 2: 保存した全エピソードの最初のこま
     saved = sorted(p for p in run.iterdir() if p.is_dir() and not p.name.endswith(".partial"))
     cond2 = []
@@ -371,9 +405,7 @@ def cmd_check_eval(a) -> None:
             made.append(str(dst.relative_to(config.ROOT)))
     write("check_smoke" if a.smoke else "check", {
         "run": str(run.relative_to(config.ROOT)), "table": table,
-        "cond1_pass": all(t["recovery_success"][1] > 0 and t["recovery_success"][0] / t["recovery_success"][1] >= 0.9
-                          and (t["landing_invalid_ratio"][1] == 0 or t["landing_invalid_ratio"][0] / t["landing_invalid_ratio"][1]
-                               <= float(CFG["inject"]["landing"]["max_invalid_ratio"])) for t in table.values()),
+        "cond1_pass": cond1_pass(table), "cond1_rule": COND1_RULE,
         "cond2_episodes": len(cond2), "cond2_pass": bool(cond2) and all(c["ok"] for c in cond2),
         "cond2_failures": [c for c in cond2 if not c["ok"]],
         "cond3_rows": replay_rows,
@@ -449,6 +481,130 @@ def cmd_plan(a) -> None:
                    "estimate_inputs": est})
 
 
+# --------------------------------------------------------------- R1・N1 のデータの生成（7、完了条件 5）
+
+DROPPED_STOP = 0.10            # 決裁 0042: 本番の生成で捨てた指定の割合が 10% を超えたら止めて諮る
+
+
+def layout_targets(entries: list, exclude: list) -> list:
+    """マニフェストの名前（<種類>_<種>_<色>_r<回>）から、exclude 以外の（種、色）を並べる。"""
+    ex = set(exclude)
+    out = []
+    for e in entries:
+        if e["key"] in ex:
+            continue
+        _, seed, color, _ = e["key"].split("_")
+        out.append((int(seed), color))
+    return sorted(out)
+
+
+def cmd_gen_data(a) -> None:
+    """plan.json のとおりに生成し、R1・N1 のマニフェストを作って変換する（見積もりの承認の後に回す。掲示板 0043）。
+
+    1 回の生成（outputs/gen/F_data_<日時>）に、通常 240 の指定、復帰の候補（枠ごとに必要数の 2 倍）、その候補と同じ
+    （種、色）の通常の指定をまとめて入れる。復帰と相手の通常の両方が（作り直しを含めて）成功した候補を、枠ごとに
+    候補の順に必要数だけ採る。通常 240 で捨てた（種、色）は R1・N1 の両方から外れる（両方に同じものを入れるので）。"""
+    from recovla.data import convert as C
+    from recovla.expert import generate as G
+    plan = json.loads((OUT / "plan.json").read_text(encoding="utf-8"))
+    normal = [G.EpisodeSpec(s["seed"], s["color"], s["layout_kind"], "n") for s in plan["normal"]["specs"]]
+    rec_specs, twin_specs, cells = [], [], []
+    for kind, lk_cells in plan["recovery"].items():
+        for lk, cell in lk_cells.items():
+            cells.append((kind, lk, cell["need"], cell["candidates"]))
+            for c in cell["candidates"]:
+                rec_specs.append(G.EpisodeSpec(c["seed"], c["color"], lk, kind))
+                twin_specs.append(G.EpisodeSpec(c["seed"], c["color"], lk, "n"))
+    specs = normal + rec_specs + twin_specs
+    run = GEN / f"F_data{'_smoke' if a.smoke else ''}_{time.strftime('%Y%m%d-%H%M%S')}"
+    if a.smoke:                                            # 通しの確認: 各群から少しだけ
+        specs = normal[:6] + rec_specs[::30] + twin_specs[::30]
+    t0 = time.perf_counter()
+    results = G.generate(specs, run, workers=a.workers, render=True)
+    gen_wall = time.perf_counter() - t0
+    by = {(r["kind"], r["layout_seed"], r["color"]): r for r in results}
+
+    def saved_name(r):
+        return r["attempts"][-1]["name"] if r["success"] else None
+
+    normal_ok = [by[("n", s.layout_seed, s.color)] for s in normal if ("n", s.layout_seed, s.color) in by]
+    normal_keys = [saved_name(r) for r in normal_ok if r["success"]]
+    chosen, cell_rows = [], []
+    for kind, lk, need, cands in cells:
+        got, examined, dropped = [], 0, 0
+        for c in cands:
+            rk, tk = (kind, c["seed"], c["color"]), ("n", c["seed"], c["color"])
+            if rk not in by or tk not in by:
+                continue                                    # 通しの確認で間引いたもの
+            if len(got) >= need:
+                break
+            examined += 1
+            if by[rk]["success"] and by[tk]["success"]:
+                got.append({"kind": kind, "layout_kind": lk, "seed": c["seed"], "color": c["color"],
+                            "recovery": saved_name(by[rk]), "twin": saved_name(by[tk]), "start": c["start"]})
+            else:
+                dropped += 1
+        chosen += got
+        cell_rows.append({"kind": kind, "layout_kind": lk, "need": need, "got": len(got), "examined": examined,
+                          "dropped": dropped, "short": need - len(got)})
+    runrel = str(run.relative_to(config.ROOT)).replace("\\", "/")
+    entries_r1 = [{"run": runrel, "key": k} for k in normal_keys] + [{"run": runrel, "key": c["recovery"]} for c in chosen]
+    entries_n1 = [{"run": runrel, "key": k} for k in normal_keys] + [{"run": runrel, "key": c["twin"]} for c in chosen]
+    stamp = run.name.split("_", 2)[-1] if not a.smoke else "smoke_" + run.name.rsplit("_", 1)[-1]
+    out = {}
+    for name, entries, rule in (
+            ("R1", entries_r1, "Step F R1: normal demos (seeds 20000-) + recovery A/B/C (seeds 30000-), plan.json"),
+            ("N1", entries_n1, "Step F N1: normal demos (seeds 20000-) + one-shot normal demos on the same recovery layouts")):
+        dname = f"{name}_{stamp}"
+        mpath = config.path(CFG["paths"]["outputs"]) / "manifests" / f"{dname}.json"
+        C.write_manifest(mpath, dname, entries, rule)
+        ds = config.path(CFG["paths"]["outputs"]) / "datasets" / dname
+        log = OUT / f"convert_{dname}.log"
+        t1 = time.perf_counter()
+        with open(log, "w", encoding="utf-8") as f:
+            c1 = subprocess.run([sys.executable, "-m", "recovla.data.convert", "--manifest", str(mpath), "--out",
+                                 str(ds), "--name", dname], stdout=f, stderr=subprocess.STDOUT)
+            c2 = subprocess.run([sys.executable, "-m", "recovla.data.convert", "--verify", str(ds)],
+                                stdout=f, stderr=subprocess.STDOUT)
+        text = log.read_text(encoding="utf-8", errors="replace")
+        info = json.loads((ds / "meta" / "info.json").read_text(encoding="utf-8")) if (ds / "meta" / "info.json").is_file() else {}
+        out[name] = {"manifest": str(mpath.relative_to(config.ROOT)), "dataset": str(ds.relative_to(config.ROOT)),
+                     "episodes": len(entries), "frames": info.get("total_frames"), "convert_exit": c1.returncode,
+                     "verify_exit": c2.returncode, "verify_pass": "[verify] PASS" in text,
+                     "convert_wall_s": round(time.perf_counter() - t1, 1), "log": str(log.relative_to(config.ROOT))}
+    # 構成表（手順書 Step F の 7）
+    def comp(rows):
+        return {"n": len(rows), "color": dict(collections.Counter(r["color"] for r in rows)),
+                "layout_kind": dict(collections.Counter(r["layout_kind"] for r in rows)),
+                "start": dict(collections.Counter(r["start"] for r in rows))}
+    nspec = {(s["seed"], s["color"]): s for s in plan["normal"]["specs"]}
+    normal_rows = [nspec[(r["layout_seed"], r["color"])] for r in normal_ok if r["success"]]
+    rec_by_kind = {k: comp([c for c in chosen if c["kind"] == k]) for k in RECOVERY_NEED}
+    fr = {k: out[k]["frames"] for k in out}
+    frame_diff = (abs(fr["R1"] - fr["N1"]) / max(fr["R1"], fr["N1"])) if all(fr.values()) else None
+    dropped_by_kind = {}
+    for k in RECOVERY_NEED:
+        rows_k = [r for r in cell_rows if r["kind"] == k]
+        ex, dr = sum(r["examined"] for r in rows_k), sum(r["dropped"] for r in rows_k)
+        dropped_by_kind[k] = [dr, ex, wilson(dr, ex) if ex else [None, None]]
+    n_dropped = [len(normal) - len(normal_rows), len(normal), wilson(len(normal) - len(normal_rows), len(normal))] \
+        if not a.smoke else None
+    stop = any(v[1] and v[0] / v[1] > DROPPED_STOP for v in dropped_by_kind.values())
+    write("data_smoke" if a.smoke else "data", {
+        "run": runrel, "generation_wall_s": round(gen_wall, 1), "workers": a.workers,
+        "normal": {"composition": comp(normal_rows), "dropped": n_dropped},
+        "recovery": {"by_kind": rec_by_kind, "cells": cell_rows, "dropped_by_kind": dropped_by_kind,
+                     "composition": comp(chosen)},
+        "chosen": chosen, "datasets": out, "frame_diff_ratio_R1_N1": frame_diff,
+        # 完了条件 5: マニフェストに載った名前から数え直す（<種類>_<種>_<色>_r<回>）。R1 と N1 で、通常の部分は同じ名前、
+        # 残り（R1 の復帰・N1 の相手の通常）は（種、色）の集合が一致する
+        "same_layouts_and_targets": layout_targets(entries_r1, normal_keys) == layout_targets(entries_n1, normal_keys),
+        "normal_part_identical": sorted(e["key"] for e in entries_r1 if e["key"] in set(normal_keys)) == sorted(
+            e["key"] for e in entries_n1 if e["key"] in set(normal_keys)),
+        "dropped_stop_rule": f"復帰の種類ごとの捨てた割合が {DROPPED_STOP:.0%} を超えたら止めて諮る（決裁 0042）",
+        "stop": stop})
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -462,9 +618,15 @@ def main(argv=None) -> int:
         s.add_argument("--workers", type=int, default=1)
         s.add_argument("--n", type=int, default=60)
         s.add_argument("--smoke", action="store_true")
+        if name == "check-eval":
+            s.add_argument("--table-only", action="store_true", help="完了条件 1 の表だけを作り直す（描画しない）")
     sub.add_parser("plan")
+    s = sub.add_parser("gen-data")
+    s.add_argument("--workers", type=int, default=8)
+    s.add_argument("--smoke", action="store_true", help="各群から少しだけ（通しの確認）")
     a = ap.parse_args(argv)
-    {"sweep": cmd_sweep, "check-gen": cmd_check_gen, "check-eval": cmd_check_eval, "plan": cmd_plan}[a.cmd](a)
+    {"sweep": cmd_sweep, "check-gen": cmd_check_gen, "check-eval": cmd_check_eval, "plan": cmd_plan,
+     "gen-data": cmd_gen_data}[a.cmd](a)
     return 0
 
 

@@ -152,6 +152,10 @@ runtime:
   rtc_guidance_horizon: 10   # 10 と 40 を比べる
   rtc_schedule: EXP          # LINEAR と EXP を比べる。必ず明示（落とし穴16）
   rtc_max_guidance_weight: 10.0
+  # 評価器（方策の推論）の TF32（決裁 0042）。以後の評価はすべてこの設定で行う。学習（lerobot-train）は行列積の
+  # TF32 ありで動く（lerobot_train.py が allow_tf32 = True にする）が、評価器は固定してそろえない
+  matmul_tf32: false         # torch.backends.cuda.matmul.allow_tf32（PyTorch の既定。これまでの評価と同じ）
+  cudnn_tf32: true           # torch.backends.cudnn.allow_tf32（PyTorch の既定。これまでの評価と同じ）
 
 eval:
   time_limit_s: 30

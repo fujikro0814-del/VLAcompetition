@@ -259,6 +259,12 @@ class PolicyActions:
                                                   transition_to_batch, transition_to_policy_action)
         self.torch = torch
         self.device = device
+        # 評価器の TF32 を設定から固定する（決裁 0042）。同じプロセスで他の何かが変えていても、ここで戻す
+        rt = _CFG["runtime"]
+        torch.backends.cuda.matmul.allow_tf32 = bool(rt["matmul_tf32"])
+        torch.backends.cudnn.allow_tf32 = bool(rt["cudnn_tf32"])
+        self.tf32 = {"matmul": bool(torch.backends.cuda.matmul.allow_tf32),
+                     "cudnn": bool(torch.backends.cudnn.allow_tf32)}
         self.peft = None
         if (self.checkpoint / "adapter_config.json").is_file():
             # LoRA（掲示板 0040）: 保存点はアダプタと全部学習したモジュールだけを持つ。LeRobot の rollout
@@ -288,7 +294,7 @@ class PolicyActions:
         self.config = {"chunk_size": int(self.policy.config.chunk_size),
                        "n_action_steps": int(self.policy.config.n_action_steps),
                        "n_obs_steps": int(self.policy.config.n_obs_steps),
-                       "rename_map": dict(self.rename)}
+                       "rename_map": dict(self.rename), "tf32": dict(self.tf32), "peft": self.peft}
         self.input_check = None
         self.generator = None
         self.policy_frames = []
