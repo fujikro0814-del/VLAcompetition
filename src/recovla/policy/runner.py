@@ -157,4 +157,5 @@ class SceneRunner:
                 "rtc_guidance_horizon": self.rt.execution_horizon if self.rt.mode == "rtc" else None,
                 "rtc_schedule": (self.rtc or {}).get("prefix_attention_schedule"),
                 "rtc_max_guidance_weight": (self.rtc or {}).get("max_guidance_weight"),
-                "safety_filter": bool(_CFG["safety_filter"]["enabled"]), "tf32": self.pol.config.get("tf32")}
+                "safety_filter": bool(_CFG["safety_filter"]["enabled"]), "tf32": self.pol.config.get("tf32"),
+                "num_steps": int(_base_policy(self.pol.policy).config.num_steps)}     # 流れの積分の刻み数（0072）

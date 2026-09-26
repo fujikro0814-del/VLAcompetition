@@ -53,6 +53,14 @@ def trial_list(spec: str) -> list:
     return list(zip(seeds_, lays, T.choose_targets(seeds_, lays)))
 
 
+def _set_num_steps(pol, n) -> None:
+    """流れの積分の刻み数（SmolVLA の num_steps、既定 10）を推論で使う値にする（0072 の 1。学習は 10 のまま）。"""
+    if n is None:
+        return
+    from recovla.policy.runner import _base_policy
+    _base_policy(pol.policy).config.num_steps = int(n)
+
+
 def cmd_run(a) -> None:
     from recovla.eval import induce as I
     from recovla.eval import scene_trial as T
@@ -64,6 +72,7 @@ def cmd_run(a) -> None:
     if out.exists() and any(out.glob("trial_*.json")):
         raise SystemExit(f"{out} already has trials (use a new --condition)")
     pol = ScenePolicy(pathlib.Path(a.checkpoint))
+    _set_num_steps(pol, a.num_steps)
     rt = RuntimeConfig(a.mode, a.s, a.d if a.mode != "sync" else None,
                        execution_horizon=a.horizon or int(CFG["runtime"]["rtc_guidance_horizon"]))
     runner = SceneRunner(pol, rt, {"schedule": a.schedule or CFG["runtime"]["rtc_schedule"],
@@ -117,6 +126,7 @@ def cmd_dcal(a) -> None:
     from recovla.sim.rig import SimRig
     rule = CFG["runtime"]["delay_rule"]
     pol = ScenePolicy(pathlib.Path(a.checkpoint))
+    _set_num_steps(pol, a.num_steps)
     rt = RuntimeConfig("rtc", int(CFG["runtime"]["exec_interval"]), 1,
                        execution_horizon=int(CFG["runtime"]["rtc_guidance_horizon"]))
     runner = SceneRunner(pol, rt, {"schedule": CFG["runtime"]["rtc_schedule"],
@@ -145,9 +155,13 @@ def cmd_dcal(a) -> None:
            "breakdown_mean_s": {k: float(np.mean([p[k] for p in parts[1:]])) for k in ("preprocess", "policy")},
            "d": d, "stop": d > int(rule["max_d"]), "rule": rule,
            "checkpoint": str(a.checkpoint), "tf32": pol.config.get("tf32"),
+           "num_steps": runner.runtime_record()["num_steps"],
            "written": time.strftime("%Y-%m-%d %H:%M:%S")}
     RES_OUT.mkdir(parents=True, exist_ok=True)
-    (RES_OUT / "dcal.json").write_text(json.dumps(res, indent=2), encoding="utf-8")
+    out = RES_OUT / f"dcal{a.tag}.json"
+    if a.tag and out.exists():
+        raise SystemExit(f"{out} already exists")
+    out.write_text(json.dumps(res, indent=2), encoding="utf-8")
     print(json.dumps(res, indent=1))
 
 
@@ -303,6 +317,7 @@ def main(argv=None) -> int:
     s.add_argument("--trials", required=True)
     s.add_argument("--induce", choices=["P1", "P2", "P3"], default=None)
     s.add_argument("--videos", type=int, default=3)
+    s.add_argument("--num-steps", type=int, default=None, help="流れの積分の刻み数（既定は保存点の設定＝10）")
     s = sub.add_parser("report")
     s.add_argument("--experiment", required=True)
     s.add_argument("--pair", action="append", help="条件 a:b（同じ種で対にする）")
@@ -311,6 +326,8 @@ def main(argv=None) -> int:
     s.add_argument("--n", type=int, default=100, help="最初の 1 回を除いた回数（0062・0063: 100 回以上）")
     s.add_argument("--seed", type=int, default=198600, help="0062・0063 の割り当て（198600〜、使った範囲を記録）")
     s.add_argument("--max-trials", type=int, default=100)
+    s.add_argument("--num-steps", type=int, default=None)
+    s.add_argument("--tag", default="", help="結果を dcal<tag>.json に書く（元の dcal.json を上書きしない）")
     sub.add_parser("decide-rtc")
     s = sub.add_parser("decide-ckpt")
     s.add_argument("--model", choices=["R1", "N1"], required=True)
