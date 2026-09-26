@@ -57,9 +57,13 @@ def execute_action(rig, action, on_step=None) -> None:
         rig.pad_read(vel, press and r == 0, on_step)
 
 
-def run_trial(rig, layout, target: str, act, trial: dict, time_limit_s: float = None, render: bool = True):
+def run_trial(rig, layout, target: str, act, trial: dict, time_limit_s: float = None, render: bool = True,
+              inducer=None):
     """act(k, frame, raw_by_view, task) -> 7 次元の行動（10 fps の k 手目）。trial: 記録の属性（trial・seed・
-    experiment・condition・model・runtime）。返り値 (meta, arrays, raw_video)。"""
+    experiment・condition・model・runtime）。返り値 (meta, arrays, raw_video)。
+
+    Step G: inducer（recovla.eval.induce.Inducer）を渡すと、行動を 1 つずつ上書きし、実行の後に成立を判定する。
+    act が trace()（recovla.policy.runner.SceneRunner）を持てば、塊の番号・添字・予測経路・推論の記録を埋める。"""
     ev = _CFG["eval"]
     time_limit_s = float(ev["time_limit_s"]) if time_limit_s is None else float(time_limit_s)
     rest_speed, rest_hold = float(ev["success"]["rest_speed"]), float(ev["success"]["rest_hold_s"])
@@ -69,12 +73,14 @@ def run_trial(rig, layout, target: str, act, trial: dict, time_limit_s: float = 
     dt = rig.timestep
     every = rig.record_every
     state = {"hold": 0.0, "success_t": None, "rest": 0.0}
-    frames_log, actions, video = [], [], []
+    frames_log, actions, video, act_k, induced = [], [], [], [], []
 
     def capture():
         f, imgs = E.capture_frame(rig, target, state["rest"], pp, render)
         frames_log.append(f)
         actions.append(np.full(7, np.nan))
+        act_k.append(-1)
+        induced.append(False)
         state["raw"] = dict(zip(rig.cameras, imgs))
         if render:
             video.append(np.hstack(imgs))
@@ -104,11 +110,19 @@ def run_trial(rig, layout, target: str, act, trial: dict, time_limit_s: float = 
     with quiet():
         while state["success_t"] is None and rig.step * dt < time_limit_s - 1e-9:
             a = np.asarray(act(k, frame, raw, task), dtype=np.float64)
+            if inducer is not None:
+                a = np.asarray(inducer.filter(k, a, rig.truth(target)), dtype=np.float64)
             actions[-1] = a
+            act_k[-1] = k
+            induced[-1] = bool(inducer is not None and inducer.active)
             n0 = len(frames_log)
             execute_action(rig, a, on_step)
             for i in range(n0, len(frames_log) - 1):        # 行動 k は、こま 2k と 2k+1 の後に効く
                 actions[i] = a
+                act_k[i] = k
+                induced[i] = induced[n0 - 1]
+            if inducer is not None:
+                inducer.after(k, rig.truth(target))
             frame, raw = frames_log[-1], state["raw"]            # こま 2k+2（行動 k+1 の直前の観測）
             k += 1
     arrays = {key: np.array([f[key] for f in frames_log]) for key in TRIAL_KEYS}
@@ -117,10 +131,27 @@ def run_trial(rig, layout, target: str, act, trial: dict, time_limit_s: float = 
         "target": np.full(n, ti, dtype=np.int8), "phase": arrays["phase"].astype(np.int8),
         "action": np.array(actions, dtype=np.float64),
         "chunk_id": np.full(n, -1, dtype=np.int32), "chunk_index": np.full(n, -1, dtype=np.int32),
-        "chunk_switch": np.zeros(n, dtype=bool), "induce_active": np.zeros(n, dtype=bool),
+        "chunk_switch": np.zeros(n, dtype=bool), "induce_active": np.array(induced, dtype=bool),
         "chunk_k_valid": np.zeros(0, dtype=np.int32), "chunk_xdes_pred": np.zeros((0, 50, 3)),
         "chunk_grip_pred": np.zeros((0, 50)),
     })
+    inference = trial.get("inference", [])
+    if hasattr(act, "trace"):                                  # Step G の実行器: 塊の記録（trial_record.md）
+        tr_ = act.trace()
+        ex = tr_["exec"]
+        cid = np.array([ex[kk][0] if 0 <= kk < len(ex) else -1 for kk in act_k], dtype=np.int32)
+        cix = np.array([ex[kk][1] if 0 <= kk < len(ex) else -1 for kk in act_k], dtype=np.int32)
+        sw = np.zeros(n, dtype=bool)
+        prev = -1
+        for f_i in range(n):                                   # 塊が切り替わった行動の最初のこま
+            if cid[f_i] >= 0 and cid[f_i] != prev and prev >= 0:
+                sw[f_i] = True
+            if cid[f_i] >= 0:
+                prev = cid[f_i]
+        arrays.update({"chunk_id": cid, "chunk_index": cix, "chunk_switch": sw,
+                       "chunk_k_valid": tr_["chunk_k_valid"], "chunk_xdes_pred": tr_["chunk_xdes_pred"],
+                       "chunk_grip_pred": tr_["chunk_grip_pred"]})
+        inference = tr_["inference"]
     success = state["success_t"] is not None
     t_end = float(arrays["sim_time"][-1])
     meta = {
@@ -131,9 +162,10 @@ def run_trial(rig, layout, target: str, act, trial: dict, time_limit_s: float = 
         "steps": [{"target": target, "instruction": task, "t_start": 0.0, "t_end": t_end,
                    "success": success, "t_success": state["success_t"]}],
         "success": success, "time_limit_s": time_limit_s,
-        "induce": {"kind": None, "params": {}, "fired": False, "t_fire": None, "established": False,
-                   "t_established": None, "t_failure": None, "reason": None},
-        "obstacles": list(contact.COLUMNS), "inference": trial.get("inference", []),
+        "induce": inducer.record() if inducer is not None else
+        {"kind": None, "params": {}, "fired": False, "t_fire": None, "established": False,
+         "t_established": None, "t_failure": None, "reason": None},
+        "obstacles": list(contact.COLUMNS), "inference": inference,
         "code_version": code_version.code_version(),
     }
     return meta, arrays, video

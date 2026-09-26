@@ -342,41 +342,47 @@ class Injector:
             self.status, self.reason = "landing_invalid", ",".join(land["landing_fail"])
 
     def landing_check(self, truth: S.Truth) -> dict:
-        """目標の立方体の状態の検査（モジュールの説明）。"""
-        rig, lc = self.rig, self.ic["landing"]
-        m, d = rig.model, rig.data
-        t = truth.target
-        pos = truth.target_pos
-        tilt = frames.tilt_deg(truth.cube_quat[t])
-        mine = frames.cube_footprint(pos, truth.cube_quat[t])
-        dist = {}
-        for i, c in enumerate(COLORS):
-            if i != t:
-                dist[f"cube_{c}"] = frames.polygon_distance(mine, frames.cube_footprint(truth.cube_pos[i], truth.cube_quat[i]))
-        for w, fp in frames.wall_footprints(m).items():
-            dist[w] = frames.polygon_distance(mine, fp)
-        outer = _box_outer_half(self.cfg)
-        over_box = bool(np.all(np.abs(pos[:2] - truth.box[:2]) < outer + frames.CUBE_HALF))
-        ws = self.cfg["sim"]["workspace"]
-        in_ws = bool(ws["x"][0] <= pos[0] <= ws["x"][1] and ws["y"][0] <= pos[1] <= ws["y"][1])
-        size = int(self.cfg["sim"]["image_size"])
-        margin = float(lc["view_margin_px"])
-        uv = frames.project(m, d, "overhead", pos, size, size)
-        in_view = uv is not None and margin <= uv[0] <= size - margin and margin <= uv[1] <= size - margin
-        fail = []
-        if tilt > float(lc["max_tilt_deg"]):
-            fail.append("tilt")
-        if over_box:
-            fail.append("over_box")
-        if min(dist.values()) < float(lc["min_clearance_m"]):
-            fail.append("clearance")
-        if not in_ws:
-            fail.append("workspace")
-        if not in_view:
-            fail.append("view")
-        yaw = np.degrees(frames.quat_yaw(truth.cube_quat[t]))
-        rel = (yaw + 45.0) % 90.0 - 45.0                        # 指（ヨー 0）に対する、90° の対称性を除いた角
-        return {"landing_ok": not fail, "landing_fail": fail, "tilt_deg": round(tilt, 3),
-                "clearance_m": {k: round(v, 5) for k, v in dist.items()}, "over_box": over_box,
-                "in_workspace": in_ws, "overhead_uv": None if uv is None else [round(uv[0], 1), round(uv[1], 1)],
-                "yaw_rel_deg": round(float(rel), 2), "target_pos": [round(float(v), 5) for v in pos]}
+        """目標の立方体の状態の検査（モジュールの説明）。評価の誘発（recovla.eval.induce）も同じ関数を使う。"""
+        return landing_check(self.rig, truth, self.cfg)
+
+
+def landing_check(rig, truth: S.Truth, cfg: dict = None) -> dict:
+    """着地の検査: 傾き 10° 以下、箱の外、他の立方体・壁との隙間 3 cm 以上、作業空間と俯瞰カメラの視野の中。"""
+    cfg = cfg or _CFG
+    lc = cfg["inject"]["landing"]
+    m, d = rig.model, rig.data
+    t = truth.target
+    pos = truth.target_pos
+    tilt = frames.tilt_deg(truth.cube_quat[t])
+    mine = frames.cube_footprint(pos, truth.cube_quat[t])
+    dist = {}
+    for i, c in enumerate(COLORS):
+        if i != t:
+            dist[f"cube_{c}"] = frames.polygon_distance(mine, frames.cube_footprint(truth.cube_pos[i], truth.cube_quat[i]))
+    for w, fp in frames.wall_footprints(m).items():
+        dist[w] = frames.polygon_distance(mine, fp)
+    outer = _box_outer_half(cfg)
+    over_box = bool(np.all(np.abs(pos[:2] - truth.box[:2]) < outer + frames.CUBE_HALF))
+    ws = cfg["sim"]["workspace"]
+    in_ws = bool(ws["x"][0] <= pos[0] <= ws["x"][1] and ws["y"][0] <= pos[1] <= ws["y"][1])
+    size = int(cfg["sim"]["image_size"])
+    margin = float(lc["view_margin_px"])
+    uv = frames.project(m, d, "overhead", pos, size, size)
+    in_view = uv is not None and margin <= uv[0] <= size - margin and margin <= uv[1] <= size - margin
+    fail = []
+    if tilt > float(lc["max_tilt_deg"]):
+        fail.append("tilt")
+    if over_box:
+        fail.append("over_box")
+    if min(dist.values()) < float(lc["min_clearance_m"]):
+        fail.append("clearance")
+    if not in_ws:
+        fail.append("workspace")
+    if not in_view:
+        fail.append("view")
+    yaw = np.degrees(frames.quat_yaw(truth.cube_quat[t]))
+    rel = (yaw + 45.0) % 90.0 - 45.0                        # 指（ヨー 0）に対する、90° の対称性を除いた角
+    return {"landing_ok": not fail, "landing_fail": fail, "tilt_deg": round(tilt, 3),
+            "clearance_m": {k: round(v, 5) for k, v in dist.items()}, "over_box": over_box,
+            "in_workspace": in_ws, "overhead_uv": None if uv is None else [round(uv[0], 1), round(uv[1], 1)],
+            "yaw_rel_deg": round(float(rel), 2), "target_pos": [round(float(v), 5) for v in pos]}
