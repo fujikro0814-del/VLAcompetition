@@ -61,6 +61,8 @@ def cmd_train(a) -> None:
                            "log_summary": rec.get("log_summary"), "command": rec.get("command"),
                            "checkpoints": sorted(p.name for p in (runs[-1] / "checkpoints").iterdir()
                                                  if p.is_dir()) if runs else None})
+    if code != 0:
+        raise SystemExit(f"training {tag} exited with {code}")          # 続けて回す段取りを止める
 
 
 RULE = {"none_min_success": 29, "noise2_success_more_than": 21, "noise2_along_median_less_than_m": 0.0144}
