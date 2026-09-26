@@ -130,11 +130,15 @@ train:
   num_workers: 6
   log_freq: 50
   gpu_limit_gib: 14.0
+  lora: {layers: [8, 9, 10, 11, 12, 13, 14, 15], modules: [q_proj, v_proj], r: 16, alpha: 32}   # 掲示板 0040。SmolVLM2 のテキスト部（16 層）の上位 8 層
+  first_frames_weight: {frames: 20, weight: 5}   # 掲示板 0038・0040: 各エピソードの最初の 2 秒（10 fps で 20 こま）を 5 倍の重みで引く
   rename_map: {observation.images.image: observation.images.camera1,
                observation.images.image2: observation.images.camera2}
   runs:
     smoke: {steps: 1000}
     K1: {steps: 8000, save_freq: 8000}
+    K1_lora: {steps: 8000, save_freq: 8000}      # 掲示板 0040（LoRA の枝）
+    smoke_lora: {steps: 50, save_freq: 50}       # 掲示板 0040 の条件 2（保存と推論の経路の一致を確かめる試し）
     R1: {steps: 30000, save_freq: 5000}
     N1: {steps: 30000, save_freq: 5000}
     second_round: {steps: 10000, save_freq: 5000, optimizer_lr: 3.0e-5,

@@ -38,6 +38,13 @@ Config JSON (unknown keys are rejected):
   num_workers  int (default: lerobot's)
   extra_args   list of further "--key=value" lerobot-train arguments (launcher-owned keys refused)
   note         free text, copied to train_run.json
+  lora         {"layers": [8, ..., 15], "modules": ["q_proj", "v_proj"], "r": 16, "alpha": 32}: LoRA on those
+               SmolVLM2 text layers; the action expert and the projections are fully trained
+               (--peft.full_training_modules). Board 0040
+  first_frames_weight  {"frames": 20, "weight": 5}: draw the first N frames of every episode W times as often
+               (recovla.policy.train_wrapped). Board 0038/0040
+  With lora or first_frames_weight, lerobot-train runs through recovla.policy.train_wrapped, which also
+  writes the in-memory policy's output on a fixed input (recovla_reference.pt) at every save.
 
     .venv\\Scripts\\python.exe -m recovla.policy.train_launcher CONFIG.json [--confirm] [--dry-run]
                                                  [--output-root DIR] [--log-root DIR]
@@ -63,7 +70,8 @@ from recovla.data import vla_observation
 
 _CFG = config.load()
 
-LAUNCHER_VERSION = 2          # 2: log_freq, log summary, loss.csv/png, code version (2026-09-17)
+LAUNCHER_VERSION = 3          # 2: log_freq, log summary, loss.csv/png, code version (2026-09-17)
+                              # 3: lora, first_frames_weight, train_wrapped (2026-09-26, board 0040)
 DEFAULT_LOG_FREQ = int(_CFG["train"]["log_freq"])
 # lerobot logs mem_gb = torch.cuda.max_memory_allocated() / 1024**3 per logging interval, i.e. GiB of
 # allocated tensors (the CUDA caching allocator reserves somewhat more).
@@ -85,11 +93,59 @@ SCOPE_FLAGS = {"expert": ["--policy.train_expert_only=true", "--policy.freeze_vi
                "full": ["--policy.train_expert_only=false", "--policy.freeze_vision_encoder=false"]}
 MAX_BATCH_14GIB = {"expert": 62, "full": 12}                 # Step C, per-process cap 14 GiB
 REQUIRED = ("dataset", "train_scope", "batch_size", "steps")
-OPTIONAL = ("save_freq", "seed", "log_freq", "num_workers", "extra_args", "note", "allow_batch_over_14gib")
+OPTIONAL = ("save_freq", "seed", "log_freq", "num_workers", "extra_args", "note", "allow_batch_over_14gib",
+            "lora", "first_frames_weight")
 OWNED = ("--policy.path", "--policy.push_to_hub", "--policy.repo_id", "--policy.device",
          "--policy.train_expert_only", "--policy.freeze_vision_encoder", "--dataset.root",
          "--dataset.repo_id", "--rename_map", "--output_dir", "--job_name", "--batch_size", "--steps",
-         "--save_freq", "--seed", "--log_freq", "--num_workers", "--wandb.enable", "--resume", "--config_path")
+         "--save_freq", "--seed", "--log_freq", "--num_workers", "--wandb.enable", "--resume", "--config_path",
+         "--peft.target_modules", "--peft.full_training_modules", "--peft.method_type", "--peft.r",
+         "--peft.lora_alpha", "--peft.init_type")
+VLM_TEXT_LAYER = r"model\.vlm_with_expert\.vlm\.model\.text_model\.layers\.({layers})\.self_attn\.({modules})"
+NUM_VLM_TEXT_LAYERS = 16             # SmolVLA reduces SmolVLM2 to 16 text layers ("Reducing the number of VLM layers")
+# fully trained with LoRA: the action expert and the projections that are new in SmolVLA (B_提案書 §11)
+FULL_TRAINING_MODULES = ["lm_expert", "state_proj", "action_in_proj", "action_out_proj", "action_time_mlp_in",
+                         "action_time_mlp_out"]
+
+
+def lora_flags(lora: dict) -> list:
+    layers = [int(v) for v in lora["layers"]]
+    target = VLM_TEXT_LAYER.format(layers="|".join(map(str, layers)), modules="|".join(lora["modules"]))
+    return ["--peft.method_type=LORA", f"--peft.target_modules={target}",
+            f"--peft.full_training_modules={json.dumps(FULL_TRAINING_MODULES)}",
+            f"--peft.r={int(lora['r'])}", f"--peft.lora_alpha={int(lora['alpha'])}"]
+
+
+def check_lora(path, lora) -> None:
+    if not isinstance(lora, dict) or set(lora) != {"layers", "modules", "r", "alpha"}:
+        raise LaunchError(f"{path}: lora must be {{layers, modules, r, alpha}}, got {lora!r}")
+    if not lora["layers"] or not all(isinstance(v, int) and 0 <= v < NUM_VLM_TEXT_LAYERS for v in lora["layers"]):
+        raise LaunchError(f"{path}: lora.layers must be text layer numbers 0..{NUM_VLM_TEXT_LAYERS - 1}")
+    if not lora["modules"] or not all(m in ("q_proj", "k_proj", "v_proj", "o_proj") for m in lora["modules"]):
+        raise LaunchError(f"{path}: lora.modules must be among q_proj, k_proj, v_proj, o_proj")
+    for k in ("r", "alpha"):
+        if not isinstance(lora[k], int) or isinstance(lora[k], bool) or lora[k] < 1:
+            raise LaunchError(f"{path}: lora.{k} must be a positive integer")
+
+
+def check_first_frames_weight(path, w) -> None:
+    if not isinstance(w, dict) or set(w) != {"frames", "weight"}:
+        raise LaunchError(f"{path}: first_frames_weight must be {{frames, weight}}, got {w!r}")
+    if not isinstance(w["frames"], int) or w["frames"] < 1 or not isinstance(w["weight"], (int, float)) or w["weight"] <= 0:
+        raise LaunchError(f"{path}: first_frames_weight needs frames >= 1 and weight > 0")
+
+
+def wrapped(cfg) -> bool:
+    return "lora" in cfg or "first_frames_weight" in cfg
+
+
+def wrapper_prefix(cfg, python=None) -> list:
+    """python -m recovla.policy.train_wrapped [...] -- (then the lerobot-train arguments)."""
+    out = [str(python or sys.executable), "-m", "recovla.policy.train_wrapped", "--reference"]
+    w = cfg.get("first_frames_weight")
+    if w:
+        out += [f"--first-frames={w['frames']}", f"--first-weight={w['weight']}"]
+    return out + ["--"]
 
 
 class LaunchError(ValueError):
@@ -126,6 +182,10 @@ def load_config(path) -> dict:
     for a in extra:
         if a.split("=", 1)[0] in OWNED:
             raise LaunchError(f"{path}: extra_args may not set {a.split('=', 1)[0]} (set by the launcher or a config key)")
+    if "lora" in cfg:
+        check_lora(path, cfg["lora"])
+    if "first_frames_weight" in cfg:
+        check_first_frames_weight(path, cfg["first_frames_weight"])
     return cfg
 
 
@@ -170,6 +230,8 @@ def build_command(trainer, policy_dir, cfg, output_dir, job_name) -> list:
            "--policy.device=cuda", "--wandb.enable=false"]
     if "num_workers" in cfg:
         cmd.append(f"--num_workers={cfg['num_workers']}")
+    if "lora" in cfg:
+        cmd += lora_flags(cfg["lora"])
     return cmd + list(cfg.get("extra_args", []))
 
 
@@ -302,7 +364,8 @@ def run(config_path, output_root=OUTPUT_ROOT, log_root=LOG_ROOT, confirm=False, 
     log_path = pathlib.Path(log_root).resolve() / f"{run_name}.log"
     if output_dir.exists():
         raise LaunchError(f"{output_dir} already exists")
-    trainer = trainer or [pathlib.Path(sys.executable).with_name("lerobot-train.exe")]
+    if trainer is None:
+        trainer = wrapper_prefix(cfg) if wrapped(cfg) else [pathlib.Path(sys.executable).with_name("lerobot-train.exe")]
     if not pathlib.Path(trainer[0]).is_file():
         raise LaunchError(f"{trainer[0]} not found; run with the LeRobot venv python")
     policy_dir = policy_dir or policy_snapshot()

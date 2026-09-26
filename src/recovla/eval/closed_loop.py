@@ -259,7 +259,21 @@ class PolicyActions:
                                                   transition_to_batch, transition_to_policy_action)
         self.torch = torch
         self.device = device
-        self.policy = SmolVLAPolicy.from_pretrained(str(self.checkpoint)).to(device).eval()
+        self.peft = None
+        if (self.checkpoint / "adapter_config.json").is_file():
+            # LoRA（掲示板 0040）: 保存点はアダプタと全部学習したモジュールだけを持つ。LeRobot の rollout
+            # （lerobot/rollout/context.py の _load_pretrained_policy）と同じく、ベースを読んでからアダプタを載せる。
+            # SmolVLAPolicy.from_pretrained だけでは model.safetensors を strict=False で読むので、差分が黙って落ちる
+            from lerobot.configs.policies import PreTrainedConfig
+            from peft import PeftConfig, PeftModel
+            peft_cfg = PeftConfig.from_pretrained(str(self.checkpoint))
+            policy_cfg = PreTrainedConfig.from_pretrained(str(self.checkpoint))
+            base = SmolVLAPolicy.from_pretrained(peft_cfg.base_model_name_or_path, config=policy_cfg)
+            self.policy = PeftModel.from_pretrained(base, str(self.checkpoint), config=peft_cfg).to(device).eval()
+            self.peft = {"base": str(peft_cfg.base_model_name_or_path), "type": str(peft_cfg.peft_type),
+                         "r": getattr(peft_cfg, "r", None)}
+        else:
+            self.policy = SmolVLAPolicy.from_pretrained(str(self.checkpoint)).to(device).eval()
         self.pre = PolicyProcessorPipeline.from_pretrained(
             str(self.checkpoint), config_filename="policy_preprocessor.json",
             overrides={"device_processor": {"device": device}},

@@ -38,9 +38,9 @@ def pct(x) -> list:
 
 # ------------------------------------------------------------------------------------------------ D1
 
-def d1() -> dict:
+def d1(e6_name: str = "e6") -> dict:
     from recovla.sim import scene
-    e6 = read("e6")
+    e6 = read(e6_name)
     by = collections.defaultdict(dict)
     conf = {c: collections.Counter() for c in COLORS}
     for r in e6["rows"]:
@@ -70,12 +70,12 @@ def d1() -> dict:
 
 # --------------------------------------------------------------------------------------- the two paths
 
-def load_all(ckpt):
+def load_all(ckpt, gen_name: str = "gen"):
     import torch
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
     from recovla.policy.scene_policy import ScenePolicy
     pol = ScenePolicy(ckpt)
-    g = read("gen")
+    g = read(gen_name)
     root = config.path(g["dataset"])
     fps = int(CFG["convert"]["fps"])
     delta = {"action": [i / fps for i in pol.policy.config.action_delta_indices]}
@@ -184,16 +184,20 @@ def d3(torch, pol, ds, run) -> dict:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--checkpoint", default=None)
+    ap.add_argument("--train", default="train_K1", help="保存点を読む train_<run>.json（--checkpoint がないとき）")
+    ap.add_argument("--e6", default="e6", help="D1 に使う E6 の結果（例 e6_lora）")
+    ap.add_argument("--gen", default="gen", help="D2・D3 に使う学習データ（例 gen_100）")
+    ap.add_argument("--tag", default="", help="結果を diag<tag>.json に書く")
     a = ap.parse_args(argv)
     t0 = time.perf_counter()
-    res = {"D1": d1()}
-    ckpt = a.checkpoint or str(config.path(read("train_K1")["checkpoint"]))
-    torch, pol, ds, run = load_all(ckpt)
+    res = {"D1": d1(a.e6)}
+    ckpt = a.checkpoint or str(config.path(read(a.train)["checkpoint"]))
+    torch, pol, ds, run = load_all(ckpt, a.gen)
     res["D3"] = d3(torch, pol, ds, run)
     res["D2"] = d2(torch, pol, ds)
-    res["checkpoint"] = ckpt
+    res.update(checkpoint=ckpt, e6=a.e6, gen=a.gen, peft=pol.peft)
     res["wall_s"] = round(time.perf_counter() - t0, 1)
-    p = OUT / "diag.json"
+    p = OUT / f"diag{a.tag}.json"
     p.write_text(json.dumps({"check": "diag", "written": time.strftime("%Y-%m-%d %H:%M:%S"), **res},
                             ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     print(f"[k1] wrote {p}")

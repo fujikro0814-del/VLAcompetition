@@ -49,14 +49,16 @@ def read(name: str) -> dict:
 def cmd_gen(a) -> None:
     from recovla.data import convert as C
     from recovla.expert import generate as G
-    specs = G.plan_specs({"empty": K1_SEEDS}, start="home")
-    run = config.path(CFG["paths"]["outputs"]) / "gen" / f"K1_{stamp()}"
+    seeds_ = range(K1_SEEDS.start, K1_SEEDS.start + a.layouts)      # 30（最初）、100（掲示板 0040）
+    specs = G.plan_specs({"empty": seeds_}, start="home")
+    run = config.path(CFG["paths"]["outputs"]) / "gen" / f"K1{a.tag}_{stamp()}"
     results = G.generate(specs, run, workers=a.workers, render=True)
     saved = [r["attempts"][-1]["name"] for r in results if r["success"]]
     name = run.name
     mpath = config.path(CFG["paths"]["outputs"]) / "manifests" / f"{name}.json"
     C.write_manifest(mpath, name, [{"run": str(run.relative_to(config.ROOT)).replace("\\", "/"), "key": k} for k in saved],
-                     "Step E K1: empty box, home start, layout seeds 10000-10029 x 3 colors, normal demos only")
+                     f"Step E K1: empty box, home start, layout seeds {seeds_.start}-{seeds_.stop - 1} x 3 colors, "
+                     f"normal demos only")
     ds = config.path(CFG["paths"]["outputs"]) / "datasets" / name
     log = OUT / f"convert_{name}.log"
     OUT.mkdir(parents=True, exist_ok=True)
@@ -67,7 +69,8 @@ def cmd_gen(a) -> None:
                             stdout=f, stderr=subprocess.STDOUT)
     text = log.read_text(encoding="utf-8", errors="replace")
     fails = [l.strip() for l in text.splitlines() if l.strip().startswith("FAIL")]
-    write("gen", {"run": str(run.relative_to(config.ROOT)), "manifest": str(mpath.relative_to(config.ROOT)),
+    write("gen" + a.tag, {"run": str(run.relative_to(config.ROOT)), "manifest": str(mpath.relative_to(config.ROOT)),
+                  "layout_seeds": [seeds_.start, seeds_.stop - 1],
                   "dataset": str(ds.relative_to(config.ROOT)), "specs": len(specs), "saved": len(saved),
                   "first_try_success": sum(r["first_try_success"] for r in results),
                   "dropped": [(r["layout_seed"], r["color"]) for r in results if not r["success"]],
@@ -81,13 +84,17 @@ def cmd_gen(a) -> None:
 
 def cmd_train(a) -> None:
     from recovla.policy import train_launcher as tl
-    g = read("gen")
+    g = read("gen" + a.gen_tag)
     run_cfg = CFG["train"]["runs"][a.run]
     cfg = {"dataset": str(config.path(g["dataset"])), "train_scope": CFG["train"]["scope"],
            "batch_size": int(CFG["train"]["batch_size"]), "steps": int(run_cfg["steps"]),
            "save_freq": int(run_cfg.get("save_freq", run_cfg["steps"])), "seed": int(CFG["train"]["seed"]),
            "log_freq": int(CFG["train"]["log_freq"]), "num_workers": int(CFG["train"]["num_workers"]),
            "note": f"Step E K1 ({a.run}): {run_cfg['steps']} steps on {g['dataset']}"}
+    if a.run.endswith("_lora"):                                     # 掲示板 0040: LoRA と最初の 2 秒の重み
+        cfg["lora"] = dict(CFG["train"]["lora"])
+        cfg["first_frames_weight"] = dict(CFG["train"]["first_frames_weight"])
+        cfg["log_freq"] = min(cfg["log_freq"], int(run_cfg["steps"]))
     cfg_path = OUT / f"train_{a.run}_{stamp()}.json"
     OUT.mkdir(parents=True, exist_ok=True)
     cfg_path.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -234,8 +241,11 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("gen")
     s.add_argument("--workers", type=int, default=8)
+    s.add_argument("--layouts", type=int, default=len(K1_SEEDS), help="配置の数（種 10000 から）。掲示板 0040 は 100")
+    s.add_argument("--tag", default="", help="結果の名前に付ける（例 _100）。gen<tag>.json に書く")
     s = sub.add_parser("train")
-    s.add_argument("run", choices=["smoke", "K1"])
+    s.add_argument("run", choices=["smoke", "K1", "smoke_lora", "K1_lora"])
+    s.add_argument("--gen-tag", default="", help="どの gen<tag>.json のデータで学習するか")
     for name in ("e6", "closed"):
         s = sub.add_parser(name)
         s.add_argument("--checkpoint", default=None, help="既定は train K1 の保存点（checkpoints/last）")
