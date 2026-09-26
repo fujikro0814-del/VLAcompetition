@@ -162,7 +162,9 @@ def figures(out_dir, rows: list, summ: list) -> list:
     for y, s in enumerate(summ):
         ax.barh(y, s["success_rate"], color=color[s["condition"]])
         if s["success_lo"] is not None:
-            ax.errorbar(s["success_rate"], y, xerr=[[s["success_rate"] - s["success_lo"]], [s["success_hi"] - s["success_rate"]]],
+            # 0 回・全回のとき、区間の端と率の差が丸めで負になる（-1e-17 など）ので 0 で切る
+            ax.errorbar(s["success_rate"], y, xerr=[[max(0.0, s["success_rate"] - s["success_lo"])],
+                                                    [max(0.0, s["success_hi"] - s["success_rate"])]],
                         color="k", capsize=3)
     ax.set_yticks(range(len(summ)), conds)
     ax.set_xlim(0, 1)
