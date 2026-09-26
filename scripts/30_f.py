@@ -5,6 +5,7 @@
     ... check-eval [--smoke] [--table-only]          # 完了条件 1〜4 の測定 → outputs/f/check.json（tests/test_f_recovery.py が判定）
     ... plan                                         # R1・N1 の生成の計画 → outputs/f/plan.json
     ... gen-data [--workers 8] [--smoke]             # R1・N1 のデータ（見積もりの承認の後）→ outputs/f/data.json（完了条件 5）
+    ... review [--smoke]                             # 目視用の資料（決裁 0045 の 2）→ outputs/f/review/
 
 振り（描画なし、作り直しなし＝retry 0）:
   A: 閉じる高さの上げ幅の中心 2.0〜4.5 cm（幅 ±0.5 cm、上げる型だけ＝raise_ratio 1）と、横ずらしだけ（raise_ratio 0）
@@ -609,6 +610,115 @@ def cmd_gen_data(a) -> None:
         "stop": stop})
 
 
+# ------------------------------------------------------------------ 目視用の資料（決裁 0045 の 2）
+
+REVIEW_PER_KIND = 10
+REVIEW_PRE_S = 1.0             # 注入の発動のこの秒数前から写す
+
+
+def _review_video(rig, spec, retry: int, path: pathlib.Path, saved_meta: dict) -> dict:
+    """同じ種・同じ作り直しの回数で最初から回し直し、20 Hz ごとに描いて、注入の少し前から終わりまでを mp4 にする。
+    描画は scratch への複写に対して行うので物理は変わらない（Step D で確認）。回し直しが保存したものと同じかも確かめる。"""
+    import cv2
+    import numpy as np
+    from recovla.expert import generate as G
+    shots = []
+    original = rig.pad_read
+
+    def pad_read(vel=None, press=False, on_step=None):
+        def hook(r):
+            if on_step is not None:
+                on_step(r)
+            if r.step % r.record_every == 0:
+                r.forward_scratch()
+                shots.append((r.step * r.timestep, r.render()))
+        return original(vel, press, hook)
+
+    rig.pad_read = pad_read
+    try:
+        a = G.run_attempt(rig, spec, retry, None, False)
+    finally:
+        rig.pad_read = original
+    inj = a["inject"]
+    t0 = max(0.0, float(inj["t_fire"]) - REVIEW_PRE_S)
+    t_rec = a["t_record_start"]
+    vw = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*"mp4v"), 20, (512, 256))
+    for t, imgs in shots:
+        if t < t0 - 1e-9:
+            continue
+        im = cv2.cvtColor(np.hstack(imgs), cv2.COLOR_RGB2BGR)
+        label = "injection" if t < (t_rec or 1e9) else "recorded (recovery)"
+        if inj["t_fire"] is not None and t < float(inj["t_fire"]):
+            label = "before injection"
+        cv2.putText(im, f"{spec.kind} {spec.layout_seed} {spec.color} t={t:5.2f}s {label}", (4, 14),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1, cv2.LINE_AA)
+        vw.write(im)
+    vw.release()
+    return {"video": str(path.relative_to(config.ROOT)), "t_fire": inj["t_fire"], "t_record_start": t_rec,
+            "reproduced": bool(a["success"]) and a["record_start_step"] == saved_meta.get("record_start_step"),
+            "a_mode": inj["params"].get("a_mode")}
+
+
+def cmd_review(a) -> None:
+    """R1 の復帰から種類ごとに 10 本の映像（注入の 1 秒前から立て直しの完了まで）と、復帰 90 本の最初のこまの一覧。"""
+    import cv2
+    import numpy as np
+    from recovla.expert import generate as G
+    from recovla.record.recorder import read_png
+    from recovla.sim.rig import SimRig
+    data = json.loads((OUT / ("data_smoke.json" if a.smoke else "data.json")).read_text(encoding="utf-8"))
+    run = config.ROOT / data["run"]
+    chosen = data["chosen"]
+    rdir = OUT / ("review_smoke" if a.smoke else "review")
+    rdir.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for c in chosen:
+        meta = json.loads((run / c["recovery"] / "meta.json").read_text(encoding="utf-8"))
+        rows.append({**c, "meta": meta})
+    # 一覧: 種類ごとに 1 枚（俯瞰と手首を 128 px に縮めて横に並べ、種類・種・色・向きの角を添える）、全部をつないだ 1 枚も
+    sheets = []
+    tiles_all = []
+    for kind in RECOVERY_NEED:
+        tiles = []
+        for r in [r for r in rows if r["kind"] == kind]:
+            ep = run / r["recovery"]
+            im = np.hstack([cv2.resize(read_png(ep / v / "000000.png"), (128, 128), interpolation=cv2.INTER_AREA)
+                            for v in CFG["sim"]["cameras"]])
+            im = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
+            bar = np.full((18, 256, 3), 255, np.uint8)
+            yaw = r["meta"]["inject"]["info"].get("yaw_rel_deg")
+            mode = r["meta"]["inject"]["params"].get("a_mode", "")
+            txt = f"{kind} {r['seed']} {r['color']} yaw {yaw:+.0f}" + (f" {mode}" if mode else "")
+            cv2.putText(bar, txt, (3, 13), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 0, 0), 1, cv2.LINE_AA)
+            tiles.append(np.vstack([bar, im]))
+        tiles_all += tiles
+        cols = 5
+        while len(tiles) % cols:
+            tiles.append(np.full_like(tiles[0], 255))
+        grid = np.vstack([np.hstack(tiles[i:i + cols]) for i in range(0, len(tiles), cols)])
+        p = rdir / f"first_frames_{kind}.png"
+        cv2.imwrite(str(p), grid)
+        sheets.append(str(p.relative_to(config.ROOT)))
+    # 映像: 種類ごとに先頭から 10 本
+    rig = SimRig(render=True)
+    videos = []
+    try:
+        for kind in RECOVERY_NEED:
+            for r in [r for r in rows if r["kind"] == kind][:REVIEW_PER_KIND]:
+                retry = int(r["recovery"].rsplit("_r", 1)[1])
+                spec = G.EpisodeSpec(r["seed"], r["color"], r["layout_kind"], kind)
+                videos.append({"episode": r["recovery"],
+                               **_review_video(rig, spec, retry, rdir / f"{r['recovery']}.mp4", r["meta"])})
+    finally:
+        rig.close()
+    write("review_smoke" if a.smoke else "review", {
+        "data": data["run"], "sheets": sheets, "videos": videos,
+        "all_reproduced": all(v["reproduced"] for v in videos),
+        "first_frames_by_kind": {k: sum(1 for r in rows if r["kind"] == k) for k in RECOVERY_NEED},
+        "note": "映像は同じ種・同じ作り直しの回数で最初から回し直して描いたもの（注入の 1 秒前から）。保存したデータは"
+                "「recorded (recovery)」の表示の部分だけ"})
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -628,9 +738,11 @@ def main(argv=None) -> int:
     s = sub.add_parser("gen-data")
     s.add_argument("--workers", type=int, default=8)
     s.add_argument("--smoke", action="store_true", help="各群から少しだけ（通しの確認）")
+    s = sub.add_parser("review")
+    s.add_argument("--smoke", action="store_true", help="data_smoke.json の回から作る")
     a = ap.parse_args(argv)
     {"sweep": cmd_sweep, "check-gen": cmd_check_gen, "check-eval": cmd_check_eval, "plan": cmd_plan,
-     "gen-data": cmd_gen_data}[a.cmd](a)
+     "gen-data": cmd_gen_data, "review": cmd_review}[a.cmd](a)
     return 0
 
 
