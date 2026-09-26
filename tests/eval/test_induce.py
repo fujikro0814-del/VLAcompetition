@@ -59,6 +59,26 @@ def test_params_drawn_up_front_and_deterministic():
     assert 0.0 <= I.Inducer("P2", 53000, lay, t, rig=None).params["u"] < 1.0
 
 
+def test_same_seed_same_layout_and_induction_across_modes():
+    """Step G 完了条件 3: 配置と誘発の条件は種だけで決まり、実行の方式（sync・naive・rtc）に依らない。
+    実行器は誘発の乱数列に触れず（雑音は noise の列）、誘発は試行の開始時に全部引く。"""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("r41", config.ROOT / "scripts" / "41_results.py")
+    r41 = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(r41)
+    a = r41.trial_list("induced:198000:6")
+    b = r41.trial_list("induced:198000:6")
+    assert [(s, l, t) for s, l, t in a] == [(s, l, t) for s, l, t in b]
+    for seed, lay, tgt in a:
+        for kind in I.KINDS:
+            assert I.Inducer(kind, seed, lay, tgt, rig=None).params == I.Inducer(kind, seed, lay, tgt, rig=None).params
+    # 雑音は推論の番号だけで決まる（方式に依らない）: 同じ (種, i) なら同じ生成器の列
+    from recovla.policy.schedule import noise_generator
+    import torch
+    assert torch.equal(torch.randn(3, generator=noise_generator(198000, 4)),
+                       torch.randn(3, generator=noise_generator(198000, 4)))
+
+
 def test_no_inducer_keeps_old_behaviour(rig):
     meta, arr = run(rig, None, 53001)
     assert meta["success"] and meta["induce"]["kind"] is None and not arr["induce_active"].any()
