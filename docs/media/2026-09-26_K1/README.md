@@ -26,4 +26,13 @@
 | `K1_cue_closed_trial_0004_raw.mp4` | 同 | 191004 | green | **成功**（11.9 s） | 退避 | green | 0 |
 | `K1_cue_closed_trial_0005_raw.mp4` | 同 | 191005 | blue | **成功**（11.1 s） | 退避 | blue | 0 |
 
-出所: `outputs/k1/closed.json`・`closed_lora.json`・`closed_cue.json`。結果の全体は `docs/E_報告.md` と掲示板 0037・0046・0051。
+| `K1_cue_noise1cm_closed_trial_0000_raw.mp4` | 手がかりつきの K1、手がかりに 1 cm のずれ（決裁 0052 の任意の試験） | 191000 | red | 成功 | 退避 | red | ずれ (0.13, −0.99) cm、掴む位置のずれの向きへの射影 1.37 cm |
+| `K1_cue_noise1cm_closed_trial_0001_raw.mp4` | 同 | 191001 | green | 成功 | 退避 | green | ずれ (−1.00, 0.06) cm、射影 1.61 cm |
+| `K1_cue_noise1cm_closed_trial_0002_raw.mp4` | 同 | 191002 | blue | 成功 | 退避 | blue | ずれ (0.56, −0.83) cm、射影 1.10 cm |
+| `K1_cue_noise2cm_closed_trial_0000_raw.mp4` | 手がかりに 2 cm のずれ | 191000 | red | 成功 | 退避 | red | ずれ (0.25, −1.98) cm、射影 1.07 cm |
+| `K1_cue_noise2cm_closed_trial_0001_raw.mp4` | 同 | 191001 | green | 成功 | 搬送 | green | ずれ (−2.00, 0.12) cm、射影 2.13 cm |
+| `K1_cue_noise2cm_closed_trial_0002_raw.mp4` | 同 | 191002 | blue | 成功 | 退避 | blue | ずれ (1.12, −1.66) cm、射影 1.84 cm |
+
+雑音の試験の行の最後の列は、接触ではなく「手がかりに足したずれ」と「最初に閉じた時点の指先の中心と立方体の中心のずれを、足したずれの向きに射影した長さ」。
+
+出所: `outputs/k1/closed.json`・`closed_lora.json`・`closed_cue.json`・`closed_cue_noise1cm.json`・`closed_cue_noise2cm.json`。結果の全体は `docs/E_報告.md` と掲示板 0037・0046・0051。
