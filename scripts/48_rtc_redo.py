@@ -111,13 +111,53 @@ def cmd_decide(a) -> None:
     print(json.dumps({k: v for k, v in res.items() if k != "stats"}, ensure_ascii=False, indent=1))
 
 
+def cmd_reference(a) -> None:
+    """参考（採否には使わない。0076 の後の回答）: 継ぎ目の跳びの中央値を (1) 誘発が行動を上書きしている間の継ぎ目を除いて
+    （跳び_k の k か k−1 の行動が上書き）、(2) 自然の 30 回だけで。あわせて P2 の立ち直りの率を G2 の基準（50%）と並べる。"""
+    from recovla.eval import metrics as M
+    out = {}
+    for c in CANDS:
+        per_trial_excl, per_trial_nat = [], []
+        for part in ("nat",) + KINDS:
+            for p in sorted((EVAL / f"{c}_{part}").glob("trial_*.json")):
+                rec = M.load_trial(p)
+                arr = rec.arrays
+                kf = np.flatnonzero((np.asarray(arr["step"]) // M._frame_steps(arr["step"])) % M.FRAMES_PER_ACTION == 0)
+                act = np.asarray(arr["action"], float)[kf]
+                sw = np.asarray(arr["chunk_switch"], bool)[kf]
+                ind = np.asarray(arr["induce_active"], bool)[kf]
+                t = np.asarray(arr["sim_time"], float)
+                dt = M.FRAMES_PER_ACTION * float(np.median(np.diff(t)))
+                v = act[:, :3] / dt
+                jump = np.linalg.norm(v[1:] - v[:-1], axis=1)
+                keep = np.isfinite(jump) & sw[1:] & ~ind[1:] & ~ind[:-1]
+                if keep.any():
+                    per_trial_excl.append(float(jump[keep].mean()))
+                if part == "nat":
+                    seam, _ = M.seam_jumps(act, sw, dt)
+                    if seam.size:
+                        per_trial_nat.append(float(seam.mean()))
+        p2 = [json.loads(p.read_text(encoding="utf-8")) for p in sorted((EVAL / f"{c}_P2").glob("trial_*.json"))]
+        est = [m for m in p2 if m["induce"]["established"]]
+        rec2 = sum(bool(m["success"]) for m in est)
+        out[c] = {"seam_median_excluding_induced": float(np.median(per_trial_excl)), "n_excl": len(per_trial_excl),
+                  "seam_median_natural_only": float(np.median(per_trial_nat)), "n_nat": len(per_trial_nat),
+                  "P2_recovered": rec2, "P2_established": len(est), "P2_recovery_rate": rec2 / len(est) if est else None,
+                  "G2_P2_threshold": 0.5}
+        print(c, json.dumps(out[c], ensure_ascii=False), flush=True)
+    (RES / "rtc_redo_reference.json").write_text(json.dumps({"note": "参考。採否には使わない", "stats": out,
+                                                            "written": time.strftime("%Y-%m-%d %H:%M:%S")},
+                                                           ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("plan")
     sub.add_parser("decide")
+    sub.add_parser("reference")
     a = ap.parse_args(argv)
-    {"plan": cmd_plan, "decide": cmd_decide}[a.cmd](a)
+    {"plan": cmd_plan, "decide": cmd_decide, "reference": cmd_reference}[a.cmd](a)
     return 0
 
 

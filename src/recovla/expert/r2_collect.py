@@ -56,7 +56,10 @@ class R2Spec:
         return np.random.default_rng(np.random.SeedSequence([self.seed, R2_RNG_KEY, KINDS.index(self.kind)]))
 
 
-def run_r2_attempt(rig, runner, spec: R2Spec, run_dir=None, render: bool = True, cfg: dict = None) -> dict:
+def run_r2_attempt(rig, runner, spec: R2Spec, run_dir=None, render: bool = True, cfg: dict = None,
+                   preview: list = None) -> dict:
+    """preview にリストを渡すと、前半（方策、記録しない）の 10 Hz の描画を (時刻, 画像の組) で足す（目視用の映像だけ。
+    描画は方策の入力と同じものなので、動きは変わらない）。"""
     cfg = cfg or _CFG
     layout = spec.layout()
     color = spec.target(layout)
@@ -77,6 +80,8 @@ def run_r2_attempt(rig, runner, spec: R2Spec, run_dir=None, render: bool = True,
     k = 0
     frame, imgs = E.capture_frame(rig, color, 0.0, pp, render)
     raw = dict(zip(rig.cameras, imgs))
+    if preview is not None:
+        preview.append((float(rig.data.time), imgs))
     task = T.instruction(color)
     t_handover, trigger, discard = None, None, None
     from recovla.sim.rig import quiet
@@ -113,6 +118,8 @@ def run_r2_attempt(rig, runner, spec: R2Spec, run_dir=None, render: bool = True,
                 break
             frame, imgs = E.capture_frame(rig, color, 0.0, pp, render)
             raw = dict(zip(rig.cameras, imgs))
+            if preview is not None:
+                preview.append((float(rig.data.time), imgs))
             k += 1
     tr = rig.truth(color)
     hand_state = {"t": round(float(tr.t), 3), "tip_to_cube_xy": float(np.hypot(*(tr.fingertip[:2] - tr.target_pos[:2]))),

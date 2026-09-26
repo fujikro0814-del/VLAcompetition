@@ -368,6 +368,159 @@ def cmd_fdcheck(a) -> None:
         ensure_ascii=False, indent=2, default=float), encoding="utf-8")
 
 
+# ------------------------------------------------------------------ 0069 の 5・0070 の 5・0075（自然な失敗の分類）
+
+CLS_CONT = ("finger_gap", "target_shift_xy", "target_tilt_deg", "tip_to_target_xy", "tip_above_target_z")
+CLS_CAT = ("phase", "gripper_closed", "grasped")
+
+
+def _cls_state(a, f, ti, init_xy, held_m):
+    from recovla.expert.script import Phase
+    from recovla.sim import frames
+    tip, cube = np.asarray(a["fingertip"][f], float), np.asarray(a["cube_pos"][f, ti], float)
+    closed = bool(a["gripper_closed"][f])
+    return {"phase": Phase(int(a["phase"][f])).name, "gripper_closed": closed,
+            "grasped": bool(closed and np.linalg.norm(tip - cube) < held_m),
+            "finger_gap": float(np.sum(a["fingers"][f])),
+            "target_shift_xy": float(np.hypot(*(cube[:2] - np.asarray(init_xy, float)))),
+            "target_tilt_deg": float(frames.tilt_deg(a["cube_quat"][f, ti])),
+            "tip_to_target_xy": float(np.hypot(*(tip[:2] - cube[:2]))),
+            "tip_above_target_z": float(tip[2] - cube[2])}
+
+
+def _cls_outside(s, rng):
+    out = [k for k in CLS_CONT if not (rng[k][0] - OUTSIDE_TOL_M <= s[k] <= rng[k][1] + OUTSIDE_TOL_M)]
+    out += [k for k in CLS_CAT if s[k] not in rng[k]]
+    return out
+
+
+def cmd_classify(a) -> None:
+    """自然な失敗の分類: G2 の R1・N1 の自然の失敗に失敗の検出 (i)〜(iv)（とその他の落下）を当て、最初に確定した時点と
+    その 1 s 後の状態を、R1 の復帰 90 本の最初のこまの範囲（全部は 5〜95 百分位、A・B・C ごとは最小〜最大、
+    種類の量は現れた値の集合）と比べる。許容は OUTSIDE_TOL_M（長さは 1 mm、傾きは 0.001°）"""
+    from recovla.eval import failure_detect as FD
+    from recovla.sim import scene
+    held_m = float(CFG["eval"]["failure_detect"]["held_dist_m"])
+    data = json.loads((OUTPUTS / "f" / "data.json").read_text(encoding="utf-8"))
+    run = config.ROOT / data["run"]
+    ref = {"A": [], "B": [], "C": []}
+    for c in data["chosen"]:
+        d = np.load(run / c["recovery"] / "data.npz")
+        lay = scene.sample_layout(c["seed"], c["layout_kind"], start=c["start"])
+        ref[c["kind"]].append(_cls_state(d, 0, int(d["target"][0]), lay.cubes[c["color"]][:2], held_m))
+    ref["all"] = ref["A"] + ref["B"] + ref["C"]
+    ranges = {}
+    for g, rows in ref.items():
+        r = {}
+        for k in CLS_CONT:
+            v = np.array([s[k] for s in rows])
+            r[k] = ((float(np.percentile(v, 5)), float(np.percentile(v, 95))) if g == "all"
+                    else (float(v.min()), float(v.max())))
+        for k in CLS_CAT:
+            r[k] = sorted({s[k] for s in rows}, key=str)
+        ranges[g] = r
+    rows = []
+    for cond in ("R1_nat", "N1_nat"):
+        for p in sorted((OUTPUTS / "eval" / "G2" / cond).glob("trial_*.json")):
+            m = json.loads(p.read_text(encoding="utf-8"))
+            if m["success"]:
+                continue
+            arr = np.load(p.with_suffix(".npz"))
+            ti = int(arr["target"][0])
+            t = np.asarray(arr["sim_time"], float)
+            evs = FD.detect_trial(arr)
+            first = evs[0] if evs else None
+            t_fail = first.t if first else float(t[-1])
+            f = int(np.searchsorted(t, t_fail - 1e-9))
+            f1 = int(min(np.searchsorted(t, t_fail + 1.0 - 1e-9), len(t) - 1))
+            init_xy = arr["cube_pos"][0, ti, :2]
+            s0, s1 = _cls_state(arr, f, ti, init_xy, held_m), _cls_state(arr, f1, ti, init_xy, held_m)
+            row = {"condition": cond, "seed": m["seed"], "target": ("red", "green", "blue")[ti],
+                   "kind": first.kind if first else "timeout", "t_fail": t_fail, "t_end": float(t[-1]),
+                   "all_events": [{"kind": e.kind, "t": e.t} for e in evs], "at": s0, "after_1s": s1,
+                   "outside": {w: {g: _cls_outside(s, ranges[g]) for g in ("all", "A", "B", "C")}
+                               for w, s in (("at", s0), ("after_1s", s1))}}
+            row["outside_all_any"] = bool(row["outside"]["at"]["all"])
+            row["inside_some_kind"] = [g for g in "ABC" if not row["outside"]["at"][g]]
+            rows.append(row)
+            print(cond, m["seed"], row["kind"], round(t_fail, 2), "outside(all):", row["outside"]["at"]["all"],
+                  "inside kinds:", row["inside_some_kind"], flush=True)
+    RES_OUT.mkdir(parents=True, exist_ok=True)
+    (RES_OUT / "natural_failure_classes.json").write_text(json.dumps({
+        "definition": "0069 の 5＋0070 の 5（閾値は configs の eval.failure_detect、0072 の 2）。確定の時点は最初の検出、"
+                      "なければ時間切れ。範囲は R1 の復帰 90 本の保存を始めた最初のこま（全部は 5〜95 百分位、種類ごとは最小〜最大）。"
+                      "長さの量は 1 mm の許容",
+        "thresholds": CFG["eval"]["failure_detect"], "ranges": ranges, "rows": rows,
+        "written": time.strftime("%Y-%m-%d %H:%M:%S")}, ensure_ascii=False, indent=2, default=float), encoding="utf-8")
+
+
+CUE_WINDOW_S = (-4.0, 1.0)          # 失敗が確定した時点の前後（掴み損ねは閉じてから 3 s で確定するので、閉じた時点を含む）
+
+
+def _cue_rows(arr, ti):
+    """推論ごとの手がかり [k_obs, x, y, 旗] と、同じ行動の番号のこま（2·k_obs）の目標の真値の差（決裁 0057）。"""
+    t = np.asarray(arr["sim_time"], float)
+    out = []
+    for k_obs, x, y, flag in np.asarray(arr["cue_at_inference"], float):
+        f = min(int(round(2 * k_obs)), len(t) - 1)
+        truth = arr["cube_pos"][f, ti, :2]
+        tip = arr["fingertip"][f, :2]
+        out.append({"t": float(t[f]), "cue_err_m": float(np.hypot(x - truth[0], y - truth[1])), "flag": float(flag),
+                    "tip_to_cue_xy": float(np.hypot(*(tip - [x, y]))), "tip_to_truth_xy": float(np.hypot(*(tip - truth)))})
+    return out
+
+
+def cmd_cuecheck(a) -> None:
+    """自然な失敗 6 本の、失敗が確定した時点の前後の手がかりの記録（cue_at_inference）と真値の差（0077 の依頼の 3）。
+    閉じた時点では、指先から最後の手がかりまでと真値までの水平の距離も出す（手がかりのずれか、方策が早く閉じたかを分ける）。
+    参考: G2 の成功した試行（R1・N1 の自然）の全推論の手がかりの差の分布。"""
+    from recovla.eval import failure_detect as FD
+    res, ref = {"rows": []}, {}
+    for cond in ("R1_nat", "N1_nat"):
+        errs = []
+        for p in sorted((OUTPUTS / "eval" / "G2" / cond).glob("trial_*.json")):
+            m = json.loads(p.read_text(encoding="utf-8"))
+            arr = np.load(p.with_suffix(".npz"))
+            ti = int(arr["target"][0])
+            cues = _cue_rows(arr, ti)
+            if m["success"]:
+                errs += [c["cue_err_m"] for c in cues]
+                continue
+            evs = FD.detect_trial(arr)
+            t_fail = evs[0].t if evs else float(arr["sim_time"][-1])
+            t = np.asarray(arr["sim_time"], float)
+            g = np.asarray(arr["gripper_closed"], bool)
+            closes = [float(t[f]) for f in range(1, len(g)) if g[f] and not g[f - 1] and t[f] <= t_fail + 1e-9]
+            t_close = closes[-1] if closes else None
+            at_close = None
+            if t_close is not None:
+                f = int(np.searchsorted(t, t_close - 1e-9))
+                prior = [c for c in cues if c["t"] <= t_close + 1e-9]
+                last = prior[-1] if prior else None
+                truth = arr["cube_pos"][f, ti, :2]
+                at_close = {"t": t_close, "tip_to_truth_xy": float(np.hypot(*(arr["fingertip"][f, :2] - truth))),
+                            "last_cue_t": last["t"] if last else None,
+                            "last_cue_err_m": last["cue_err_m"] if last else None,
+                            "tip_to_last_cue_xy": (float(np.hypot(*(arr["fingertip"][f, :2] - np.asarray(
+                                arr["cue_at_inference"])[len(prior) - 1, 1:3])))) if last else None}
+            win = [c for c in cues if t_fail + CUE_WINDOW_S[0] - 1e-9 <= c["t"] <= t_fail + CUE_WINDOW_S[1] + 1e-9]
+            row = {"condition": cond, "seed": m["seed"], "kind": evs[0].kind if evs else "timeout", "t_fail": t_fail,
+                   "at_close": at_close, "window": win,
+                   "window_cue_err_max_m": max((c["cue_err_m"] for c in win), default=None)}
+            res["rows"].append(row)
+            print(cond, m["seed"], row["kind"], "close", at_close, "win max err", row["window_cue_err_max_m"], flush=True)
+        e = np.array(errs)
+        ref[cond] = {"n_inferences": int(e.size), "median_m": float(np.median(e)), "p95_m": float(np.percentile(e, 95)),
+                     "max_m": float(e.max())}
+    res["reference_success_trials"] = ref
+    print(json.dumps(ref, indent=1))
+    res.update(window_s=CUE_WINDOW_S, written=time.strftime("%Y-%m-%d %H:%M:%S"),
+               note="手がかりは推論ごと [k_obs, x, y, 旗]、真値はこま 2·k_obs の目標の中心（決裁 0057）。旗 0 は色が見えなかった")
+    RES_OUT.mkdir(parents=True, exist_ok=True)
+    (RES_OUT / "natural_failure_cue.json").write_text(json.dumps(res, ensure_ascii=False, indent=2, default=float),
+                                                       encoding="utf-8")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -378,8 +531,10 @@ def main(argv=None) -> int:
     sub.add_parser("pilot")
     sub.add_parser("states")
     sub.add_parser("fdcheck")
+    sub.add_parser("classify")
+    sub.add_parser("cuecheck")
     a = ap.parse_args(argv)
-    {"hold": cmd_hold, "pilot": cmd_pilot, "states": cmd_states, "fdcheck": cmd_fdcheck}[a.cmd](a)
+    {"hold": cmd_hold, "pilot": cmd_pilot, "states": cmd_states, "fdcheck": cmd_fdcheck, "classify": cmd_classify, "cuecheck": cmd_cuecheck}[a.cmd](a)
     return 0
 
 
