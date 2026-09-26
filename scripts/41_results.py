@@ -130,10 +130,11 @@ def cmd_dcal(a) -> None:
                 break
     finally:
         rig.close()
+    used_seeds = [a.seed, a.seed + trials_run - 1]
     w = np.array(walls[1:])                         # 最初の 1 回（ウォームアップ）を除く
     p95 = float(np.percentile(w, float(rule["percentile"])))
     d = int(math.ceil(p95 / float(rule["action_dt_s"])))
-    res = {"n": int(w.size), "trials": trials_run, "wall_mean_s": float(w.mean()), "wall_p95_s": p95,
+    res = {"n": int(w.size), "trials": trials_run, "seeds_used": used_seeds, "wall_mean_s": float(w.mean()), "wall_p95_s": p95,
            "wall_max_s": float(w.max()), "d": d, "stop": d > int(rule["max_d"]), "rule": rule,
            "checkpoint": str(a.checkpoint), "tf32": pol.config.get("tf32"),
            "written": time.strftime("%Y-%m-%d %H:%M:%S")}
@@ -201,6 +202,83 @@ def cmd_induce_script(a) -> None:
         "written": time.strftime("%Y-%m-%d %H:%M:%S")}, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+# ------------------------------------------------ 判断の決まり（0062・0063。結果を見る前に固めた）
+
+RTC_COMBOS = [(10, "LINEAR"), (10, "EXP"), (40, "LINEAR"), (40, "EXP")]
+RTC_SUCCESS_WITHIN = 3          # 最良の組の成功数から 3 回以内（30 回中）
+RTC_SEAM_SAME_REL = 0.10        # 継ぎ目の跳びの中央値が最小の 10% 以内なら「同じ」
+RTC_DEFAULT = (10, "EXP")       # 同点のときに近い方を採る既定
+
+
+def rtc_condition(h: int, sched: str) -> str:
+    return f"E{h}_{sched}"
+
+
+def cmd_decide_rtc(a) -> None:
+    """RTC の設定の 2×2（0062 の 2・0063 の 2）。outputs/eval/RTC2x2/<条件>/ の試行から決める。"""
+    from recovla.eval import report
+    base = EVAL_OUT / "RTC2x2"
+    rows = {}
+    for h, sc in RTC_COMBOS:
+        c = rtc_condition(h, sc)
+        rows[c] = report.collect([base / c])
+    stat = {}
+    for (h, sc) in RTC_COMBOS:
+        c = rtc_condition(h, sc)
+        rs = rows[c]
+        est = [r for r in rs if r["induce_established"]]
+        seam = [r["seam_jump_mean"] for r in rs if r["seam_jump_mean"] is not None and not math.isnan(r["seam_jump_mean"])]
+        react = [r["reaction_time_s"] for r in est if r["reaction_time_s"] is not None and not math.isnan(r["reaction_time_s"])]
+        stat[c] = {"horizon": h, "schedule": sc, "n": len(rs), "successes": sum(bool(r["success"]) for r in rs),
+                   "established": len(est), "establish_rate": len(est) / len(rs) if rs else None,
+                   "seam_jump_median": float(np.median(seam)) if seam else float("nan"),
+                   "reaction_time_median_s": float(np.median(react)) if react else float("nan"),
+                   "seeds": sorted({r["seed"] for r in rs})}
+    seeds_sets = {tuple(v["seeds"]) for v in stat.values()}
+    best = max(v["successes"] for v in stat.values())
+    step1 = [c for c, v in stat.items() if v["successes"] >= best - RTC_SUCCESS_WITHIN]
+    smin = min(stat[c]["seam_jump_median"] for c in step1)
+    step2 = [c for c in step1 if stat[c]["seam_jump_median"] <= smin * (1 + RTC_SEAM_SAME_REL)]
+    if len(step2) > 1:
+        rmin = min(stat[c]["reaction_time_median_s"] for c in step2)
+        step3 = [c for c in step2 if stat[c]["reaction_time_median_s"] == rmin]
+    else:
+        step3 = step2
+
+    def closeness(c):
+        v = stat[c]
+        return (v["horizon"] != RTC_DEFAULT[0], v["schedule"] != RTC_DEFAULT[1])
+    chosen = sorted(step3, key=closeness)[0]
+    res = {"rule": {"success_within": RTC_SUCCESS_WITHIN, "seam_same_rel": RTC_SEAM_SAME_REL, "default": RTC_DEFAULT,
+                    "success_denominator": "P2 が不成立の試行も含めた全試行（0063 の 2）", "source": "0062・0063"},
+           "same_seeds_all_combos": len(seeds_sets) == 1, "stats": stat, "step1_success": step1,
+           "step2_seam": step2, "step3_reaction": step3, "chosen": chosen,
+           "chosen_horizon": stat[chosen]["horizon"], "chosen_schedule": stat[chosen]["schedule"],
+           "written": time.strftime("%Y-%m-%d %H:%M:%S")}
+    RES_OUT.mkdir(parents=True, exist_ok=True)
+    (RES_OUT / "rtc_decision.json").write_text(json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps({k: v for k, v in res.items() if k != "stats"}, ensure_ascii=False, indent=1))
+
+
+def cmd_decide_ckpt(a) -> None:
+    """保存点の選択（手順書 Step H の 2・0062 の 3）。成功数の多い方、同数なら 30000 手。"""
+    from recovla.eval import report
+    base = EVAL_OUT / f"select_{a.model}"
+    out = {}
+    for step in (20000, 30000):
+        rs = report.collect([base / f"{a.model}_{step}"])
+        out[step] = {"n": len(rs), "successes": sum(bool(r["success"]) for r in rs),
+                     "seeds": sorted({r["seed"] for r in rs})}
+    s20, s30 = out[20000]["successes"], out[30000]["successes"]
+    chosen = 20000 if s20 > s30 else 30000
+    res = {"model": a.model, "rule": "成功数の多い方、同数なら 30000 手（手順書 Step H の 2・0062・0063）",
+           "candidates": out, "same_seeds": out[20000]["seeds"] == out[30000]["seeds"], "chosen_step": chosen,
+           "written": time.strftime("%Y-%m-%d %H:%M:%S")}
+    RES_OUT.mkdir(parents=True, exist_ok=True)
+    (RES_OUT / f"ckpt_decision_{a.model}.json").write_text(json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps(res, ensure_ascii=False, indent=1))
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -222,14 +300,18 @@ def main(argv=None) -> int:
     s.add_argument("--pair", action="append", help="条件 a:b（同じ種で対にする）")
     s = sub.add_parser("dcal")
     s.add_argument("--checkpoint", required=True)
-    s.add_argument("--n", type=int, default=int(CFG["runtime"]["delay_rule"]["min_samples"]))
-    s.add_argument("--seed", type=int, default=198000, help="Step G の検査の帯 198000〜198999（B_提案書 §9）")
-    s.add_argument("--max-trials", type=int, default=30)
+    s.add_argument("--n", type=int, default=100, help="最初の 1 回を除いた回数（0062・0063: 100 回以上）")
+    s.add_argument("--seed", type=int, default=198600, help="0062・0063 の割り当て（198600〜、使った範囲を記録）")
+    s.add_argument("--max-trials", type=int, default=100)
+    sub.add_parser("decide-rtc")
+    s = sub.add_parser("decide-ckpt")
+    s.add_argument("--model", choices=["R1", "N1"], required=True)
     s = sub.add_parser("induce-script")
     s.add_argument("--seed", type=int, default=198100, help="Step G の検査の帯 198000〜198999")
     s.add_argument("--n", type=int, default=20)
     a = ap.parse_args(argv)
-    {"run": cmd_run, "report": cmd_report, "dcal": cmd_dcal, "induce-script": cmd_induce_script}[a.cmd](a)
+    {"run": cmd_run, "report": cmd_report, "dcal": cmd_dcal, "induce-script": cmd_induce_script,
+     "decide-rtc": cmd_decide_rtc, "decide-ckpt": cmd_decide_ckpt}[a.cmd](a)
     return 0
 
 
