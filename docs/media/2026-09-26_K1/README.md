@@ -19,4 +19,11 @@
 | `K1_lora_closed_trial_0004_raw.mp4` | 同 | 191004 | green | 失敗 | 接近 | — | 1 |
 | `K1_lora_closed_trial_0005_raw.mp4` | 同 | 191005 | blue | 失敗 | 接近 | — | 3 |
 
-出所: `outputs/k1/closed.json`・`closed_lora.json`。結果の全体は `docs/E_報告.md` と掲示板 0037・0046。
+| `K1_cue_closed_trial_0000_raw.mp4` | 手がかりつきの K1（0048。状態 18 次元、行動エキスパートのみ、300 本） | 191000 | red | **成功**（10.6 s） | 退避 | red | 0 |
+| `K1_cue_closed_trial_0001_raw.mp4` | 同 | 191001 | green | **成功**（9.9 s） | 退避 | green | 0 |
+| `K1_cue_closed_trial_0002_raw.mp4` | 同 | 191002 | blue | **成功**（10.2 s） | 退避 | blue | 0 |
+| `K1_cue_closed_trial_0003_raw.mp4` | 同 | 191003 | red | **成功**（11.1 s） | 退避 | red | 0 |
+| `K1_cue_closed_trial_0004_raw.mp4` | 同 | 191004 | green | **成功**（11.9 s） | 退避 | green | 0 |
+| `K1_cue_closed_trial_0005_raw.mp4` | 同 | 191005 | blue | **成功**（11.1 s） | 退避 | blue | 0 |
+
+出所: `outputs/k1/closed.json`・`closed_lora.json`・`closed_cue.json`。結果の全体は `docs/E_報告.md` と掲示板 0037・0046・0051。
