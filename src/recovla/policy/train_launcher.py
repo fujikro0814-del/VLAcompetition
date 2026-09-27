@@ -47,6 +47,13 @@ Config JSON (unknown keys are rejected):
                probability prob by U(0, max_m) in a uniform direction (board 0054). Actions unchanged
   With lora, first_frames_weight or cue_augment, lerobot-train runs through recovla.policy.train_wrapped, which also
   writes the in-memory policy's output on a fixed input (recovla_reference.pt) at every save.
+  init_policy  path of a trained pretrained_model folder to continue from (R2・R1+ from R1, B_提案書 §10) instead of
+               the smolvla_libero snapshot. The optimizer starts fresh (no --resume). After training, the normalizer
+               and unnormalizer of every saved checkpoint are compared bit for bit with init_policy's
+               (observation.state.* and action.* must match; the dataset's meta/stats.json must have been
+               replaced with the init model's dataset stats). The result goes to train_run.json "stats_check"
+  lr_schedule  {"peak": 3e-5, "warmup": 200, "decay_steps": 10000, "decay_lr": 2.5e-6}: --policy.optimizer_lr,
+               --policy.scheduler_warmup_steps, --policy.scheduler_decay_steps, --policy.scheduler_decay_lr
 
     .venv\\Scripts\\python.exe -m recovla.policy.train_launcher CONFIG.json [--confirm] [--dry-run]
                                                  [--output-root DIR] [--log-root DIR]
@@ -72,8 +79,9 @@ from recovla.data import vla_observation
 
 _CFG = config.load()
 
-LAUNCHER_VERSION = 3          # 2: log_freq, log summary, loss.csv/png, code version (2026-09-17)
+LAUNCHER_VERSION = 4         # 2: log_freq, log summary, loss.csv/png, code version (2026-09-17)
                               # 3: lora, first_frames_weight, train_wrapped (2026-09-26, board 0040)
+                              # 4: init_policy, lr_schedule, stats_check (2026-09-27, B_提案書 §10, board 0079)
 DEFAULT_LOG_FREQ = int(_CFG["train"]["log_freq"])
 # lerobot logs mem_gb = torch.cuda.max_memory_allocated() / 1024**3 per logging interval, i.e. GiB of
 # allocated tensors (the CUDA caching allocator reserves somewhat more).
@@ -96,13 +104,18 @@ SCOPE_FLAGS = {"expert": ["--policy.train_expert_only=true", "--policy.freeze_vi
 MAX_BATCH_14GIB = {"expert": 62, "full": 12}                 # Step C, per-process cap 14 GiB
 REQUIRED = ("dataset", "train_scope", "batch_size", "steps")
 OPTIONAL = ("save_freq", "seed", "log_freq", "num_workers", "extra_args", "note", "allow_batch_over_14gib",
-            "lora", "first_frames_weight", "cue_augment")
+            "lora", "first_frames_weight", "cue_augment", "init_policy", "lr_schedule")
 OWNED = ("--policy.path", "--policy.push_to_hub", "--policy.repo_id", "--policy.device",
          "--policy.train_expert_only", "--policy.freeze_vision_encoder", "--dataset.root",
          "--dataset.repo_id", "--rename_map", "--output_dir", "--job_name", "--batch_size", "--steps",
          "--save_freq", "--seed", "--log_freq", "--num_workers", "--wandb.enable", "--resume", "--config_path",
          "--peft.target_modules", "--peft.full_training_modules", "--peft.method_type", "--peft.r",
-         "--peft.lora_alpha", "--peft.init_type")
+         "--peft.lora_alpha", "--peft.init_type", "--policy.optimizer_lr", "--policy.scheduler_warmup_steps",
+         "--policy.scheduler_decay_steps", "--policy.scheduler_decay_lr")
+NORMALIZER_FILES = ("policy_preprocessor_step_5_normalizer_processor.safetensors",
+                    "policy_postprocessor_step_0_unnormalizer_processor.safetensors")
+LR_KEYS = {"peak": "--policy.optimizer_lr", "warmup": "--policy.scheduler_warmup_steps",
+           "decay_steps": "--policy.scheduler_decay_steps", "decay_lr": "--policy.scheduler_decay_lr"}
 VLM_TEXT_LAYER = r"model\.vlm_with_expert\.vlm\.model\.text_model\.layers\.({layers})\.self_attn\.({modules})"
 NUM_VLM_TEXT_LAYERS = 16             # SmolVLA reduces SmolVLM2 to 16 text layers ("Reducing the number of VLM layers")
 # fully trained with LoRA: the action expert and the projections that are new in SmolVLA (B_提案書 §11)
@@ -199,7 +212,45 @@ def load_config(path) -> dict:
         check_first_frames_weight(path, cfg["first_frames_weight"])
     if "cue_augment" in cfg:
         check_cue_augment(path, cfg["cue_augment"])
+    if "lr_schedule" in cfg:
+        s = cfg["lr_schedule"]
+        if (not isinstance(s, dict) or set(s) != set(LR_KEYS) or not 0 < float(s["peak"]) < 1
+                or not 0 <= float(s["decay_lr"]) <= float(s["peak"])
+                or not all(isinstance(s[k], int) and s[k] >= 0 for k in ("warmup", "decay_steps"))):
+            raise LaunchError(f"{path}: lr_schedule must be {{peak, warmup, decay_steps, decay_lr}}, got {s!r}")
+    if "init_policy" in cfg:
+        init_policy_dir(cfg)
     return cfg
+
+
+def init_policy_dir(cfg) -> pathlib.Path:
+    """The trained pretrained_model folder to continue from (config.json, weights and both normalizer files)."""
+    p = config.path(cfg["init_policy"]).resolve()
+    for f in ("config.json", "model.safetensors", *NORMALIZER_FILES):
+        if not (p / f).is_file():
+            raise LaunchError(f"init_policy {p}: {f} not found; give a checkpoints/<step>/pretrained_model folder")
+    return p
+
+
+def stats_check(init_dir, output_dir) -> dict:
+    """Bit-for-bit comparison of the (un)normalizer tensors of every saved checkpoint with init_dir's
+    (B_提案書 §10 の 4). pass = every observation.state.* and action.* tensor identical in both files."""
+    from safetensors.numpy import load_file
+    ref = {f: load_file(str(pathlib.Path(init_dir) / f)) for f in NORMALIZER_FILES}
+    out = {"init_policy": str(init_dir), "checkpoints": {}}
+    for ck in sorted((pathlib.Path(output_dir) / "checkpoints").glob("[0-9]*")):
+        row = {}
+        for f in NORMALIZER_FILES:
+            got = load_file(str(ck / "pretrained_model" / f))
+            keys = sorted(k for k in ref[f] if k.startswith(("observation.state.", "action.")))
+            diff = [k for k in keys if k not in got or got[k].shape != ref[f][k].shape
+                    or got[k].tobytes() != ref[f][k].tobytes()]
+            other = [k for k in ref[f] if k not in keys and (k not in got or got[k].tobytes() != ref[f][k].tobytes())]
+            row[f] = {"compared": len(keys), "different": diff, "other_keys_different": other}
+        row["pass"] = all(not v["different"] for v in row.values())
+        out["checkpoints"][ck.name] = row
+    out["pass"] = bool(out["checkpoints"]) and all(r["pass"] for r in out["checkpoints"].values())
+    return out
 
 
 def check_dataset(dataset) -> dict:
@@ -245,6 +296,8 @@ def build_command(trainer, policy_dir, cfg, output_dir, job_name) -> list:
         cmd.append(f"--num_workers={cfg['num_workers']}")
     if "lora" in cfg:
         cmd += lora_flags(cfg["lora"])
+    if "lr_schedule" in cfg:
+        cmd += [f"{flag}={cfg['lr_schedule'][k]}" for k, flag in LR_KEYS.items()]
     return cmd + list(cfg.get("extra_args", []))
 
 
@@ -381,7 +434,7 @@ def run(config_path, output_root=OUTPUT_ROOT, log_root=LOG_ROOT, confirm=False, 
         trainer = wrapper_prefix(cfg) if wrapped(cfg) else [pathlib.Path(sys.executable).with_name("lerobot-train.exe")]
     if not pathlib.Path(trainer[0]).is_file():
         raise LaunchError(f"{trainer[0]} not found; run with the LeRobot venv python")
-    policy_dir = policy_dir or policy_snapshot()
+    policy_dir = policy_dir or (init_policy_dir(cfg) if "init_policy" in cfg else policy_snapshot())
     cmd = build_command(trainer, policy_dir, cfg, output_dir, run_name)
     print(f"\n config   {config_path}\n dataset  {dataset}\n          {fingerprint['total_episodes']} episodes, "
           f"{fingerprint['total_frames']} frames, raw ids {fingerprint['raw_episode_ids']}\n"
@@ -445,6 +498,11 @@ def run(config_path, output_root=OUTPUT_ROOT, log_root=LOG_ROOT, confirm=False, 
                 shutil.copyfile(config_path, output_dir / CONFIG_COPY)
                 if parsed is not None:
                     write_loss_files(parsed["rows"], output_dir)
+                if "init_policy" in cfg:
+                    try:
+                        record["stats_check"] = stats_check(policy_dir, output_dir)
+                    except Exception as e:                    # noqa: BLE001  the record must still be written
+                        record["stats_check"] = {"pass": False, "error": repr(e)}
             name = RUN_RECORD if where == output_dir else f"{run_name}.{RUN_RECORD}"
             (where / name).write_text(json.dumps(record, indent=2, ensure_ascii=False), encoding="utf-8")
     s = record.get("log_summary", {})

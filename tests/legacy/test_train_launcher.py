@@ -234,3 +234,48 @@ def test_main_reports_config_errors(tmp_path, capsys):
     p = make_config(tmp_path, tmp_path / "missing_ds")
     assert tl.main([str(p), "--dry-run"]) == 2
     assert "ERROR" in capsys.readouterr().out
+
+
+# --- 2 周目（init_policy・lr_schedule・stats_check、B_提案書 §10・決裁 0079） ------------------------------
+
+def _policy_dir(tmp_path, name, state_mean=0.0):
+    import numpy as np
+    from safetensors.numpy import save_file
+    d = tmp_path / name
+    d.mkdir(parents=True)
+    for f in ("config.json", "model.safetensors"):
+        (d / f).write_text("{}", encoding="utf-8")
+    for f in tl.NORMALIZER_FILES:
+        save_file({"observation.state.mean": np.full(17, state_mean, np.float32), "action.std": np.ones(7, np.float32),
+                   "index.max": np.full(1, 5.0 if name == "init" else 9.0, np.float32)}, str(d / f))
+    return d
+
+
+def test_lr_schedule_flags_and_owned(tmp_path):
+    s = {"peak": 3e-5, "warmup": 200, "decay_steps": 10000, "decay_lr": 2.5e-6}
+    cfg = tl.load_config(make_config(tmp_path, tmp_path / "ds", lr_schedule=s))
+    args = dict(a.split("=", 1) for a in tl.build_command(["t"], "S", cfg, tmp_path / "o", "j")[1:])
+    assert (args["--policy.optimizer_lr"], args["--policy.scheduler_warmup_steps"],
+            args["--policy.scheduler_decay_steps"], args["--policy.scheduler_decay_lr"]) == ("3e-05", "200", "10000", "2.5e-06")
+    with pytest.raises(tl.LaunchError, match="lr_schedule"):
+        tl.load_config(make_config(tmp_path, tmp_path / "ds", name="b", lr_schedule={**s, "decay_lr": 1.0}))
+    with pytest.raises(tl.LaunchError, match="--policy.optimizer_lr"):
+        tl.load_config(make_config(tmp_path, tmp_path / "ds", name="c", extra_args=["--policy.optimizer_lr=1"]))
+
+
+def test_init_policy_must_be_a_trained_folder(tmp_path):
+    with pytest.raises(tl.LaunchError, match="init_policy"):
+        tl.load_config(make_config(tmp_path, tmp_path / "ds", init_policy=str(tmp_path / "nothing")))
+    p = _policy_dir(tmp_path, "init")
+    assert tl.load_config(make_config(tmp_path, tmp_path / "ds", name="b", init_policy=str(p)))["init_policy"] == str(p)
+
+
+def test_stats_check_bitwise(tmp_path):
+    init = _policy_dir(tmp_path, "init")
+    out = tmp_path / "out"
+    for step, mean in (("005000", 0.0), ("010000", 1e-7)):
+        _policy_dir(out / "checkpoints" / step, "pretrained_model", mean)
+    r = tl.stats_check(init, out)
+    assert r["checkpoints"]["005000"]["pass"] and not r["checkpoints"]["010000"]["pass"] and not r["pass"]
+    row = r["checkpoints"]["005000"][tl.NORMALIZER_FILES[0]]
+    assert row["compared"] == 2 and row["other_keys_different"] == ["index.max"]    # 状態・行動以外は記録だけ

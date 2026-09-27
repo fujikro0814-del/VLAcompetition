@@ -65,6 +65,84 @@ def cmd_train(a) -> None:
         raise SystemExit(f"training {tag} exited with {code}")          # 続けて回す段取りを止める
 
 
+# ------------------------------------------------------------------ 2 周目（R2・R1+、B_提案書 §10・決裁 0079）
+
+R1_DATASET = "outputs/datasets/R1cue_20260926-140506"           # R1 の学習データ（統計量の出所）
+R1_30K = "outputs/train/train_R1_20260926-153959_20260926-153959/checkpoints/030000/pretrained_model"
+SECOND = OUT / "data_second.json"
+
+
+def cmd_statscopy(a) -> None:
+    """学習用の写し <src>_statsR1 を作る: data・images は固い結び（同じ中身）、meta は写して stats.json だけ R1 の
+    データセットのものに置き換え、conversion.json に stats_source を書く（B_提案書 §10 の 2・3）。"""
+    import hashlib
+    import os
+    import shutil
+    src = config.path(a.src).resolve()
+    r1 = config.path(R1_DATASET).resolve()
+    dst = src.with_name(f"{src.name}_statsR1")
+    if dst.exists():
+        raise SystemExit(f"{dst} already exists")
+    n = 0
+    for p in src.rglob("*"):
+        q = dst / p.relative_to(src)
+        if p.is_dir():
+            q.mkdir(parents=True, exist_ok=True)
+        elif p.relative_to(src).parts[0] == "meta":
+            q.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(p, q)
+        else:
+            q.parent.mkdir(parents=True, exist_ok=True)
+            os.link(p, q)
+            n += 1
+    shutil.copy2(r1 / "meta" / "stats.json", dst / "meta" / "stats.json")
+    conv = json.loads((dst / "meta" / "conversion.json").read_text(encoding="utf-8"))
+    sha = lambda f: hashlib.sha256(f.read_bytes()).hexdigest()
+    conv["stats_source"] = {"dataset": R1_DATASET, "stats_json_sha256": sha(r1 / "meta" / "stats.json"),
+                            "own_stats_json_sha256": sha(src / "meta" / "stats.json"),
+                            "note": "B_提案書 §10: 統計量を R1 のものに固定するための学習用の写し（data・images は元と同じ中身）"}
+    (dst / "meta" / "conversion.json").write_text(json.dumps(conv, ensure_ascii=False, indent=2), encoding="utf-8")
+    d = json.loads(SECOND.read_text(encoding="utf-8")) if SECOND.is_file() else {"datasets": {}}
+    d["datasets"][a.name] = {"source": str(src.relative_to(config.ROOT)), "dataset": str(dst.relative_to(config.ROOT)),
+                             "linked_files": n, "stats_source": conv["stats_source"]}
+    write("data_second", d)
+
+
+def cmd_train2(a) -> None:
+    """R2・R1+ の学習（R1 の 3 万手から 1 万手、学習率の予定は configs の train.runs.second_round）。"""
+    from recovla.policy import train_launcher as tl
+    d = json.loads(SECOND.read_text(encoding="utf-8"))["datasets"][a.name]
+    dec = json.loads((OUT / "cue_aug_decision.json").read_text(encoding="utf-8"))
+    rc = CFG["train"]["runs"]["second_round"]
+    steps = 50 if a.smoke else int(rc["steps"])
+    cfg = {"dataset": str(config.path(d["dataset"])), "train_scope": CFG["train"]["scope"],
+           "batch_size": int(CFG["train"]["batch_size"]), "steps": steps,
+           "save_freq": steps if a.smoke else int(rc["save_freq"]), "seed": int(CFG["train"]["seed"]),
+           "log_freq": 10 if a.smoke else int(CFG["train"]["log_freq"]), "num_workers": int(CFG["train"]["num_workers"]),
+           "init_policy": str(config.path(R1_30K)),
+           "lr_schedule": {"peak": float(rc["optimizer_lr"]), "warmup": int(rc["warmup_steps"]),
+                           "decay_steps": int(rc["decay_steps"]), "decay_lr": float(rc["decay_lr"])},
+           "note": f"Step H {a.name}{' smoke' if a.smoke else ''}: {steps} steps from R1 30000 on {d['dataset']} "
+                   f"(stats of R1, B_提案書 §10; cue_augment {'on' if dec['adopt'] else 'off'} as R1)"}
+    if dec["adopt"]:
+        cfg["cue_augment"] = dict(CFG["train"]["cue_augment"])
+    tag = f"{a.name}{'_smoke' if a.smoke else ''}"
+    cfg_path = OUT / f"train_{tag}_{time.strftime('%Y%m%d-%H%M%S')}.json"
+    cfg_path.write_text(json.dumps(cfg, indent=2, ensure_ascii=False), encoding="utf-8")
+    t0 = time.time()
+    code = tl.run(cfg_path)
+    runs = sorted(config.path(CFG["paths"]["train_output"]).glob(f"{cfg_path.stem}_*"))
+    rec = json.loads((runs[-1] / tl.RUN_RECORD).read_text(encoding="utf-8")) if runs else {}
+    write(f"train_{tag}", {"config": str(cfg_path.relative_to(config.ROOT)), "exit": code,
+                           "wall_s": round(time.time() - t0, 1), "run_dir": str(runs[-1].relative_to(config.ROOT)) if runs else None,
+                           "log_summary": rec.get("log_summary"), "command": rec.get("command"),
+                           "stats_check_pass": (rec.get("stats_check") or {}).get("pass"),
+                           "code_version": rec.get("code_version", {}).get("git_commit"),
+                           "git_dirty": rec.get("code_version", {}).get("git_dirty")})
+    if code != 0 or not (rec.get("stats_check") or {}).get("pass"):
+        raise SystemExit(f"training {tag}: exit {code}, stats_check {(rec.get('stats_check') or {}).get('pass')}")
+
+
 RULE = {"none_min_success": 29, "noise2_success_more_than": 21, "noise2_along_median_less_than_m": 0.0144}
 
 
@@ -100,8 +178,14 @@ def main(argv=None) -> int:
     s = sub.add_parser("train")
     s.add_argument("name", choices=["R1", "N1"])
     s.add_argument("--smoke", action="store_true", help="1000 手で最後まで通す")
+    s = sub.add_parser("statscopy")
+    s.add_argument("name", choices=["R2", "R1plus"])
+    s.add_argument("--src", required=True, help="変換したデータセット（R1+ は R1 のもの）")
+    s = sub.add_parser("train2")
+    s.add_argument("name", choices=["R2", "R1plus"])
+    s.add_argument("--smoke", action="store_true", help="50 手で保存と統計量の一致まで通す")
     a = ap.parse_args(argv)
-    {"train": cmd_train, "decide": cmd_decide}[a.cmd](a)
+    {"train": cmd_train, "decide": cmd_decide, "statscopy": cmd_statscopy, "train2": cmd_train2}[a.cmd](a)
     return 0
 
 
