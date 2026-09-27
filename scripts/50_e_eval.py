@@ -346,7 +346,8 @@ def cmd_report(a) -> None:
             rec = sum(SUCC(r) for r in est)
             lo, hi = p1["recovery_wilson"]
             ax.errorbar(q[1], p1["recovery_rate"], xerr=[[q[1] - q[0]], [q[2] - q[1]]],
-                        yerr=[[p1["recovery_rate"] - lo], [hi - p1["recovery_rate"]]], fmt="o", color=col, capsize=4,
+                        yerr=[[max(0.0, p1["recovery_rate"] - lo)], [max(0.0, hi - p1["recovery_rate"])]], fmt="o",
+                        color=col, capsize=4,
                         label=f"{lab}: P1 {p1['recovered']}/{p1['established']}")
             ax.plot(q[1], rec / len(est), "o", mfc="none", color=col, ms=9)
         ax.set_xlabel("seam jump per trial, median and IQR [m/s]")

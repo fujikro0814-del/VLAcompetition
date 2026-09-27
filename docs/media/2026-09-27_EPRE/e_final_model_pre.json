@@ -1,0 +1,27 @@
+{
+  "rule": "0083 の 5・0084 の 2（自然で 3 以内 → 立ち直りの合計、差 3 以内は同じ → 同じなら R2）",
+  "stats": {
+    "R2": {
+      "nat_n": 30,
+      "nat_success": 29,
+      "recovered_total": 39,
+      "established_total": 77
+    },
+    "R1plus": {
+      "nat_n": 30,
+      "nat_success": 29,
+      "recovered_total": 21,
+      "established_total": 74
+    }
+  },
+  "step_a": [
+    "R2",
+    "R1plus"
+  ],
+  "step_b_same": [
+    "R2"
+  ],
+  "chosen": "R2",
+  "note": "以後の結果によらず変えない。R1+ が選ばれても E1・E2・E5 はそれで回す",
+  "written": "2026-09-27 19:06:12"
+}
