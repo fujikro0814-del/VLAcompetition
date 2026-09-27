@@ -40,7 +40,8 @@ def cmd_run(a) -> None:
         raise SystemExit(f"configs runtime.mode is {rt['mode']!r}, expected the main setting 'naive'")
     cmd = [sys.executable, "scripts/41_results.py", "run", "--experiment", "CONTACT", "--condition", COND,
            "--checkpoint", CKPT, "--model", "R1", "--mode", rt["mode"], "--s", str(rt["exec_interval"]),
-           "--d", str(rt["delay_steps"]), "--trials", SPEC, "--videos", "3"]
+           "--d", str(rt["delay_steps"]), "--trials", SPEC, "--videos", "3",
+           "--safety", "off"]                           # 測り直しはフィルタを作る前（2026-09-27 14:22）。回し直しても同じ条件に
     print(" ".join(cmd), flush=True)
     raise SystemExit(subprocess.call(cmd, cwd=config.ROOT))
 
@@ -120,13 +121,68 @@ def cmd_decide(a) -> None:
                      indent=1, default=float))
 
 
+# ------------------------------------------------ 安全フィルタの検査 (c)（0080・0081。判定には使わない下見）
+
+SAFE_COND = "R1_nat_naive_safety"
+SAFE_DIR = OUT / "eval" / "CONTACT" / SAFE_COND
+
+
+def cmd_run_safety(a) -> None:
+    rt = CFG["runtime"]
+    if rt["mode"] != "naive" or not CFG["safety_filter"]["enabled"]:
+        raise SystemExit("configs: expected runtime.mode naive and safety_filter.enabled true (the main setting)")
+    cmd = [sys.executable, "scripts/41_results.py", "run", "--experiment", "CONTACT", "--condition", SAFE_COND,
+           "--checkpoint", CKPT, "--model", "R1", "--mode", rt["mode"], "--s", str(rt["exec_interval"]),
+           "--d", str(rt["delay_steps"]), "--trials", SPEC, "--videos", "3", "--safety", "on"]
+    print(" ".join(cmd), flush=True)
+    raise SystemExit(subprocess.call(cmd, cwd=config.ROOT))
+
+
+def cmd_compare_safety(a) -> None:
+    """naive＋フィルタ（今回）と naive（フィルタなし、上の run）を種ごとに対で比べる。フィルタが指令を変えたこまの割合と
+    変えた量の合計、成立しなかった二次計画の数も出す。"""
+    new, old = _rows(SAFE_DIR), _rows(NEW_DIR)
+    keys = sorted(set(new) & set(old))
+    act, change, infeas = [], [], []
+    for p in sorted(SAFE_DIR.glob("trial_*.json")):
+        m = json.loads(p.read_text(encoding="utf-8"))
+        arr = np.load(p.with_suffix(".npz"))
+        act.append(float(np.mean(arr["safety_active"])))
+        change.append(float(m["safety"]["total_change_m"]))
+        infeas.append(int(m["safety"]["infeasible_steps"]))
+    pair = {}
+    for name, f in (("contact", lambda r: r["contacts_n"] > 0), ("success", lambda r: r["success"])):
+        b = sum(f(new[x]) and not f(old[x]) for x in keys)
+        c = sum(f(old[x]) and not f(new[x]) for x in keys)
+        pair[name] = {"filter_only": b, "no_filter_only": c, "both": sum(f(new[x]) and f(old[x]) for x in keys),
+                      "mcnemar_exact_p": _mcnemar(b, c)}
+    res = {"note": "0080 の検査 (c)。選択用の帯（194000〜194098）での下見で、E5 の本番（最終評価用の種）ではない",
+           "filter": {"n": len(new), "contact_trials": sum(r["contacts_n"] > 0 for r in new.values()),
+                      "successes": sum(r["success"] for r in new.values())},
+           "no_filter": {"n": len(old), "contact_trials": sum(r["contacts_n"] > 0 for r in old.values()),
+                         "successes": sum(r["success"] for r in old.values())},
+           "paired_n": len(keys), "paired": pair,
+           "safety_active_frame_share": {"mean": float(np.mean(act)), "max": float(np.max(act)),
+                                         "trials_with_any": int(sum(x > 0 for x in act))},
+           "total_change_m": {"median": float(np.median(change)), "max": float(np.max(change))},
+           "infeasible_steps_total": int(sum(infeas)),
+           "contact_rows_filter": [{"seed": s, "target": t, **r} for (s, t), r in sorted(new.items()) if r["contacts_n"]],
+           "written": time.strftime("%Y-%m-%d %H:%M:%S")}
+    p = OUT / "results" / "contact_safety_compare.json"
+    p.write_text(json.dumps(res, ensure_ascii=False, indent=2, default=float), encoding="utf-8")
+    print(json.dumps({k: v for k, v in res.items() if k != "contact_rows_filter"}, ensure_ascii=False, indent=1,
+                     default=float))
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("run")
     sub.add_parser("decide")
+    sub.add_parser("run-safety")
+    sub.add_parser("compare-safety")
     a = ap.parse_args(argv)
-    {"run": cmd_run, "decide": cmd_decide}[a.cmd](a)
+    {"run": cmd_run, "decide": cmd_decide, "run-safety": cmd_run_safety, "compare-safety": cmd_compare_safety}[a.cmd](a)
     return 0
 
 

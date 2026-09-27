@@ -285,18 +285,20 @@ def cmd_decide_rtc(a) -> None:
 
 
 def cmd_decide_ckpt(a) -> None:
-    """保存点の選択（手順書 Step H の 2・0062 の 3）。成功数の多い方、同数なら 30000 手。"""
+    """保存点の選択（手順書 Step H の 2・0062 の 3）。成功数の多い方、同数なら後の保存点。
+    R1・N1 は 20000 と 30000 手、R2・R1+（R1plus）は 5000 と 10000 手（0070 の 3。同じ種 193000〜193029・同じ設定）。"""
     from recovla.eval import report
     base = EVAL_OUT / f"select_{a.model}"
+    early, late = (20000, 30000) if a.model in ("R1", "N1") else (5000, 10000)
     out = {}
-    for step in (20000, 30000):
+    for step in (early, late):
         rs = report.collect([base / f"{a.model}_{step}"])
         out[step] = {"n": len(rs), "successes": sum(bool(r["success"]) for r in rs),
-                     "seeds": sorted({r["seed"] for r in rs})}
-    s20, s30 = out[20000]["successes"], out[30000]["successes"]
-    chosen = 20000 if s20 > s30 else 30000
-    res = {"model": a.model, "rule": "成功数の多い方、同数なら 30000 手（手順書 Step H の 2・0062・0063）",
-           "candidates": out, "same_seeds": out[20000]["seeds"] == out[30000]["seeds"], "chosen_step": chosen,
+                     "seeds": sorted({r["seed"] for r in rs}),
+                     "runtime": sorted({(r["mode"], r["d"], r["safety_filter"]) for r in rs})}
+    chosen = early if out[early]["successes"] > out[late]["successes"] else late
+    res = {"model": a.model, "rule": f"成功数の多い方、同数なら {late} 手（手順書 Step H の 2・0062・0063・0070 の 3）",
+           "candidates": out, "same_seeds": out[early]["seeds"] == out[late]["seeds"], "chosen_step": chosen,
            "written": time.strftime("%Y-%m-%d %H:%M:%S")}
     RES_OUT.mkdir(parents=True, exist_ok=True)
     (RES_OUT / f"ckpt_decision_{a.model}.json").write_text(json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -334,7 +336,7 @@ def main(argv=None) -> int:
     s.add_argument("--tag", default="", help="結果を dcal<tag>.json に書く（元の dcal.json を上書きしない）")
     sub.add_parser("decide-rtc")
     s = sub.add_parser("decide-ckpt")
-    s.add_argument("--model", choices=["R1", "N1"], required=True)
+    s.add_argument("--model", choices=["R1", "N1", "R2", "R1plus"], required=True)
     s = sub.add_parser("induce-script")
     s.add_argument("--seed", type=int, default=198100, help="Step G の検査の帯 198000〜198999")
     s.add_argument("--n", type=int, default=20)
