@@ -78,7 +78,7 @@ def capture_frame(rig, target: str, target_rest_s: float, pp, render: bool = Tru
         "cube_in_box": np.array([c in rig.cubes_in_box(s) for c in COLORS]),
         "target": COLORS.index(target), "phase": int(phase_of(tr, target_rest_s, pp)),
         "contact_robot": c_robot, "contact_cube_cube": c_cc, "min_dist": rig.meter.distances(s),
-        "safety_active": False,
+        "safety_active": bool(rig.safety.take_window()) if hasattr(rig, "safety") else False,
     }
     return frame, (rig.render(s) if render else [])
 

@@ -363,6 +363,46 @@ def _figure(base_pol, d, ex) -> str:
     return str(p.relative_to(config.ROOT))
 
 
+# ------------------------------------------------------------------ 完了条件 7 (b)（安全フィルタ、0080・0081）
+
+def cmd_cond7b(a) -> None:
+    """生成の種から 20 本（Step F で採った復帰 A 4・B 3・C 3 本と、その対の通常 10 本）を、安全フィルタの入と切で描画なしに
+    作り直し、結果（成否・記録を始めた物理の手・段階の時刻）と最後の物理の状態（qpos・qvel・x_cmd）がビットで
+    一致すること。フィルタは方策が指令を出している間だけ効く設計なので、台本では一度も働かないことの確かめ。"""
+    from recovla.expert import generate as G
+    from recovla.sim.rig import SimRig, quiet
+    data = json.loads((config.path(CFG["paths"]["outputs"]) / "f" / "data.json").read_text(encoding="utf-8"))
+    specs = []
+    pick = ([c for c in data["chosen"] if c["kind"] == "A"][:4] + [c for c in data["chosen"] if c["kind"] == "B"][:3]
+            + [c for c in data["chosen"] if c["kind"] == "C"][:3])               # 復帰は A 4・B 3・C 3
+    for c in pick:
+        for kind, name in ((c["kind"], c["recovery"]), ("n", c["twin"])):
+            specs.append((name, G.EpisodeSpec(c["seed"], c["color"], c["layout_kind"], kind), int(name.rsplit("_r", 1)[1])))
+    rig = SimRig(render=False)
+    rows = []
+    try:
+        for name, spec, retry in specs:
+            got = {}
+            for on in (False, True):
+                rig.safety.enabled = on
+                with quiet():
+                    r = G.run_attempt(rig, spec, retry, None, False)
+                got[on] = {"summary": {k: r.get(k) for k in ("success", "record_start_step", "failure", "t_record_start")},
+                           "state": np.concatenate([rig.data.qpos, rig.data.qvel, rig.integrator.x_cmd]).copy(),
+                           "safety": rig.safety.summary()}
+            same = (got[False]["summary"] == got[True]["summary"]
+                    and got[False]["state"].tobytes() == got[True]["state"].tobytes())
+            rows.append({"episode": name, "identical": bool(same), "summary": got[True]["summary"],
+                         "safety_active_steps_on": got[True]["safety"]["active_physics_steps"]})
+            print(name, same, flush=True)
+    finally:
+        rig.close()
+        rig.safety.enabled = bool(CFG["safety_filter"]["enabled"])
+    _write("cond7b", {"n": len(rows), "identical": sum(r["identical"] for r in rows),
+                      "pass": all(r["identical"] and r["safety_active_steps_on"] == 0 for r in rows), "rows": rows,
+                      "note": "描画なし。0080 の検査 (b)（手順書 Step G の完了条件 7 の (b)）"})
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -378,8 +418,10 @@ def main(argv=None) -> int:
     s = sub.add_parser("cond6")
     s.add_argument("--d", type=int, required=True, help="遅れ d の測定で決めた値（0063 の 1）")
     s.add_argument("--example", type=int, default=5, help="図にする推論の番号（前の塊の残りがあるものの中で）")
+    sub.add_parser("cond7b")
     a = ap.parse_args(argv)
-    {"cond1": cmd_cond1, "cond1-cause": cmd_cond1_cause, "cond2": cmd_cond2, "cond4": cmd_cond4, "cond6": cmd_cond6}[a.cmd](a)
+    {"cond1": cmd_cond1, "cond1-cause": cmd_cond1_cause, "cond2": cmd_cond2, "cond4": cmd_cond4, "cond6": cmd_cond6,
+     "cond7b": cmd_cond7b}[a.cmd](a)
     return 0
 
 

@@ -112,10 +112,10 @@ contact:
   # 最短距離は、native CCD を有効にし当て板を箱形のメッシュにした「距離の計算専用の模型の写し」で測る
   # （recovla.sim.contact.distance_model。既定の mj_geomDistance は近い組で最大 30 mm 誤った。Step D で確認）
 
-safety_filter:               # 条件付き（接触率 5% 以上のときだけ作る）
-  enabled: false
-  d_min_m: null
-  d_detect_m: null
+safety_filter:               # 条件付き（接触率 5% 以上のときだけ作る）。naive の自然 99 回で 8.1% → 作った（0080・0081、recovla.sim.safety）
+  enabled: true              # 本線（naive d=4＋安全フィルタ）。方策が指令を出している間だけ効く。E5 の切は 41_results.py --safety off
+  d_min_m: 0.003              # 掲示板 0080・0081: 台本のデモの最短距離の 1 パーセンタイル 5.2 mm より小さく
+  d_detect_m: 0.03            # 同: 参照位置での距離がこれ未満の障害物だけ不等式に入れる
   gamma: 0.85
   tracking_lag_margin_m: 0.017   # 参照から手先までの遅れ 5〜17mm（落とし穴13）
 

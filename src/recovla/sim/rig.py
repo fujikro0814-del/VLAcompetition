@@ -57,6 +57,8 @@ class SimRig:
         m = self.model
         self.box = frames.box_pos(m)
         self.hand_id = self.controller.hand_body_id
+        from recovla.sim.safety import SafetyFilter
+        self.safety = SafetyFilter(self, cfg)       # 入切は configs の safety_filter.enabled、効くのは gate が真の間だけ
         self.cube_ids = np.array([m.body(frames.cube_body(c)).id for c in COLORS])
         adr = [scene.cube_qpos_adr(m, c) for c in COLORS]
         self.cube_vadr = np.array([v for _, v in adr])
@@ -84,6 +86,7 @@ class SimRig:
         mujoco.mj_forward(m, d)
         self.pad.state = pad_state()
         self.integrator.refresh()
+        self.integrator.command_filter = None
         n = int(round(float(self.cfg["scene"]["settle_prefilled_s"]) / self.timestep))
         with quiet():
             for _ in range(n):
@@ -96,6 +99,7 @@ class SimRig:
         self.step = 0
         self.layout = layout
         self.meter.reset_window()
+        self.safety.reset_trial()                    # 目標なし・gate 偽（台本・生成では効かない）
 
     # ------------------------------------------------------------ one pad read
     def pad_read(self, vel=None, press: bool = False, on_step=None) -> None:
@@ -104,6 +108,11 @@ class SimRig:
         self.pad.state = pad_state(vel=np.zeros(3) if vel is None else np.asarray(vel, float),
                                    button_grip=bool(press))
         self.integrator.refresh()
+        if self.safety.on():
+            self.safety.begin_read(d, self.integrator.x_cmd)
+            self.integrator.command_filter = self.safety.filter
+        else:
+            self.integrator.command_filter = None
         for _ in range(self.steps_per_read):
             self.controller.update(self.integrator)
             mujoco.mj_step(m, d)

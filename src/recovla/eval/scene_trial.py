@@ -69,6 +69,7 @@ def run_trial(rig, layout, target: str, act, trial: dict, time_limit_s: float = 
     rest_speed, rest_hold = float(ev["success"]["rest_speed"]), float(ev["success"]["rest_hold_s"])
     pp = PhaseParams.from_config()
     rig.reset(layout)
+    rig.safety.start_trial(target)                  # 安全フィルタ（0080）: 障害物の組はこの目標で作る
     ti = COLORS.index(target)
     dt = rig.timestep
     every = rig.record_every
@@ -115,6 +116,7 @@ def run_trial(rig, layout, target: str, act, trial: dict, time_limit_s: float = 
             actions[-1] = a
             act_k[-1] = k
             induced[-1] = bool(inducer is not None and inducer.active)
+            rig.safety.gate = not induced[-1]           # 方策が指令を出している間だけ（誘発の上書き中は切る、0080）
             n0 = len(frames_log)
             execute_action(rig, a, on_step)
             for i in range(n0, len(frames_log) - 1):        # 行動 k は、こま 2k と 2k+1 の後に効く
@@ -169,7 +171,11 @@ def run_trial(rig, layout, target: str, act, trial: dict, time_limit_s: float = 
          "t_established": None, "t_failure": None, "reason": None},
         "obstacles": list(contact.COLUMNS), "inference": inference,
         "code_version": code_version.code_version(),
+        "safety": rig.safety.summary(),
     }
+    if isinstance(meta.get("runtime"), dict):             # 実際の入切（41_results.py --safety で configs を上書きできる）
+        meta["runtime"] = {**meta["runtime"], "safety_filter": rig.safety.enabled}
+    rig.safety.gate = False
     return meta, arrays, video
 
 

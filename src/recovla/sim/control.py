@@ -119,6 +119,8 @@ class VelocityCommandIntegrator(DeviceInput):
         # False: the arm ignores the pad (zero velocity, gripper button
         # ignored) while buttons are still read via refresh().
         self.enabled = True
+        # command_filter(x_cmd, step) -> step: 安全フィルタ（recovla.sim.safety）。None なら流用元と同じ
+        self.command_filter = None
 
     def start(self) -> None:
         self.inner.start()
@@ -136,8 +138,10 @@ class VelocityCommandIntegrator(DeviceInput):
     def read(self) -> DeviceState:
         s = self.latest
         if self.enabled and s.vel is not None:
-            self.x_cmd = self._clamp(self.x_cmd + np.asarray(s.vel, dtype=float)
-                                     * self.timestep)
+            step = np.asarray(s.vel, dtype=float) * self.timestep
+            if self.command_filter is not None:          # 安全フィルタの差し込み口（B_提案書、掲示板 0080）
+                step = self.command_filter(self.x_cmd, step)
+            self.x_cmd = self._clamp(self.x_cmd + step)
         return DeviceState(pos=self.x_cmd.copy(), quat=_IDENTITY_QUAT.copy(),
                            button_grip=bool(self.enabled and s.button_grip),
                            button_clutch=True)

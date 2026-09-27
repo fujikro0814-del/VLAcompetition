@@ -79,6 +79,8 @@ def cmd_run(a) -> None:
                                    "max_guidance_weight": CFG["runtime"]["rtc_max_guidance_weight"]})
     trials = trial_list(a.trials)
     rig = SimRig(render=True)
+    if a.safety != "config":                         # E5 などの入切（0080）。既定は configs の safety_filter.enabled
+        rig.safety.enabled = a.safety == "on"
     rows = []
     t0 = time.perf_counter()
     try:
@@ -102,7 +104,7 @@ def cmd_run(a) -> None:
         rig.close()
     (out / "run.json").write_text(json.dumps({
         "experiment": a.experiment, "condition": a.condition, "checkpoint": str(a.checkpoint), "trials_spec": a.trials,
-        "induce": a.induce, "runtime": runner.runtime_record(), "n": len(rows),
+        "induce": a.induce, "runtime": {**runner.runtime_record(), "safety_filter": rig.safety.enabled}, "n": len(rows),
         "successes": sum(r["success"] for r in rows), "wall_s": round(time.perf_counter() - t0, 1),
         "written": time.strftime("%Y-%m-%d %H:%M:%S")}, ensure_ascii=False, indent=2), encoding="utf-8")
 
@@ -318,6 +320,8 @@ def main(argv=None) -> int:
     s.add_argument("--induce", choices=["P1", "P2", "P3"], default=None)
     s.add_argument("--videos", type=int, default=3)
     s.add_argument("--num-steps", type=int, default=None, help="流れの積分の刻み数（既定は保存点の設定＝10）")
+    s.add_argument("--safety", choices=["config", "on", "off"], default="config", help="安全フィルタの入切（0080）")
+
     s = sub.add_parser("report")
     s.add_argument("--experiment", required=True)
     s.add_argument("--pair", action="append", help="条件 a:b（同じ種で対にする）")
