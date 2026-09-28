@@ -151,6 +151,23 @@ def test_return_motion_from_above_comes_down_to_rise_z_first():
     assert np.linalg.norm(p[-1] - np.array(c["expert"]["retreat_pose"])) <= c["expert"]["phase"]["retreat_tol_m"]
 
 
+def test_return_motion_is_only_in_the_task_executor():
+    """0096 の 1 (1): 戻す動きは上位層の実行器（planner/executor.py、呼ぶのは 51_planner.py だけ）にしかなく、
+    E1〜E6・E8 の経路（41_results.py → eval/closed_loop・scene_trial、20_k1.py e6）には入っていない。"""
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[1]
+    allowed = {root / "src" / "recovla" / "planner" / "executor.py", root / "scripts" / "51_planner.py",
+               root / "scripts" / "50_e_eval.py"}      # 50_e_eval.py は E7 の一覧の文に名前が出るだけ（下で import しないことを見る）
+    words = ("planner.executor", "TaskExecutor", "ReturnMotion", "return_to_retreat", "_return_to_retreat")
+    hits = [str(p.relative_to(root)) for d in ("src", "scripts") for p in (root / d).rglob("*.py")
+            if p not in allowed and any(w in p.read_text(encoding="utf-8") for w in words)]
+    assert hits == []
+    for p in list((root / "src" / "recovla" / "eval").rglob("*.py")) + [root / "scripts" / "41_results.py",
+                                                                         root / "scripts" / "20_k1.py",
+                                                                         root / "scripts" / "50_e_eval.py"]:
+        assert "recovla.planner" not in p.read_text(encoding="utf-8"), p
+
+
 @pytest.fixture(scope="module")
 def _rig():
     from recovla.sim.rig import SimRig

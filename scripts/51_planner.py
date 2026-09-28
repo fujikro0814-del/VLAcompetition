@@ -427,45 +427,136 @@ def _task_code(m) -> str:
     return "x:" + (miss[0][0] if miss else "?") + tail
 
 
+def _load_run(tag):
+    d = OUT / "runs" / tag
+    run = json.loads((d / "run.json").read_text(encoding="utf-8"))
+    paths = sorted(d.glob("task_*.json"))
+    tasks = [json.loads(p.read_text(encoding="utf-8")) for p in paths]
+    for m, p in zip(tasks, paths):
+        m["_npz"] = str(p.with_suffix(".npz"))
+    return run, tasks
+
+
+def dropped_on_open(m) -> list:
+    """戻す動きの始めに指を開いたとき（returns の opened）に挟んでいた立方体と、落ちた先（0096 の 2、副の指標）。
+    挟んでいた = 戻す動きの始めのこまで、指先の中心から expert.phase.drop_dist_m 以内で最も近い立方体（なければ None）。
+    持ち上がっていた = その高さが机の上の静止の高さより grasped_lift_min_m 以上（台本の「持ち上がっている」と同じ）。
+    落ちた先は戻す動きの終わりのこまの位置で分ける: box（成功の体積の中）、on_cube（静止の高さより 2 cm 以上高く、
+    水平の距離が立方体 1 個分以内に別の立方体がある）、table（静止の高さ ±1 cm で、箱の内寸の上でない）、other。"""
+    from recovla.sim import frames
+    pp = CFG["expert"]["phase"]
+    box = np.asarray(CFG["scene"]["box"]["pos"], float)
+    out = []
+    rets = [r for r in m.get("returns", []) if r.get("opened")]
+    if not rets:
+        return out
+    d = np.load(m["_npz"])
+    t = d["sim_time"]
+    for r in rets:
+        i0 = min(int(np.searchsorted(t, r["t_begin"] - 1e-9)), len(t) - 1)
+        i1 = min(int(np.searchsorted(t, r["t_end"] - 1e-9)), len(t) - 1)
+        dist = np.linalg.norm(d["cube_pos"][i0] - d["fingertip"][i0], axis=1)
+        k = int(np.argmin(dist))
+        row = {"seed": m["seed"], "step": r["step"], "kind": r["kind"], "t_begin": r["t_begin"],
+               "step_color": m["steps"][r["step"]]["color"], "held": None}
+        if dist[k] <= float(pp["drop_dist_m"]):
+            p0, p1 = d["cube_pos"][i0][k], d["cube_pos"][i1][k]
+            others = [d["cube_pos"][i1][j] for j in range(3) if j != k]
+            if frames.in_box(p1, box):
+                where = "box"
+            elif p1[2] - frames.CUBE_REST_Z >= 0.02 and any(np.hypot(*(p1[:2] - o[:2])) <= 2 * frames.CUBE_HALF
+                                                             for o in others):
+                where = "on_cube"
+            elif abs(p1[2] - frames.CUBE_REST_Z) < 0.01 and not frames.over_box_interior(p1, box):
+                where = "table"
+            else:
+                where = "other"
+            row.update(held=COLORS[k], lifted=bool(p0[2] - frames.CUBE_REST_Z >= float(pp["grasped_lift_min_m"])),
+                       height_m=float(p0[2]), landed=where, moved_m=float(np.linalg.norm(p1 - p0)))
+        out.append(row)
+    return out
+
+
+def run_summary(tasks) -> dict:
+    """通しの記録（task_*.json）の集計。compare-return と e7-summary で共用。"""
+    steps = [s for m in tasks for s in m["steps"]]
+    rets = [r for m in tasks for r in m.get("returns", [])]
+    pos = {}
+    for m in tasks:
+        for s in m["steps"]:
+            key = (s["step"] + 1, s["color"])
+            p = pos.setdefault(f"{key[0]}:{key[1]}", [0, 0, 0])
+            p[1] += 1
+            if not s["judged_complete"]:
+                p[0] += 1
+                if s["t_truth_success"] is None:
+                    p[2] += 1
+    drops = [x for m in tasks for x in dropped_on_open(m)]
+    false_c = [(m["seed"], s["step"], s["color"]) for m in tasks for s in m["steps"]
+               if s["judged_complete"] and s["t_truth_success"] is None and not m["final_in_box"][s["color"]]]
+    reached3 = sum(len(m["steps"]) >= 3 for m in tasks)
+    import collections
+    return {"all_three": sum(m["all_three_in_box"] for m in tasks), "n": len(tasks),
+            "retry_completed_steps": sum(s["judged_complete"] and len(s["attempts"]) > 1 for s in steps),
+            "stopped_by_position": {k: {"stopped": v[0], "started": v[1], "stopped_truth_not_placed": v[2]}
+                                    for k, v in sorted(pos.items())},
+            "returns": {"n": len(rets), "retry": sum(r["kind"] == "retry" for r in rets),
+                        "placed": sum(r["kind"] == "placed" for r in rets),
+                        "not_arrived": sum(not r["arrived"] for r in rets),
+                        "touched_cube_or_box": sum(r["contact_cube"] or r["contact_box"] for r in rets),
+                        "touched_cube": sum(r["contact_cube"] for r in rets),
+                        "touched_box": sum(r["contact_box"] for r in rets),
+                        "placed_then_judged": sum(r["kind"] == "placed" and r["judged"] for r in rets),
+                        "retry_then_step_completed": sum(
+                            r["kind"] == "retry" and m["steps"][r["step"]]["judged_complete"]
+                            for m in tasks for r in m.get("returns", []))},
+            "opened_on_return": {"n": len(drops), "held": sum(x["held"] is not None for x in drops),
+                                 "held_lifted": sum(bool(x.get("lifted")) for x in drops),
+                                 "held_other_color": sum(x["held"] is not None and x["held"] != x["step_color"]
+                                                         for x in drops),
+                                 "landed": dict(collections.Counter(x["landed"] for x in drops if x["held"])),
+                                 "rows": drops},
+            "judge_false_complete": len(false_c), "judge_false_complete_rows": false_c,
+            "runs_reaching_step3": reached3,
+            "judge_false_complete_per_run": len(false_c) / len(tasks) if tasks else None}
+
+
+def cmd_e7_summary(a) -> None:
+    """E7 の複数手順の通しの集計（主な指標と副の指標、50_e_eval.py の E7 の一覧）。検定なし、Wilson 95% 区間。"""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("e_eval", pathlib.Path(__file__).with_name("50_e_eval.py"))
+    ee = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(ee)
+    run, tasks = _load_run(a.tag)
+    s = run_summary(tasks)
+    lat = [st["t_judge"] - st["t_truth_success"] for m in tasks for st in m["steps"]
+           if st["t_judge"] is not None and st["t_truth_success"] is not None]
+    miss = [(m["seed"], st["step"], st["color"]) for m in tasks for st in m["steps"]
+            if not st["judged_complete"] and st["t_truth_success"] is not None]
+    res = {"tag": a.tag, "text": run["text"], "seeds": run["seeds"], "checkpoint": run["checkpoint"],
+           "return_to_retreat": run.get("return_to_retreat"),
+           "primary": {"all_three": s["all_three"], "n": s["n"], "wilson95": ee._wilson(s["all_three"], s["n"]),
+                       "G3_threshold": 10, "meets_G3": s["all_three"] >= 10},
+           "summary": s, "judge_missed_rows": miss,
+           "truth_to_judge_s_median": float(np.median(lat)) if lat else None,
+           "plans": sorted({json.dumps(m["plan"]["steps"]) for m in tasks}),
+           "run_sim_s_median": float(np.median([m["t_end"] for m in tasks])),
+           "run_wall_s_median": float(np.median([m["wall_s"] for m in tasks])),
+           "by_seed": [{"seed": m["seed"], "code": _task_code(m)} for m in tasks],
+           "written": time.strftime("%Y-%m-%d %H:%M:%S")}
+    (OUT / f"e7_summary_{a.tag}.json").write_text(json.dumps(res, ensure_ascii=False, indent=2, default=float),
+                                                 encoding="utf-8")
+    print(json.dumps({k: v for k, v in res.items() if k not in ("summary", "by_seed")}, ensure_ascii=False,
+                     default=float))
+    print(json.dumps({k: v for k, v in s.items() if k != "opened_on_return"}, ensure_ascii=False, default=float))
+    print(json.dumps({k: v for k, v in s["opened_on_return"].items() if k != "rows"}, ensure_ascii=False))
+
+
 def cmd_compare_return(a) -> None:
     """待機位置へ戻す動き（0094 の 2）の前後を同じ種の対で並べる（検定は付けない）。主な見方と採る基準は 0094 で
     回す前に固めた: 3 通りの合計の「3 個とも」（変更前 31/60）と、やり直しで完了した手順の数（変更前 0）。
     採る = 変更後の「3 個とも」の合計が変更前を下回らず、かつやり直しで完了した手順が 1 つ以上。"""
-    def load(tag):
-        d = OUT / "runs" / tag
-        run = json.loads((d / "run.json").read_text(encoding="utf-8"))
-        tasks = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(d.glob("task_*.json"))]
-        return run, tasks
-
-    def summary(tasks):
-        steps = [s for m in tasks for s in m["steps"]]
-        rets = [r for m in tasks for r in m.get("returns", [])]
-        pos = {}
-        for m in tasks:
-            for s in m["steps"]:
-                key = (s["step"] + 1, s["color"])
-                p = pos.setdefault(f"{key[0]}:{key[1]}", [0, 0, 0])
-                p[1] += 1
-                if not s["judged_complete"]:
-                    p[0] += 1
-                    if s["t_truth_success"] is None:
-                        p[2] += 1
-        return {"all_three": sum(m["all_three_in_box"] for m in tasks), "n": len(tasks),
-                "retry_completed_steps": sum(s["judged_complete"] and len(s["attempts"]) > 1 for s in steps),
-                "stopped_by_position": {k: {"stopped": v[0], "started": v[1], "stopped_truth_not_placed": v[2]}
-                                        for k, v in sorted(pos.items())},
-                "returns": {"n": len(rets), "retry": sum(r["kind"] == "retry" for r in rets),
-                            "placed": sum(r["kind"] == "placed" for r in rets),
-                            "not_arrived": sum(not r["arrived"] for r in rets),
-                            "touched_cube_or_box": sum(r["contact_cube"] or r["contact_box"] for r in rets),
-                            "touched_cube": sum(r["contact_cube"] for r in rets),
-                            "touched_box": sum(r["contact_box"] for r in rets),
-                            "placed_then_judged": sum(r["kind"] == "placed" and r["judged"] for r in rets),
-                            "retry_then_step_completed": sum(
-                                r["kind"] == "retry" and m["steps"][r["step"]]["judged_complete"]
-                                for m in tasks for r in m.get("returns", []))},
-                "judge_false_complete": sum(s["judged_complete"] and s["t_truth_success"] is None
-                                            and not m["final_in_box"][s["color"]] for m in tasks for s in m["steps"])}
+    load, summary = _load_run, run_summary
     if len(a.before) != len(a.after):
         raise SystemExit("--before と --after の数を揃える")
     res = {"pairs": [], "written": time.strftime("%Y-%m-%d %H:%M:%S")}
@@ -487,7 +578,7 @@ def cmd_compare_return(a) -> None:
                       "n": sum(p["after_summary"]["n"] for p in res["pairs"]),
                       "retry_completed_after": retry_a,
                       "adopt": bool(tot_a >= tot_b and retry_a >= 1)}
-    (OUT / f"{a.out}.json").write_text(json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8")
+    (OUT / f"{a.out}.json").write_text(json.dumps(res, ensure_ascii=False, indent=2, default=float), encoding="utf-8")
     print(json.dumps(res["primary"], ensure_ascii=False))
     for p in res["pairs"]:
         print(p["text"], p["before_summary"]["all_three"], "->", p["after_summary"]["all_three"],
@@ -513,6 +604,8 @@ def main(argv=None) -> int:
     s.add_argument("--before", nargs="+", default=["E7_pre", "E7_order_GRB", "E7_order_RBG"])
     s.add_argument("--after", nargs="+", required=True)
     s.add_argument("--out", default="return_compare")
+    s = sub.add_parser("e7-summary")
+    s.add_argument("--tag", required=True)
     s = sub.add_parser("judge-data")
     s.add_argument("--seeds", required=True, help="<先頭>:<数>（予備は 196000:40）")
     s.add_argument("--tag", required=True)
@@ -522,7 +615,7 @@ def main(argv=None) -> int:
     s.add_argument("--fixture", default="dev_sentences")
     a = ap.parse_args(argv)
     {"fit": cmd_fit, "run": cmd_run, "judge-data": cmd_judge_data, "llm-eval": cmd_llm_eval,
-     "compare-return": cmd_compare_return}[a.cmd](a)
+     "compare-return": cmd_compare_return, "e7-summary": cmd_e7_summary}[a.cmd](a)
     return 0
 
 

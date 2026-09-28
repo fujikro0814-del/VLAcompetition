@@ -34,6 +34,9 @@
                   予備は 197000〜197019、最終は 115000〜115019
      副: 手順ごとの失敗の内訳、やり直しの回数、完了判定と真値の食い違い（判定したのに真値は未成功、など）、
          真値の成功から判定までの時間、1 回の通しの時間、照合データの種類ごとの一致率
+     実行器の版（0096 で書き足した。主な指標と基準は変えていない）: 最終の通しは、待機位置へ戻す動き（やり直しの前・
+         置いた後）を入れた実行器で回す（0094・0095、実装 2174445、configs の planner.return_to_retreat）。予備の
+         通し 11/20（0091）は戻す動きを入れる前の実行器の値。変更は予備評価の結果を見た後のもの
 副の指標（補正なしの記述。主な検定と区別して書く）: 自然の成功（McNemar と Newcombe の差の 95% 区間）、P2・P3 の
   立ち直りと P1〜P3 の合計（両方で成立した対の McNemar）、成立率、継ぎ目の跳び・躍度・反応時間（種ごとの対の Wilcoxon）、
   接触、巻き添え、E4 の自然な失敗の形の内訳、E5 の「隣の立方体への接近を止め続けた失敗」の数
@@ -316,7 +319,7 @@ def cmd_report(a) -> None:
     stage = a.stage
     have = [s for s in SETS if (OUT / "eval" / STAGES[stage]["experiment"] / f"{s}_nat").is_dir()]
     S = {s: _set_rows(stage, s) for s in have}
-    final = _final_model(stage) if (RES / f"e_final_model_{stage}.json").is_file() else None
+    final = _final_model("pre") if (RES / "e_final_model_pre.json").is_file() else None   # 予備評価で決めた（以後変えない）
     fin_set = {"R2": "F", "R1plus": "G"}.get(final)
     res = {"stage": stage, "sets": {s: {p: summary(S[s][p]) for p in PARTS} for s in have}, "final_model": final,
            "primary": {}, "secondary": {}}
