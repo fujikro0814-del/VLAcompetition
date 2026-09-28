@@ -112,3 +112,30 @@ def test_step_seed_is_deterministic_and_distinct():
     from recovla.planner.executor import step_seed
     assert step_seed(197000, 0, 0) == step_seed(197000, 0, 0)
     assert len({step_seed(197000, s, a) for s in range(3) for a in range(2)}) == 6
+
+
+# --- 凍結（0092 の 5）。範囲を変えるときは、変える前に諮る ------------------------------------------------------
+
+FROZEN = {"SYSTEM": "458cca994ccf384e6cce1ae05e263699b99c6006852df72c5875e4f2c633bae9",
+          "SCHEMA": "a3026bd9dd85bc43ee93c2d33621c11640fff61e3cb7c7ca0cf24f282dc11484",
+          "model": "f72e9feca7d458ff796aa31c70b79c9f93554d1a450f35c6f6c99bd3e24217d3",
+          "temperature": "8aed642bf5118b9d3c859bd4be35ecac75b6e873cce34e7b6f554b06f75550d7",
+          "check": "acbc93fab76b4976d9006f3197e98a7f3758daf42acc331484481e335b3f7551"}
+
+
+def test_prompt_is_frozen():
+    import hashlib
+    import inspect
+    from recovla.common import config
+    c = config.load()["planner"]
+    h = lambda s: hashlib.sha256(s.encode("utf-8")).hexdigest()      # noqa: E731
+    got = {"SYSTEM": h(D.SYSTEM), "SCHEMA": h(json.dumps(D.SCHEMA, sort_keys=True, ensure_ascii=False)),
+           "model": h(c["model"]), "temperature": h(repr(float(c["temperature"]))), "check": h(inspect.getsource(D.check))}
+    assert got == FROZEN
+
+
+def test_fallback_reply_comes_from_the_checks_not_the_llm():
+    cli = _FakeClient(json.dumps({"steps": ["red", "green"], "reply": "赤と青を入れることはできますが"}))
+    out = D.decompose("赤と緑を入れて", ["red", "blue"], ["green"], cli=cli)
+    assert out["steps"] == [] and out["reply"] == "緑はすでに箱の中にあります。赤だけ入れますか。"
+    assert out["llm_reply"] == "赤と青を入れることはできますが"

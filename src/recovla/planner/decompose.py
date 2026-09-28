@@ -85,6 +85,29 @@ def check(steps, table_colors, box_colors) -> dict:
             "known_colors": all(s in COLORS for s in steps)}
 
 
+JA = {"red": "赤", "green": "緑", "blue": "青"}
+
+
+def fallback_reply(steps, table_colors, box_colors) -> str:
+    """自前の検査で尋ねる側に倒したときの返答（LLM の返答の文は使わない＝0092 の 4）。検査の結果だけから決まる。"""
+    known = [s for s in steps if s in COLORS]
+    in_box = [s for s in dict.fromkeys(known) if s in box_colors]
+    absent = [s for s in dict.fromkeys(known) if s not in table_colors and s not in box_colors]
+    ok = [s for s in dict.fromkeys(known) if s in table_colors]
+    parts = []
+    if in_box:
+        parts.append("・".join(JA[s] for s in in_box) + "はすでに箱の中にあります。")
+    if absent:
+        parts.append("・".join(JA[s] for s in absent) + "は机の上にありません。")
+    if len(known) != len(set(known)):
+        parts.append("同じ色は 1 回しか入れられません。")
+    if not known or not parts:
+        return "指示をうまく読み取れませんでした。どの色の立方体を箱に入れるか、もう一度教えてください。"
+    if ok:
+        return "".join(parts) + "・".join(JA[s] for s in ok) + "だけ入れますか。"
+    return "".join(parts) + "どの色の立方体を箱に入れるか、もう一度教えてください。"
+
+
 def decompose(text: str, table_colors, box_colors, cli=None, use_cache: bool = True) -> dict:
     p = _CFG["planner"]
     msg = user_message(text, table_colors, box_colors)
@@ -120,7 +143,7 @@ def decompose(text: str, table_colors, box_colors, cli=None, use_cache: bool = T
         steps, reply, parsed = [], "指示をうまく読み取れませんでした。もう一度教えてください。", False
     checks = {"parsed": parsed, **check(steps, table_colors, box_colors)}
     valid = all(checks.values())
-    return {"steps": steps if valid else [], "reply": reply if valid else
-            f"{reply}（手順を確かめられなかったので、実行しません。もう一度教えてください）",
+    return {"steps": steps if valid else [], "reply": reply if valid else fallback_reply(steps, table_colors, box_colors),
+            "llm_reply": reply,
             "llm_steps": steps, "valid": valid, "checks": checks, "cache": rec["key"], "from_cache": rec["from_cache"],
             "usage": rec.get("usage"), "stop_reason": rec.get("stop_reason")}
