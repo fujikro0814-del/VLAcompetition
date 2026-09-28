@@ -115,9 +115,10 @@ def decompose(text: str, table_colors, box_colors, cli=None, use_cache: bool = T
     try:
         data = json.loads(rec["raw"])
         steps, reply = list(data["steps"]), str(data["reply"])
+        parsed = True
     except (ValueError, KeyError, TypeError):
-        steps, reply = [], "指示をうまく読み取れませんでした。もう一度教えてください。"
-    checks = check(steps, table_colors, box_colors)
+        steps, reply, parsed = [], "指示をうまく読み取れませんでした。もう一度教えてください。", False
+    checks = {"parsed": parsed, **check(steps, table_colors, box_colors)}
     valid = all(checks.values())
     return {"steps": steps if valid else [], "reply": reply if valid else
             f"{reply}（手順を確かめられなかったので、実行しません。もう一度教えてください）",

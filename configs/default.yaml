@@ -205,5 +205,10 @@ planner:
   # 選択用・最終評価用の種では調整しない。3 色の画素の F1 の平均 0.937。写っていないのに検出したことは 0 回、
   # 机の上の立方体なら 1 画素の検出からで位置の差の 95 百分位が 2 cm 以下 → min_pixels 1
   color_detect: {min_value: 20, min_margin: 40, min_pixels: 1}
+  # Step I（掲示板 0088・0089）。presence は学習用の帯の描画だけで決める（scripts/51_planner.py fit）。null の間は使えない
+  # 51_planner.py fit（outputs/planner/presence_fit.json）。学習データ（R1 の 330 本の生の記録）と、学習用の帯 57000〜57039 で
+  # 台本の後に目標を縁・脇・中へ置き直した例だけで決めた（0090）。俯瞰の箱 31271/31378、机 1972/1980、手首 160/160
+  presence: {box_min_pixels: 56, table_min_pixels: 3, wrist_min_pixels: 33, wrist_min_fraction: 0.73}
+  judge: {retreat_tol_m: 0.05, still_speed: 0.01}   # 完了判定の待機位置（expert.retreat_pose から 5 cm 以内、x_des の速さ 1 cm/s 未満）
 
 viz: {fps: 30}
