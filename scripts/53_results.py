@@ -170,6 +170,8 @@ def build() -> str:
         a, p, ci = _pair(d)
         w(f"| {name} | {a} | {p} | {ci} |")
     w("")
+    w("2 段目の学習（R2）で、失敗注入なしの成功が下がった可能性がある。最終モデルは事前の決まりどおり R2 のまま。")
+    w("")
     fails = nat_failures("F_nat", blocked)
     forms = collections.Counter(("フィルタで停止" if r["filter_blocked"] else r["form"]) for r in fails)
     w(f"**R2 の自然の失敗 {len(fails)} 本の内訳**（失敗の検出器の最初に確定した形。フィルタが止め続けたものは別に数える）: "
@@ -193,8 +195,9 @@ def build() -> str:
           f"{'成功' if b['without_filter_success'] else '失敗'}（触れたもの: {'、'.join(b['without_filter_touched']) or 'なし'}） |")
     w("")
     kinds = {("立方体" if k.startswith("cube_") else "箱の壁") for b in bd for k in b["nearest_obstacle_when_active"]}
-    w(f"止め続けた相手（働いたときに最も近かった障害物）: {'・'.join(sorted(kinds)) or '—'}。"
-      "映像（映像のために同じ設定で回し直したもの）は `docs/media/2026-09-28_EFINAL/` の E5_*.mp4")
+    w(f"止め続けた相手（働いたときに最も近かった障害物）: {'・'.join(sorted(kinds)) or '—'}（目標外の立方体）。フィルタなしでは、"
+      "その立方体に触れながら目標へ届いて成功した。接触を減らす代わりに、隣の立方体に近い目標へ届けなくなることがある、という取引。"
+      "映像は同じ設定で回し直した映像（結果は本番と同じ。ビット一致ではない）")
     w("")
     # ------------------------------------------------------------------ 副の指標
     w("## 3. 副次評価項目（補正なしの記述）")
@@ -312,7 +315,21 @@ def build() -> str:
     ups = sum(1 for p in rc["pairs"] for r in p["by_seed"] if not r["before"].startswith("ok") and r["after"].startswith("ok"))
     downs = sum(1 for p in rc["pairs"] for r in p["by_seed"] if r["before"].startswith("ok") and not r["after"].startswith("ok"))
     w(f"- 同じ種の対で、失敗 → 成功 {ups}、成功 → 失敗 {downs}（回すたびのばらつきは P1 で 30 対中 9 が入れ替わる程度＝0087。検定は付けない）")
-    w(f"- テスト用の種では、戻す動きを入れた実行器で {pr['all_three']}/{pr['n']}。入れる前の実行器ではこの種を回していない")
+    fc = PL / "return_compare_final.json"
+    if fc.is_file():
+        rf = _j(fc)
+        pf = rf["pairs"][0]
+        sb, sa = pf["before_summary"], pf["after_summary"]
+        st2 = lambda s: next(v for k, v in s["stopped_by_position"].items() if k.startswith("2:"))   # noqa: E731
+        up2 = sum(1 for r in pf["by_seed"] if not r["before"].startswith("ok") and r["after"].startswith("ok"))
+        dn2 = sum(1 for r in pf["by_seed"] if r["before"].startswith("ok") and not r["after"].startswith("ok"))
+        w(f"- **テスト用のシード（{pf['seeds']}）での前後の比較（結果を見た後に加えた比較。どの決定にも使わない）**: 3 個とも "
+          f"{sb['all_three']}/{sb['n']}（戻す動きなし）→ {sa['all_three']}/{sa['n']}（あり）、再試行で完了したサブタスク "
+          f"{sb['retry_completed_steps']} → {sa['retry_completed_steps']}、2 番目で止まった {st2(sb)['stopped']}/{st2(sb)['started']} → "
+          f"{st2(sa)['stopped']}/{st2(sa)['started']}、立方体の上に乗った誤った「完了」 {sb['judge_false_complete']} → {sa['judge_false_complete']}。"
+          f"同じシードの対で失敗 → 成功 {up2}、成功 → 失敗 {dn2}。テスト用のシードでは、3 個とも入る数は増えなかった")
+    else:
+        w(f"- テスト用の種では、戻す動きを入れた実行器で {pr['all_three']}/{pr['n']}。入れる前の実行器ではこの種を回していない")
     w("")
     return "\n".join(L) + "\n"
 
