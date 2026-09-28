@@ -44,8 +44,31 @@ def targets() -> list:
     return out
 
 
-def listing() -> dict:
-    return {p.relative_to(ROOT).as_posix(): {"bytes": p.stat().st_size, "sha256": sha256(p)} for p in targets()}
+def run_level_targets() -> list:
+    """学習の実行のフォルダの直下のファイル（conversion.json など。評価で方策を読むときに conversion.json を読む）。
+    最初の一覧（stepJ_hashes.json）から漏れていたので、追補（stepJ_hashes_addendum.json）に入れる（0098）。"""
+    out = []
+    for c in CKPTS.values():
+        out += sorted(p for p in (ROOT / c).parents[1].iterdir() if p.is_file())
+    return out
+
+
+def listing(paths=None) -> dict:
+    return {p.relative_to(ROOT).as_posix(): {"bytes": p.stat().st_size, "sha256": sha256(p)}
+            for p in (targets() if paths is None else paths)}
+
+
+def cmd_addendum(a) -> None:
+    files = listing(run_level_targets())
+    for k in files:
+        files[k]["mtime"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime((ROOT / k).stat().st_mtime))
+    res = {"note": "stepJ_hashes.json の追補（0098）。学習の実行のフォルダの直下のファイルが最初の一覧から漏れていた。"
+                   "どれも更新時刻が凍結（stepJ-freeze、2026-09-28 13:50）より前で、凍結の後に書き換えていない",
+           "n_files": len(files), "files": files, "written": time.strftime("%Y-%m-%d %H:%M:%S")}
+    (OUT_DIR / "stepJ_hashes_addendum.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(json.dumps({k: v for k, v in res.items() if k != "files"}, ensure_ascii=False))
+    for k, v in files.items():
+        print(v["mtime"], k)
 
 
 def cmd_write(a) -> None:
@@ -72,6 +95,11 @@ def cmd_write(a) -> None:
 def cmd_verify(a) -> None:
     ref = json.loads((OUT_DIR / "stepJ_hashes.json").read_text(encoding="utf-8"))["files"]
     now = listing()
+    add = OUT_DIR / "stepJ_hashes_addendum.json"
+    if add.is_file():
+        ref = {**ref, **{k: {kk: v[kk] for kk in ("bytes", "sha256")}
+                         for k, v in json.loads(add.read_text(encoding="utf-8"))["files"].items()}}
+        now = {**now, **listing(run_level_targets())}
     bad = sorted(k for k in set(ref) | set(now) if ref.get(k) != now.get(k))
     print(json.dumps({"n_ref": len(ref), "n_now": len(now), "differ": bad[:50], "n_differ": len(bad)},
                      ensure_ascii=False))
@@ -83,8 +111,9 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("write")
     sub.add_parser("verify")
+    sub.add_parser("addendum")
     a = ap.parse_args(argv)
-    {"write": cmd_write, "verify": cmd_verify}[a.cmd](a)
+    {"write": cmd_write, "verify": cmd_verify, "addendum": cmd_addendum}[a.cmd](a)
     return 0
 
 

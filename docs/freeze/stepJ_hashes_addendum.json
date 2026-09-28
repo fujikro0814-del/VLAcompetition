@@ -1,0 +1,107 @@
+{
+ "note": "stepJ_hashes.json の追補（0098）。学習の実行のフォルダの直下のファイルが最初の一覧から漏れていた。どれも更新時刻が凍結（stepJ-freeze、2026-09-28 13:50）より前で、凍結の後に書き換えていない",
+ "n_files": 20,
+ "files": {
+  "outputs/train/train_R1_20260926-153959_20260926-153959/conversion.json": {
+   "bytes": 337250,
+   "sha256": "cb689cef8467496f2b523f1e051491495ff5bee99f37320cc398145f270cf675",
+   "mtime": "2026-09-26 16:16:06"
+  },
+  "outputs/train/train_R1_20260926-153959_20260926-153959/loss.csv": {
+   "bytes": 10471,
+   "sha256": "3ff82b529cf9e4c696299e74ee12945fb25f2b2b55e114eddc885b9c6e660956",
+   "mtime": "2026-09-26 19:12:02"
+  },
+  "outputs/train/train_R1_20260926-153959_20260926-153959/loss.png": {
+   "bytes": 9809,
+   "sha256": "ad45792633ad419c061458307661064a3c8b42414514b7b005343c9374685352",
+   "mtime": "2026-09-26 19:12:03"
+  },
+  "outputs/train/train_R1_20260926-153959_20260926-153959/train_launch_config.json": {
+   "bytes": 362,
+   "sha256": "557a663345fe5e6964b88f401a90c3ac12dfe751b2ed602799a44819a32ba83f",
+   "mtime": "2026-09-26 19:12:02"
+  },
+  "outputs/train/train_R1_20260926-153959_20260926-153959/train_run.json": {
+   "bytes": 10749,
+   "sha256": "9138588b6b26c13a4e34a29b702ac544d5424bd3725bb604073d273520afe326",
+   "mtime": "2026-09-26 19:12:03"
+  },
+  "outputs/train/train_N1_20260926-191928_20260926-191928/conversion.json": {
+   "bytes": 337078,
+   "sha256": "017eff8a9fde31107b4cbd9f08a7b005c70bc09a9eb8567bdf9cf416a9175e55",
+   "mtime": "2026-09-26 19:54:38"
+  },
+  "outputs/train/train_N1_20260926-191928_20260926-191928/loss.csv": {
+   "bytes": 9916,
+   "sha256": "8bdd997a42d306878b777fedcb775afc7c5c5849dbda9162f91de1d9b1d8a049",
+   "mtime": "2026-09-26 22:49:14"
+  },
+  "outputs/train/train_N1_20260926-191928_20260926-191928/loss.png": {
+   "bytes": 9136,
+   "sha256": "8a1ef9fb7e8aad0cd9c7fbe95029ea1ce7bba4488f0c6ba8030147725a68cefe",
+   "mtime": "2026-09-26 22:49:14"
+  },
+  "outputs/train/train_N1_20260926-191928_20260926-191928/train_launch_config.json": {
+   "bytes": 362,
+   "sha256": "fb3f015d7c342f0c05dadd979f9bbe5e4648d534c5e83baaa440a81165a8c54b",
+   "mtime": "2026-09-26 22:49:14"
+  },
+  "outputs/train/train_N1_20260926-191928_20260926-191928/train_run.json": {
+   "bytes": 10751,
+   "sha256": "77775bb78bbadd3cf90a2b8ad1a493cd61ca70f3b703e51b73fb0e9009d0435b",
+   "mtime": "2026-09-26 22:49:14"
+  },
+  "outputs/train/train_R2_20260927-145256_20260927-145256/conversion.json": {
+   "bytes": 527365,
+   "sha256": "8444001269a6b220f2503b2ff70d0a6cade003c2817bdcafd3d8861983bf57ad",
+   "mtime": "2026-09-27 15:27:43"
+  },
+  "outputs/train/train_R2_20260927-145256_20260927-145256/loss.csv": {
+   "bytes": 3381,
+   "sha256": "1745dad0bef6e9585cb0ebd02a9d9b26c7e125debd1ced4d328c7e5ddc014af9",
+   "mtime": "2026-09-27 16:02:08"
+  },
+  "outputs/train/train_R2_20260927-145256_20260927-145256/loss.png": {
+   "bytes": 11916,
+   "sha256": "8dc6bb455390b9a89642d849c2d28362df9f8394babba35116f05571263ce86a",
+   "mtime": "2026-09-27 16:02:08"
+  },
+  "outputs/train/train_R2_20260927-145256_20260927-145256/train_launch_config.json": {
+   "bytes": 655,
+   "sha256": "798da9c725b1dce7a1ca576015be5826557fce2bacbca91d0c3574ab12cf5ea3",
+   "mtime": "2026-09-27 16:02:08"
+  },
+  "outputs/train/train_R2_20260927-145256_20260927-145256/train_run.json": {
+   "bytes": 14595,
+   "sha256": "74c208dbb8c1dfefc1b74212c2779cac63eb19ad1cfd0f480e2709f217f23a23",
+   "mtime": "2026-09-27 16:02:08"
+  },
+  "outputs/train/train_R1plus_20260927-160208_20260927-160208/conversion.json": {
+   "bytes": 337669,
+   "sha256": "e70ea798c26269629acba42f4b536486aa9f242d5509dce5473f89125b3e9f85",
+   "mtime": "2026-09-27 16:36:55"
+  },
+  "outputs/train/train_R1plus_20260927-160208_20260927-160208/loss.csv": {
+   "bytes": 3375,
+   "sha256": "d7e86ad4555f3cf63500f8532317f0390bc7c1346d508c03c948f6227a03b3f2",
+   "mtime": "2026-09-27 17:11:28"
+  },
+  "outputs/train/train_R1plus_20260927-160208_20260927-160208/loss.png": {
+   "bytes": 11137,
+   "sha256": "5997f39b7ef51c22f477f960eaa1ecf76f22ed888a0cbe77e93fce4c9f64cb7c",
+   "mtime": "2026-09-27 17:11:28"
+  },
+  "outputs/train/train_R1plus_20260927-160208_20260927-160208/train_launch_config.json": {
+   "bytes": 659,
+   "sha256": "0b29f9b1c24739ed5d99d848b7666e3f1b8cbbd9b93b92f5638053fec2bc96f8",
+   "mtime": "2026-09-27 17:11:28"
+  },
+  "outputs/train/train_R1plus_20260927-160208_20260927-160208/train_run.json": {
+   "bytes": 12297,
+   "sha256": "719aa3658e8ccb4f3cad99795b6d493dcc1907d88b6ae7c6fcd92423aeb266c2",
+   "mtime": "2026-09-27 17:11:28"
+  }
+ },
+ "written": "2026-09-28 16:25:45"
+}
