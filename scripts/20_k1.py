@@ -144,7 +144,8 @@ def cmd_e6(a) -> None:
     pp = PhaseParams.from_config()
     rows = []
     try:
-        for seed in list(E6_SEEDS)[:a.limit]:
+        seeds_e6 = list(E6_SEEDS) if a.seed_base is None else list(range(a.seed_base, a.seed_base + len(E6_SEEDS)))
+        for seed in seeds_e6[:a.limit]:
             lay = scene.sample_layout(seed, "empty", start="home")
             rig.reset(lay)
             frame, imgs = E.capture_frame(rig, COLORS[0], 0.0, pp, render=True)
@@ -187,6 +188,7 @@ def cmd_e6(a) -> None:
            "closed_within_chunk_rate": sum(s["closed"] for r in rows for s in r["samples"]) / total_samples,
            "by_instruction": {c: sum(r["correct_majority"] for r in rows if r["instruction"] == c) / (n / 3) for c in COLORS},
            "cue_mode": a.cue_mode, "has_target_cue": pol.builder.cue is not None,
+           "seeds": [min(r["seed"] for r in rows), max(r["seed"] for r in rows)],
            "follows_instruction_text_majority": sum(r["follows_instruction_text_majority"] for r in rows) / n,
            "input_check_last": pol.input_check, "rows": rows}
     write("e6" + a.tag, res)
@@ -304,6 +306,8 @@ def main(argv=None) -> int:
     for name in ("e6", "closed"):
         s = sub.add_parser(name)
         if name == "e6":
+            s.add_argument("--seed-base", type=int, default=None,
+                           help="E6 の配置の種の先頭（既定は K1 の 190000〜。E の予備評価は 199400〜＝0086）")
             s.add_argument("--cue-mode", choices=["both", "cue_only"], default="both",
                            help="both: 指示と手がかりを一緒に差し替え（正解は差し替えた色）。cue_only: 手がかりだけ（0048）")
         s.add_argument("--checkpoint", default=None, help="既定は train K1 の保存点（checkpoints/last）")
