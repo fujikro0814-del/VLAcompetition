@@ -210,5 +210,9 @@ planner:
   # 台本の後に目標を縁・脇・中へ置き直した例だけで決めた（0090）。俯瞰の箱 31271/31378、机 1972/1980、手首 160/160
   presence: {box_min_pixels: 56, table_min_pixels: 3, wrist_min_pixels: 33, wrist_min_fraction: 0.73}
   judge: {retreat_tol_m: 0.05, still_speed: 0.01}   # 完了判定の待機位置（expert.retreat_pose から 5 cm 以内、x_des の速さ 1 cm/s 未満）
+  # 待機位置へ戻す動き（決裁 0094 の 2。予備評価の結果を見た後の変更）。planner.executor の ReturnMotion と (a)(b)。
+  # 真上に rise_z まで上げてから水平に expert.retreat_pose へ（速さは台本と同じ）。trigger_s は (b) の条件が続く時間、
+  # wait_s は (b) で着いた後に完了判定を待つ時間（判定の 1 s 静止＋余裕）、timeout_s は動きの上限（着かなくても打ち切る）
+  return_to_retreat: {enabled: true, rise_z: 0.30, trigger_s: 4.0, wait_s: 2.0, timeout_s: 10.0}
 
 viz: {fps: 30}

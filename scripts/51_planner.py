@@ -381,7 +381,11 @@ def cmd_run(a) -> None:
     out = OUT / "runs" / a.tag
     out.mkdir(parents=True, exist_ok=False)
     rig = SimRig(render=True)
-    ex = TaskExecutor(rig, runner)
+    import copy
+    cfg = copy.deepcopy(CFG)
+    if a.return_to_retreat is not None:          # 待機位置へ戻す動き（0094 の 2）の入切を configs から上書き
+        cfg["planner"]["return_to_retreat"]["enabled"] = a.return_to_retreat == "on"
+    ex = TaskExecutor(rig, runner, cfg)
     base, n = map(int, a.seeds.split(":"))
     rows = []
     try:
@@ -396,14 +400,100 @@ def cmd_run(a) -> None:
                 write_mp4(out / f"task_{i:04d}.mp4", video, 20)
             rows.append({"seed": seed, "plan": meta["plan"]["steps"], "all_three": meta["all_three_in_box"],
                          "stopped": meta["stopped"], "steps": [(s["color"], s["judged_complete"], len(s["attempts"]),
-                                                                s["t_truth_success"] is not None) for s in meta["steps"]]})
+                                                                s["t_truth_success"] is not None) for s in meta["steps"]],
+                         "returns": [(r["kind"], r["step"], r["arrived"], r["judged"]) for r in meta["returns"]]})
             print(json.dumps(rows[-1], ensure_ascii=False), flush=True)
     finally:
         rig.close()
     (out / "run.json").write_text(json.dumps({"text": a.text, "seeds": a.seeds, "checkpoint": a.checkpoint,
+                                              "return_to_retreat": cfg["planner"]["return_to_retreat"],
                                               "all_three": sum(r["all_three"] for r in rows), "n": len(rows),
                                               "written": time.strftime("%Y-%m-%d %H:%M:%S")}, ensure_ascii=False,
                                              indent=2), encoding="utf-8")
+
+
+def _task_code(m) -> str:
+    """0093 の表の符号: ok＝3 個とも（真値）、G2＝2 番目の緑で止まった（* は真値では置けていた＝判定の見逃し）、
+    x:b＝判定はすべて完了だが青が真値で箱に入っていない。やり直しで完了した手順があれば末尾に +r<番号>。"""
+    retry_done = [str(s["step"] + 1) for s in m["steps"] if s["judged_complete"] and len(s["attempts"]) > 1]
+    tail = ("+r" + ",".join(retry_done)) if retry_done else ""
+    if m["all_three_in_box"]:
+        return "ok" + tail
+    st = m["stopped"]
+    if st is not None:
+        s = m["steps"][st["step"]]
+        return f"{st['color'][0].upper()}{st['step'] + 1}{'*' if s['t_truth_success'] is not None else ''}" + tail
+    miss = [c for c in m["plan"]["steps"] if not m["final_in_box"][c]] or [c for c, v in m["final_in_box"].items() if not v]
+    return "x:" + (miss[0][0] if miss else "?") + tail
+
+
+def cmd_compare_return(a) -> None:
+    """待機位置へ戻す動き（0094 の 2）の前後を同じ種の対で並べる（検定は付けない）。主な見方と採る基準は 0094 で
+    回す前に固めた: 3 通りの合計の「3 個とも」（変更前 31/60）と、やり直しで完了した手順の数（変更前 0）。
+    採る = 変更後の「3 個とも」の合計が変更前を下回らず、かつやり直しで完了した手順が 1 つ以上。"""
+    def load(tag):
+        d = OUT / "runs" / tag
+        run = json.loads((d / "run.json").read_text(encoding="utf-8"))
+        tasks = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(d.glob("task_*.json"))]
+        return run, tasks
+
+    def summary(tasks):
+        steps = [s for m in tasks for s in m["steps"]]
+        rets = [r for m in tasks for r in m.get("returns", [])]
+        pos = {}
+        for m in tasks:
+            for s in m["steps"]:
+                key = (s["step"] + 1, s["color"])
+                p = pos.setdefault(f"{key[0]}:{key[1]}", [0, 0, 0])
+                p[1] += 1
+                if not s["judged_complete"]:
+                    p[0] += 1
+                    if s["t_truth_success"] is None:
+                        p[2] += 1
+        return {"all_three": sum(m["all_three_in_box"] for m in tasks), "n": len(tasks),
+                "retry_completed_steps": sum(s["judged_complete"] and len(s["attempts"]) > 1 for s in steps),
+                "stopped_by_position": {k: {"stopped": v[0], "started": v[1], "stopped_truth_not_placed": v[2]}
+                                        for k, v in sorted(pos.items())},
+                "returns": {"n": len(rets), "retry": sum(r["kind"] == "retry" for r in rets),
+                            "placed": sum(r["kind"] == "placed" for r in rets),
+                            "not_arrived": sum(not r["arrived"] for r in rets),
+                            "touched_cube_or_box": sum(r["contact_cube"] or r["contact_box"] for r in rets),
+                            "touched_cube": sum(r["contact_cube"] for r in rets),
+                            "touched_box": sum(r["contact_box"] for r in rets),
+                            "placed_then_judged": sum(r["kind"] == "placed" and r["judged"] for r in rets),
+                            "retry_then_step_completed": sum(
+                                r["kind"] == "retry" and m["steps"][r["step"]]["judged_complete"]
+                                for m in tasks for r in m.get("returns", []))},
+                "judge_false_complete": sum(s["judged_complete"] and s["t_truth_success"] is None
+                                            and not m["final_in_box"][s["color"]] for m in tasks for s in m["steps"])}
+    if len(a.before) != len(a.after):
+        raise SystemExit("--before と --after の数を揃える")
+    res = {"pairs": [], "written": time.strftime("%Y-%m-%d %H:%M:%S")}
+    tot_b = tot_a = retry_a = 0
+    for tb, ta in zip(a.before, a.after):
+        rb, kb = load(tb)
+        ra, ka = load(ta)
+        if rb["text"] != ra["text"] or rb["seeds"] != ra["seeds"]:
+            raise SystemExit(f"指示か種が違う: {tb} {ta}")
+        sb, sa = summary(kb), summary(ka)
+        tot_b += sb["all_three"]
+        tot_a += sa["all_three"]
+        retry_a += sa["retry_completed_steps"]
+        res["pairs"].append({"text": ra["text"], "seeds": ra["seeds"], "before": tb, "after": ta,
+                             "before_summary": sb, "after_summary": sa,
+                             "by_seed": [{"seed": x["seed"], "before": _task_code(x), "after": _task_code(y)}
+                                         for x, y in zip(kb, ka)]})
+    res["primary"] = {"all_three_before": tot_b, "all_three_after": tot_a,
+                      "n": sum(p["after_summary"]["n"] for p in res["pairs"]),
+                      "retry_completed_after": retry_a,
+                      "adopt": bool(tot_a >= tot_b and retry_a >= 1)}
+    (OUT / f"{a.out}.json").write_text(json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps(res["primary"], ensure_ascii=False))
+    for p in res["pairs"]:
+        print(p["text"], p["before_summary"]["all_three"], "->", p["after_summary"]["all_three"],
+              json.dumps(p["after_summary"]["returns"], ensure_ascii=False))
+        for r in p["by_seed"]:
+            print(" ", r["seed"], r["before"], "->", r["after"])
 
 
 def main(argv=None) -> int:
@@ -417,6 +507,12 @@ def main(argv=None) -> int:
     s.add_argument("--tag", required=True)
     s.add_argument("--checkpoint", default=R2_10K)
     s.add_argument("--videos", type=int, default=2)
+    s.add_argument("--return-to-retreat", choices=["on", "off"], default=None,
+                   help="待機位置へ戻す動き（0094 の 2）。省くと configs の planner.return_to_retreat.enabled")
+    s = sub.add_parser("compare-return")
+    s.add_argument("--before", nargs="+", default=["E7_pre", "E7_order_GRB", "E7_order_RBG"])
+    s.add_argument("--after", nargs="+", required=True)
+    s.add_argument("--out", default="return_compare")
     s = sub.add_parser("judge-data")
     s.add_argument("--seeds", required=True, help="<先頭>:<数>（予備は 196000:40）")
     s.add_argument("--tag", required=True)
@@ -425,7 +521,8 @@ def main(argv=None) -> int:
     s = sub.add_parser("llm-eval")
     s.add_argument("--fixture", default="dev_sentences")
     a = ap.parse_args(argv)
-    {"fit": cmd_fit, "run": cmd_run, "judge-data": cmd_judge_data, "llm-eval": cmd_llm_eval}[a.cmd](a)
+    {"fit": cmd_fit, "run": cmd_run, "judge-data": cmd_judge_data, "llm-eval": cmd_llm_eval,
+     "compare-return": cmd_compare_return}[a.cmd](a)
     return 0
 
 

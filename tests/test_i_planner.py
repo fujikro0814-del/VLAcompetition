@@ -114,6 +114,87 @@ def test_step_seed_is_deterministic_and_distinct():
     assert len({step_seed(197000, s, a) for s in range(3) for a in range(2)}) == 6
 
 
+# --- 待機位置へ戻す動き（0094 の 2） ----------------------------------------------------------------------------
+
+def _integrate(mot, x, dt=0.02, t_max=10.0):
+    path = [np.array(x, float)]
+    for _ in range(int(t_max / dt)):
+        if mot.arrived(path[-1]):
+            break
+        path.append(path[-1] + mot.velocity(path[-1]) * dt)
+    return np.array(path)
+
+
+def test_return_motion_rises_straight_up_then_moves_level_at_expert_speed():
+    from recovla.common import config
+    from recovla.planner.executor import ReturnMotion
+    c = config.load()
+    start = (0.45, -0.10, 0.12)
+    mot = ReturnMotion(start, c)
+    v0 = mot.velocity(start)
+    assert np.allclose(v0[:2], 0.0) and np.isclose(v0[2], c["expert"]["speed_ref"]["z"])    # 真上に、台本の上限の速さで
+    p = _integrate(ReturnMotion(start, c), start)
+    goal = np.array(c["expert"]["retreat_pose"], float)
+    assert np.linalg.norm(p[-1] - goal) <= c["expert"]["phase"]["retreat_tol_m"]
+    low = p[p[:, 2] < 0.30 - c["expert"]["move_tol_m"] - 1e-9]
+    assert np.allclose(low[:, :2], start[:2], atol=1e-9)                # 上がり切るまで水平には動かない
+    step_xy = np.linalg.norm(np.diff(p[:, :2], axis=0), axis=1) / 0.02
+    assert step_xy.max() <= c["expert"]["speed_ref"]["xy"] + 1e-9
+    assert np.all(p[np.argmax(p[:, 2] >= 0.30 - c["expert"]["move_tol_m"]):, 2] >= 0.30 - 0.002)   # 以後は水平
+
+
+def test_return_motion_from_above_comes_down_to_rise_z_first():
+    from recovla.common import config
+    from recovla.planner.executor import ReturnMotion
+    c = config.load()
+    p = _integrate(ReturnMotion((0.50, 0.0, 0.34), c), (0.50, 0.0, 0.34))
+    assert np.linalg.norm(p[-1] - np.array(c["expert"]["retreat_pose"])) <= c["expert"]["phase"]["retreat_tol_m"]
+
+
+@pytest.fixture(scope="module")
+def _rig():
+    from recovla.sim.rig import SimRig
+    r = SimRig(render=False)
+    yield r
+    r.close()
+
+
+def test_return_to_retreat_opens_rises_and_arrives_without_touching(_rig):
+    """物理の中で: 低い所で閉じた手を、開いて真上に上げてから待機位置へ戻す。立方体と箱に触れない。"""
+    from recovla.common.seeds import COLORS
+    from recovla.expert.script import PhaseParams
+    from recovla.planner.executor import TaskExecutor
+    from recovla.record import episode as E
+    from recovla.sim import scene
+    from recovla.sim.rig import quiet
+    rig = _rig
+    rig.reset(scene.sample_layout(197000, "empty", start="home"))
+    pp = PhaseParams.from_config()
+    frames_log = []
+    state = {"frames": frames_log, "n_frames": lambda: len(frames_log), "done_t": None, "mode": 0}
+
+    def on_step(r):
+        if r.step % r.record_every == 0:
+            frames_log.append(E.capture_frame(r, COLORS[0], 0.0, pp, False)[0])
+    with quiet():
+        for _ in range(40):                                   # 下へ 0.8 s（約 7 cm）
+            rig.pad_read(np.array([0.0, 0.0, -0.09]), False, on_step)
+        rig.pad_read(np.zeros(3), True, on_step)              # 閉じる
+        for _ in range(25):
+            rig.pad_read(np.zeros(3), False, on_step)
+        assert rig.controller.gripper_closed
+        x_start = rig.integrator.x_cmd.copy()
+        ex = TaskExecutor(rig, runner=None)
+        rec = ex._return_to_retreat("retry", on_step, state, judge_wait=False)
+    assert rec["arrived"] and rec["opened"] and not rig.controller.gripper_closed
+    assert not rec["contact_cube"] and not rec["contact_box"] and max(rec["cube_moved_m"]) < 1e-3
+    xd = np.array([f["x_des"] for f in frames_log[-int((rec["t_end"] - rec["t_begin"]) / 0.05):]])
+    low = xd[xd[:, 2] < 0.29]
+    assert len(low) and np.allclose(low[:, :2], x_start[:2], atol=2e-3)   # 上がり切るまでは真上
+    assert np.linalg.norm(rig.integrator.x_cmd - np.array([0.33, 0.15, 0.30])) <= 0.003
+    assert state["mode"] == 0 and not rig.safety.gate
+
+
 # --- 凍結（0092 の 5）。範囲を変えるときは、変える前に諮る ------------------------------------------------------
 
 FROZEN = {"SYSTEM": "458cca994ccf384e6cce1ae05e263699b99c6006852df72c5875e4f2c633bae9",
