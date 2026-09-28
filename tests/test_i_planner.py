@@ -157,7 +157,8 @@ def test_return_motion_is_only_in_the_task_executor():
     import pathlib
     root = pathlib.Path(__file__).resolve().parents[1]
     allowed = {root / "src" / "recovla" / "planner" / "executor.py", root / "scripts" / "51_planner.py",
-               root / "scripts" / "50_e_eval.py"}      # 50_e_eval.py は E7 の一覧の文に名前が出るだけ（下で import しないことを見る）
+               root / "scripts" / "50_e_eval.py",       # 50_e_eval.py は E7 の一覧の文に名前が出るだけ（下で import しないことを見る）
+               root / "scripts" / "61_demo.py"}         # 動画の場面の回し直し（3 個の連続タスクの場面だけが実行器を使う）
     words = ("planner.executor", "TaskExecutor", "ReturnMotion", "return_to_retreat", "_return_to_retreat")
     hits = [str(p.relative_to(root)) for d in ("src", "scripts") for p in (root / d).rglob("*.py")
             if p not in allowed and any(w in p.read_text(encoding="utf-8") for w in words)]

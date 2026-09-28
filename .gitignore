@@ -12,3 +12,6 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
+
+# 説明資料と動画の出来上がり（提出物。scripts/60_paper.py・62_video.py で作る）
+/paper/build/

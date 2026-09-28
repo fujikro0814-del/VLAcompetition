@@ -107,11 +107,13 @@ def build() -> str:
     w = L.append
     head = subprocess.run([str(ROOT / ".tools" / "git" / "cmd" / "git.exe"), "rev-parse", "--short", FREEZE_TAG + "^{commit}"],
                           cwd=ROOT, capture_output=True, text=True).stdout.strip()
-    w("# 最終評価の結果（Step J）")
+    w("# 最終評価の結果")
     w("")
+    del head
     w(f"このファイルは `scripts/53_results.py` が記録から作った（{time.strftime('%Y-%m-%d %H:%M')}）。数字は手で書いていない。"
-      f"評価した版は凍結のタグ `{FREEZE_TAG}`（{head}）。最終評価用の種の帯（110000〜）で回した。最終モデルは予備評価で決めた "
-      f"**{fin['final_model']}**（以後変えない決まり）。予備は選択用の帯（199000〜）の値で、並べて示す。")
+      "評価はコードを凍結した後に行い、チェックポイントとデータの版は `docs/freeze/` の SHA-256 の一覧で固定している。"
+      f"テスト用のシード範囲（110000〜）で回した。最終モデルは、検証用のシード範囲（199000〜）での予備評価で事前に決めた "
+      f"**{fin['final_model']}**（以後変えない決まり）。予備評価の値も並べて示す。")
     w("")
     # ------------------------------------------------------------------ 主な検定
     w("## 1. 主要評価項目（予備評価の前に固めたもの）")

@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>失敗から復帰する VLA</title>
+<style>
+@page { size: A4; margin: 13mm 14mm 13mm 14mm; }
+:root { --ink:#1d2126; --muted:#555c64; --rule:#c9ced3; --a:#2d5f8b; --a-fill:#e5ecf3; --b:#1f6b5c; --b-fill:#e1eee9;
+        --c:#955619; --c-fill:#f3e9dc; --d:#5f646b; --d-fill:#e9eaec; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { font-family: "BIZ UDPGothic", "Yu Gothic", "Meiryo", sans-serif; font-size: 9.3pt; line-height: 1.55; color: var(--ink); margin: 0; }
+h1 { font-size: 15.5pt; margin: 0 0 1mm; line-height: 1.3; }
+.sub { color: var(--muted); font-size: 9pt; margin-bottom: 3mm; }
+h2 { font-size: 11pt; margin: 3.2mm 0 1.2mm; padding-bottom: 0.6mm; border-bottom: 1px solid var(--rule); }
+h3 { font-size: 9.6pt; margin: 2.2mm 0 0.6mm; }
+p { margin: 0 0 1.4mm; }
+ul { margin: 0 0 1.4mm; padding-left: 5mm; } li { margin: 0.3mm 0; }
+.lead { font-size: 9.6pt; }
+.num { font-feature-settings: "tnum"; }
+figure { margin: 1.5mm 0 2mm; break-inside: avoid; }
+figcaption { font-size: 8.3pt; color: var(--muted); margin-top: 0.8mm; }
+figcaption b { color: var(--ink); }
+table { border-collapse: collapse; width: 100%; font-size: 8.3pt; table-layout: fixed; }
+caption { caption-side: top; text-align: left; font-weight: 700; font-size: 8.8pt; padding-bottom: 1mm; }
+th, td { border-bottom: 1px solid var(--rule); padding: 1.1mm 1.4mm; text-align: left; vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: 7.9pt; }
+td.r { white-space: nowrap; }
+.tag { font-size: 7.6pt; color: var(--muted); }
+.two3 { display: grid; grid-template-columns: 1.35fr 1fr; gap: 4mm; align-items: start; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 4mm; align-items: start; }
+.box { border: 1px solid var(--rule); border-radius: 2mm; padding: 1.6mm 2.4mm; margin: 1.2mm 0; break-inside: avoid; }
+.box h3 { margin-top: 0; }
+.eff { color: var(--b); font-weight: 600; }
+.neg { color: var(--c); font-weight: 600; }
+.small { font-size: 8.2pt; color: var(--muted); }
+.pb { break-before: page; }
+/* 図 1 */
+svg { width: 100%; height: auto; font-family: "BIZ UDPGothic", "Yu Gothic", sans-serif; }
+.band-a{fill:var(--a-fill)} .band-b{fill:var(--b-fill)} .band-c{fill:var(--c-fill)} .band-d{fill:var(--d-fill)}
+.bx{fill:#fff;stroke-width:1.4} .bx.a{stroke:var(--a)} .bx.b{stroke:var(--b)} .bx.c{stroke:var(--c)} .bx.d{stroke:var(--d)}
+.bt{font-size:14px;font-weight:700;fill:var(--ink)} .t{font-size:13px;fill:var(--ink)} .tm{font-size:12px;fill:var(--muted)}
+.lt{font-size:15px;font-weight:700} .lt.a{fill:var(--a)} .lt.b{fill:var(--b)} .lt.c{fill:var(--c)} .lt.d{fill:var(--d)}
+.ls{font-size:12.5px;fill:var(--muted)}
+.cmd{fill:none;stroke:var(--ink);stroke-width:1.6} .obs{fill:none;stroke:var(--muted);stroke-width:1.5;stroke-dasharray:6 4}
+.head-cmd{fill:var(--ink)} .head-obs{fill:var(--muted)} .lab{font-size:12px;fill:var(--ink)} .lab-obs{font-size:12px;fill:var(--muted)}
+</style>
+</head>
+<body>
+
+<h1>失敗から復帰する VLA ― 人手なしで作った復帰デモで学習</h1>
+<div class="sub">Physical AI 応用 1 講座 最終課題　／　シミュレーション（MuJoCo）の Franka Panda</div>
+
+<h2>概要</h2>
+<p class="lead">日本語の指示（「全部片付けて」など）を受けて、机の上の赤・緑・青の立方体を箱へ片付けるロボットアームを、シミュレーションで作った。
+LLM が指示をサブタスクに分け、VLA（Vision-Language-Action）モデルが画像と指示文から腕を動かす。
+新しい点は、<b>成功例に「失敗を注入してから立て直す部分」を自動で足した復帰デモ</b>で VLA を学習し、人手の収録なしで、掴み損ねなどの失敗から復帰できるようにしたこと。
+テスト用のシード範囲（立方体の配置と失敗注入を決める乱数シードのうち、学習にも調整にも使わずテストだけに取り分けた範囲）で、掴み損ねからの復帰は、復帰デモなしの {{e3a_y}} から、復帰デモを足した 1 回目の追加学習のモデルで {{e3a_x}} に上がった。</p>
+
+<h2>目的</h2>
+<p>成功例だけで学習した VLA は、学習データにない状態（掴み損ねた直後など）に入ると、立て直さずに止まったり、同じ失敗を繰り返したりする。
+実機で失敗と復帰の例を人が集めるのは手間がかかる。そこで、<b>スクリプト化したエキスパートと失敗注入で復帰デモを自動生成</b>し、人手の収録なしで復帰を学ばせることを目指した。
+あわせて、推論に時間がかかる VLA を止めずに動かす非同期実行、障害物への接近を抑える安全フィルタ、複数の立方体を順に片付ける上位層を組み合わせ、どれがどれだけ効いたかを、学習にも調整にも使っていないテスト用のシード範囲で測った。</p>
+
+<h2>システム構成</h2>
+<figure>
+{{fig1_svg}}
+<figcaption><b>図 1　三層の制御ループ。</b>実線は指令、破線は観測。上位層はサブタスクが変わるときだけ下の層の設定を切り替え、あとは完了判定で進み具合を見る。VLA の状態 {{state_dim}} 次元は、手先・指・関節の {{state_base}} 次元に目標位置のキュー（目標の立方体の机の上の位置。工夫 4）{{cue_dim}} 次元を足したもの。行動のうち手先の回転の成分は使わず、手先の向きは制御側で真下に固定している。シミュレーションの中では推論の間は物理を止め、推論遅延は {{delay_d}} ステップ（{{delay_s}} s）として模擬している。</figcaption>
+</figure>
+
+<h2>工夫した点</h2>
+<p class="small">数字はどれもテスト用のシード範囲の値。失敗注入の種類は、P1＝閉じる直前に手先を横へずらしてから閉じる（掴み損ね）、P2＝持ち上げて運ぶ途中、箱に着く前に指を開いて落とす、P3＝箱の上で放す代わりに、立方体を机の別の場所へ運んで置く。「注入が有効だった試行」は、失敗注入で実際に失敗が起きた試行（P1 なら掴み損ねが起きたもの）。「復帰」は、そのうち制限時間 {{time_limit}} s の中で目標を箱に入れられたもの。比較は同じシードの試行どうしを組にして行い（「{{e3a_pairs}} 組」などは組の数）、p は McNemar 検定。</p>
+
+<div class="box">
+<h3>1. 復帰デモの自動生成 <span class="tag">（評価観点: 創造性・技術力）</span></h3>
+<p><b>問題:</b> 成功例だけで学ぶと、掴み損ねた後に立て直さない。<b>入れたもの:</b> スクリプト化したエキスパートの成功例 {{n_normal}} 本に、失敗を注入してからエキスパートが立て直す部分だけを記録した復帰デモ {{n_recovery}} 本を足して学習した（復帰デモありで学習したモデル＝R1）。比べる相手は、同じ本数 {{n_n1}} 本の成功例だけで学習したモデル（N1）。
+<b>効果:</b> P1 の復帰は、非同期実行（推論の間も動き続ける）で <span class="eff">{{e3a_x}} 対 {{e3a_y}}</span>（{{e3a_pairs}} 組、Holm 補正後 p {{e3a_holmeq}}）、同期実行（推論の間は物理を止める）で <span class="eff">{{e3s_x}} 対 {{e3s_y}}</span>（{{e3s_pairs}} 組、p {{e3s_holmeq}}）。失敗注入なしの成功は {{nat_rn_x}} 対 {{nat_rn_y}}（{{nat_rn_pairs}} 組、p {{nat_rn_peq}}）で、下がったとは言えない。</p>
+</div>
+
+<div class="box">
+<h3>2. 推論遅延と RTC のトレードオフ <span class="tag">（評価観点: 技術力）</span></h3>
+<p><b>問題:</b> 推論に最大 {{delay_s}} s かかるので、推論の間も前のアクションチャンクを実行し続ける非同期実行にした。チャンクの切り替わりで計画が食い違うと、チャンク境界で速度が不連続になる。
+<b>入れたもの:</b> 境界を滑らかにする RTC（Real-Time Chunking）を試し、使わない判断をした。RTC は速度の不連続を <span class="eff">{{seam_naive}} → {{seam_rtc}} m/s</span>（中央値、{{seam_pairs}} 組）に減らすが、P1 の復帰は <span class="neg">{{e4_x}} → {{e4_y}}</span>（{{e4_pairs}} 組、p {{e4_peq}}）、失敗注入なしの成功も {{nat_nr_x}} → {{nat_nr_y}}（{{nat_nr_pairs}} 組、p {{nat_nr_peq}}）に下がった。滑らかさより復帰を取り、RTC を使わない非同期実行（naive）にした（図 3）。</p>
+</div>
+
+<div class="box">
+<h3>3. 安全フィルタ <span class="tag">（評価観点: 実用性）</span></h3>
+<p><b>問題:</b> 方策の動きが目標以外の立方体や箱の壁に当たる。<b>入れたもの:</b> 手先の目標位置の変化量を、近くの障害物との距離の不等式を満たす最も近い値に置き換える二次計画（{{sf_detect_cm}} cm 以内の障害物、最小距離 {{sf_dmin_mm}} mm）。
+<b>効果:</b> 失敗注入なしで障害物に触れた試行が <span class="eff">{{e5_y}} → {{e5_x}}</span>（最終モデル、{{e5_pairs}} 組、p {{e5_peq}}）。<b>代償:</b> 隣の立方体への接近を止め続けて失敗した試行が <span class="neg">{{e5_blocked}} 本</span>あった（フィルタなしでは、その立方体に触れながら目標へ届いて成功した）。</p>
+</div>
+
+<div class="box">
+<h3>4. 目標位置のキュー <span class="tag">（評価観点: 技術力）</span></h3>
+<p><b>問題:</b> 指示文（「put the green cube in the box」）だけでは、VLA は色を見分けなかった。<b>入れたもの:</b> 俯瞰カメラの画像で指示した色の画素の重心を求め、机の面の位置 (x, y) を状態に足した。
+<b>効果:</b> 指示と目標位置のキューを一緒に差し替えたとき、指示した色に向かった割合は <span class="eff">{{e6_k}}/{{e6_n}}</span>（95% 信頼区間 {{e6_ci}}）。キューだけを差し替えるとキューの色に {{e6_cue}} 従うので、色の見分けはキューが担っている。</p>
+</div>
+
+<div class="box">
+<h3>5. LLM による分解・完了判定・再試行 <span class="tag">（評価観点: 創造性・実用性）</span></h3>
+<p><b>入れたもの:</b> Claude Haiku 4.5（温度 {{llm_temp}}、構造化出力）が、机の上と箱の中の色の検出結果と指示から、片付ける色の順を返す。出力は規則で検査し、不正なら実行せず人に尋ねる。サブタスクの完了は、俯瞰と手首のカメラで「箱の中に色が見え、指が開き、手が待機位置で {{judge_hold_s}} s 静止」で判定する。失敗したら手を待機位置へ戻して再試行する仕組みを入れた。
+<b>結果:</b> 日本語の試験文 {{llm_n}} 文のうち {{llm_k}} 文で期待どおりのサブタスク列になった。3 個の連続タスクで 3 個とも箱に入ったのは {{e7_k}}/{{e7_n}}。再試行で完了したサブタスクは増えたが、テスト用のシードでは 3 個とも入る数は増えなかった（待機位置へ戻す動きなし {{nr_k}}/{{nr_n}}、あり {{e7_k}}/{{e7_n}}。再試行で完了したサブタスクは {{nr_retry}} と {{e7_retry}}。結果を見た後に加えた比較）。</p>
+</div>
+
+<h2>結果</h2>
+<p class="small">最終モデル（R2）は、R1 に 2 回目の追加学習をしたモデル。2 回目は、R1 を動かして起きた失敗の場面から、スクリプト化したエキスパートが立て直す部分を記録した復帰デモ {{n_r2}} 本を足した。R2 にするかどうかは、テスト用とは別の検証用のシード範囲で事前に決めた。主要評価項目（P1 の復帰の比較など、表の上側）は結果を見る前に決め、副次評価項目は補正なしの参考として示す。テスト用のシード範囲は、失敗注入なし {{nat_layouts}} 配置 × 3 色＝{{nat_n}} 試行、失敗注入は種類ごとに {{p_n}} 試行。</p>
+<table>
+<caption>表 1　主な結果（テスト用のシード範囲）</caption><colgroup><col style="width:17%"><col style="width:43%"><col style="width:17%"><col style="width:13%"><col style="width:10%"></colgroup><thead><tr><th>項目</th><th>比べるもの</th><th>結果</th><th>95% 信頼区間</th><th>p</th></tr></thead>
+<tbody>
+<tr><td>失敗注入なしの成功</td><td>最終モデル（R2）</td><td class="r">{{e1_k}}/{{e1_n}}（{{e1_pct}}）</td><td>{{e1_ci}}</td><td>—</td></tr>
+<tr><td>P1 からの復帰</td><td>最終モデル（R2）、注入が有効だった試行</td><td class="r">{{e2_k}}/{{e2_n}}（{{e2_pct}}）</td><td>{{e2_ci}}</td><td>—</td></tr>
+<tr><td>復帰デモの効果（P1）</td><td>R1 対 N1、非同期実行（{{e3a_pairs}} 組）</td><td class="r">{{e3a_x}} 対 {{e3a_y}}</td><td>{{e3a_ci}}</td><td>{{e3a_holm}}<span class="tag">（Holm）</span></td></tr>
+<tr><td></td><td>R1 対 N1、同期実行（{{e3s_pairs}} 組）</td><td class="r">{{e3s_x}} 対 {{e3s_y}}</td><td>{{e3s_ci}}</td><td>{{e3s_holm}}<span class="tag">（Holm）</span></td></tr>
+<tr><td>RTC（P1）</td><td>RTC なし（naive）対 RTC、R1（{{e4_pairs}} 組）</td><td class="r">{{e4_x}} 対 {{e4_y}}</td><td>{{e4_ci}}</td><td>{{e4_p}}</td></tr>
+<tr><td>安全フィルタ</td><td>失敗注入なしで障害物に触れた試行、フィルタあり対なし（{{e5_pairs}} 組）</td><td class="r">{{e5_x_k}}/{{e5_pairs}} 対 {{e5_y_k}}/{{e5_pairs}}</td><td>{{e5_ci}}</td><td>{{e5_p}}</td></tr>
+<tr><td>2 回目の追加学習</td><td>R2 対 R1+（R1 を、1 回目のデータのまま R2 と同じステップ数だけ追加学習したモデル）、P1（{{e8_pairs}} 組）</td><td class="r">{{e8_x}} 対 {{e8_y}}</td><td>{{e8_ci}}</td><td>{{e8_p}}</td></tr>
+<tr><td><span class="tag">副次評価項目</span></td><td>同、P3（{{e8p3_pairs}} 組）</td><td class="r">{{e8p3_x}} 対 {{e8p3_y}}</td><td>{{e8p3_ci}}</td><td>{{e8p3_p}}</td></tr>
+<tr><td><span class="tag">副次評価項目</span></td><td>同、失敗注入なしの成功（{{e8nat_pairs}} 組）</td><td class="r">{{e8nat_x}} 対 {{e8nat_y}}</td><td>{{e8nat_ci}}</td><td>{{e8nat_p}}</td></tr>
+<tr><td>目標位置のキュー</td><td>指示した色に向かった対</td><td class="r">{{e6_k}}/{{e6_n}}</td><td>{{e6_ci}}</td><td>—</td></tr>
+<tr><td>LLM の分解</td><td>期待どおりのサブタスク列（事前に決めた合格ライン {{llm_crit}} 文以上）</td><td class="r">{{llm_k}}/{{llm_n}}</td><td>{{llm_ci}}</td><td>—</td></tr>
+<tr><td>完了判定</td><td>照合データ（シミュレーションの真の位置で正解を付けた場面）との一致（合格ライン {{judge_crit}}% 以上。届かず）</td><td class="r">{{judge_k}}/{{judge_n}}（{{judge_pct}}）</td><td>{{judge_ci}}</td><td>—</td></tr>
+<tr><td>3 個の連続タスク</td><td>「全部片付けて」で 3 個とも箱へ</td><td class="r">{{e7_k}}/{{e7_n}}</td><td>{{e7_ci}}</td><td>—</td></tr>
+</tbody>
+</table>
+<p class="small">比較の行の 95% 信頼区間は割合の差（ポイント。対のある割合の Newcombe の方法）、割合の 95% 信頼区間は Wilson の方法。副次評価項目は多重比較の補正なし。R1 と N1 の比較は、失敗注入の種類ごとに P2・P3 も測った（詳しい表は提出用リポジトリの README）。</p>
+
+<figure>
+<img src="fig2.png" style="width:100%">
+<figcaption><b>図 2　失敗注入なしで起きた掴み損ねからの復帰。</b>同じシード（テスト用）で、上は復帰デモありで学習したモデル（R1）、下はなしで学習したモデル（N1）。どちらも一度掴み損ね（{{fig2_miss}} s ごろ）、R1 は掴み直して {{fig2_succ}} s に箱へ入れ、N1 は立て直せなかった。動画のために同じ設定で回し直した映像（結果は本番と同じ。ビット一致ではない）。</figcaption>
+</figure>
+
+<div class="two3">
+<div>
+<h2>限界と今後</h2>
+<ul>
+<li><b>シミュレーションだけ。</b>実機では確かめていない。ただし、復帰デモの作り方（エキスパートの動きに失敗を注入し、立て直す部分を記録する）は、実機でもスクリプト化した動きと遠隔操作の組み合わせで同じように作れる見込み。</li>
+<li><b>落下からの復帰は弱い。</b>P2（運ぶ途中で落とす）の復帰は、どのモデル・実行の方式でも {{p2_max}} 以下だった。</li>
+<li><b>推論の高速化。</b>推論遅延そのものが復帰を大きく下げる。P1〜P3 を合わせた復帰は、推論の間に物理を止める同期実行で {{sync_p123_x}}、非同期実行で {{sync_p123_y}}（{{sync_p123_pairs}} 組、p {{sync_p123_peq}}）。推論を速くすることが、復帰を実機で生かすための次の課題。</li>
+<li><b>2 回目の追加学習の復帰デモ。</b>主要評価項目（P1 の復帰）では差を確かめられなかった（{{e8_x}} 対 {{e8_y}}、p {{e8_peq}}）。副次評価項目（補正なし）では P3 の復帰が {{e8p3_x}} 対 {{e8p3_y}} と高く、代わりに失敗注入なしの成功は {{e8nat_x}} 対 {{e8nat_y}} と下がった（p {{e8nat_peq}}）。復帰と普段の成功のトレードオフがあった可能性がある。</li>
+<li><b>完了判定の誤り。</b>3 個の連続タスクの失敗 {{e7_fail}} 本のうち {{e7_false}} 本は、立方体を別の立方体の上に乗せたのを「完了」と判定したもの。完了判定の照合データの一致率（{{judge_pct}}）は、この誤りを測っていない（照合データの負例にこの形がない）。照合データでの食い違い {{judge_dis}} 件はすべて見逃し（完了しているのに未完了と判定）で、影響は判定までの時間が延びること。</li>
+</ul>
+
+</div>
+<figure>
+<img src="fig3.png" style="width:100%">
+<figcaption><b>図 3　推論遅延と RTC のトレードオフ。</b>横はチャンク境界での速度の不連続（1 試行の平均の中央値と四分位範囲）、縦は P1 からの復帰（塗り、95% 信頼区間）と P1〜P3 の合計（白抜き）。R1、安全フィルタあり、テスト用。</figcaption>
+</figure>
+</div>
+
+<h2>使ったものと AI の使い方</h2>
+<table>
+<thead><tr><th>もの</th><th>出所</th><th>使用許諾</th></tr></thead>
+<tbody>
+<tr><td>SmolVLA（LIBERO で学習済みのモデルを出発点に追加学習）</td><td>Hugging Face の lerobot/smolvla_libero（元は SmolVLM2）</td><td>Apache-2.0</td></tr>
+<tr><td>LeRobot（学習と推論、RTC の実装）</td><td>github.com/huggingface/lerobot</td><td>Apache-2.0</td></tr>
+<tr><td>MuJoCo（物理シミュレーション）</td><td>github.com/google-deepmind/mujoco</td><td>Apache-2.0</td></tr>
+<tr><td>Franka Panda のモデル（MJCF）</td><td>MuJoCo Menagerie</td><td>Apache-2.0</td></tr>
+<tr><td>Claude Haiku 4.5（指示の分解）</td><td>Anthropic の API</td><td>Anthropic の利用規約</td></tr>
+</tbody>
+</table>
+<p><b>AI の使い方。</b>システムの中では、指示の分解に LLM（Claude Haiku 4.5）を、腕の制御に VLA（SmolVLA）を使っている。開発では、コードの作成・実験の実行・集計・この資料と動画の作成に Claude Code を使った。評価の設計（主要評価項目と基準）は結果を見る前に決め、数字は結果のファイルからスクリプトで表に入れている。</p>
+
+</body>
+</html>

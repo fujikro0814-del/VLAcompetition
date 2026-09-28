@@ -40,7 +40,7 @@ def sha256(p: pathlib.Path) -> str:
 def targets() -> list:
     out = []
     for d in list(CKPTS.values()) + TREES:
-        out += sorted(p for p in (ROOT / d).rglob("*") if p.is_file())
+        out += sorted(p for p in (ROOT / d).rglob("*") if p.is_file())     # 無いフォルダは rglob が空を返す
     return out
 
 
@@ -49,7 +49,9 @@ def run_level_targets() -> list:
     最初の一覧（stepJ_hashes.json）から漏れていたので、追補（stepJ_hashes_addendum.json）に入れる（0098）。"""
     out = []
     for c in CKPTS.values():
-        out += sorted(p for p in (ROOT / c).parents[1].iterdir() if p.is_file())
+        d = (ROOT / c).parents[1]
+        if d.is_dir():                                   # 置いていない実行は数えない（verify では「違い」として出る）
+            out += sorted(p for p in d.iterdir() if p.is_file())
     return out
 
 
@@ -100,10 +102,13 @@ def cmd_verify(a) -> None:
         ref = {**ref, **{k: {kk: v[kk] for kk in ("bytes", "sha256")}
                          for k, v in json.loads(add.read_text(encoding="utf-8"))["files"].items()}}
         now = {**now, **listing(run_level_targets())}
-    bad = sorted(k for k in set(ref) | set(now) if ref.get(k) != now.get(k))
-    print(json.dumps({"n_ref": len(ref), "n_now": len(now), "differ": bad[:50], "n_differ": len(bad)},
-                     ensure_ascii=False))
-    raise SystemExit(1 if bad else 0)
+    missing = sorted(k for k in ref if k not in now)
+    changed = sorted(k for k in ref if k in now and now[k] != ref[k])
+    extra = sorted(k for k in now if k not in ref)      # 凍結の後に増えたもの（検査が作るキャッシュなど）。参考として出す
+    print(json.dumps({"n_ref": len(ref), "n_present": len(ref) - len(missing), "n_changed": len(changed),
+                      "changed": changed[:50], "n_missing": len(missing), "missing": missing[:20],
+                      "n_extra": len(extra), "extra": extra[:10]}, ensure_ascii=False))
+    raise SystemExit(1 if changed or missing else 0)
 
 
 def main(argv=None) -> int:
