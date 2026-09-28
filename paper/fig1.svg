@@ -7,39 +7,39 @@
   <rect class="band-b" x="44" y="240" width="1022" height="210" rx="10"/>
   <rect class="band-c" x="44" y="470" width="1022" height="170" rx="10"/>
   <rect class="band-d" x="44" y="660" width="1022" height="125" rx="10"/>
-  <text x="60" y="34"><tspan class="lt a">上位層</tspan><tspan class="ls" dx="12">サブタスクごとに動く（数秒〜数十秒）</tspan></text>
+  <text x="60" y="34"><tspan class="lt a">上位層</tspan><tspan class="ls" dx="12">サブタスク単位で動作（数秒〜数十秒）</tspan></text>
   <text x="60" y="264"><tspan class="lt b">VLA 層</tspan><tspan class="ls" dx="12">行動は {{policy_hz}} Hz、推論は {{infer_period_s}} s ごと</tspan></text>
-  <text x="60" y="494"><tspan class="lt c">低位制御</tspan><tspan class="ls" dx="12">物理の刻みごと（{{phys_hz}} Hz）</tspan></text>
+  <text x="60" y="494"><tspan class="lt c">低位制御</tspan><tspan class="ls" dx="12">物理演算の時間刻みごと（{{phys_hz}} Hz）</tspan></text>
   <text x="60" y="684"><tspan class="lt d">シミュレーション</tspan><tspan class="ls" dx="12">MuJoCo</tspan></text>
 
   <rect class="bx a" x="60" y="48" width="170" height="52" rx="6"/>
-  <text class="bt" x="145" y="70" text-anchor="middle">人の指示（日本語）</text>
+  <text class="bt" x="145" y="70" text-anchor="middle">ユーザの指示（日本語）</text>
   <text class="t" x="145" y="90" text-anchor="middle">「全部片付けて」</text>
   <rect class="bx a" x="60" y="118" width="170" height="52" rx="6"/>
   <text class="bt" x="145" y="140" text-anchor="middle">色の検出</text>
-  <text class="t" x="145" y="160" text-anchor="middle">机の上・箱の中の色</text>
+  <text class="t" x="145" y="160" text-anchor="middle">テーブル上・箱内の色</text>
   <rect class="bx a" x="270" y="48" width="200" height="122" rx="6"/>
   <text class="bt" x="370" y="74" text-anchor="middle">LLM によるタスク分解</text>
   <text class="t" x="370" y="96" text-anchor="middle">Claude Haiku 4.5</text>
   <text class="t" x="370" y="115" text-anchor="middle">温度 {{llm_temp}}・構造化出力</text>
-  <text class="t" x="370" y="134" text-anchor="middle">出力を規則で検査</text>
-  <text class="tm" x="370" y="154" text-anchor="middle">不正なら実行せず人に尋ねる</text>
+  <text class="t" x="370" y="134" text-anchor="middle">出力をルールで検査</text>
+  <text class="tm" x="370" y="154" text-anchor="middle">不正な出力は実行せず確認を求める</text>
   <rect class="bx a" x="510" y="48" width="170" height="52" rx="6"/>
   <text class="bt" x="595" y="70" text-anchor="middle">サブタスク列</text>
   <text class="t" x="595" y="90" text-anchor="middle">赤 → 緑 → 青</text>
   <rect class="bx a" x="510" y="118" width="170" height="82" rx="6"/>
   <text class="bt" x="595" y="138" text-anchor="middle">完了判定</text>
-  <text class="t" x="595" y="156" text-anchor="middle">箱の中に色が見える</text>
-  <text class="t" x="595" y="173" text-anchor="middle">指が開いている</text>
+  <text class="t" x="595" y="156" text-anchor="middle">箱内に当該色を検出</text>
+  <text class="t" x="595" y="173" text-anchor="middle">グリッパが開</text>
   <text class="t" x="595" y="190" text-anchor="middle">待機位置で {{judge_hold_s}} s 静止</text>
   <rect class="bx a" x="720" y="48" width="330" height="160" rx="6"/>
   <text class="bt" x="736" y="72">実行器</text>
   <text class="t" x="736" y="93">サブタスクごとに:</text>
-  <text class="t" x="736" y="112">・VLA への指示文と目標の色を切り替える</text>
-  <text class="t" x="736" y="131">・前のアクションチャンクを捨てる</text>
-  <text class="t" x="736" y="150">・安全フィルタの障害物を作り直す</text>
-  <text class="t" x="736" y="172">{{step_timeout}} s で終わらなければ手を待機位置へ戻して再試行</text>
-  <text class="tm" x="736" y="192">置いた後に手が戻らなければ待機位置へ戻す</text>
+  <text class="t" x="736" y="112">・VLA への指示文と目標色を切り替え</text>
+  <text class="t" x="736" y="131">・直前のアクションチャンクを破棄</text>
+  <text class="t" x="736" y="150">・安全フィルタの障害物を再構成</text>
+  <text class="t" x="736" y="172">{{step_timeout}} s で未完了なら待機位置へ戻して再試行</text>
+  <text class="tm" x="736" y="192">解放後に待機位置へ戻らない場合も待機位置へ戻す</text>
   <line class="cmd" x1="230" y1="74" x2="268" y2="74" marker-end="url(#m1c)"/>
   <line class="cmd" x1="230" y1="144" x2="268" y2="144" marker-end="url(#m1c)"/>
   <line class="cmd" x1="470" y1="74" x2="508" y2="74" marker-end="url(#m1c)"/>
@@ -47,47 +47,47 @@
   <line class="cmd" x1="680" y1="159" x2="718" y2="159" marker-end="url(#m1c)"/>
   <text class="lab" x="700" y="151" text-anchor="middle">完了</text>
   <polyline class="cmd" points="800,208 800,230 370,230 370,278" marker-end="url(#m1c)"/>
-  <text class="lab" x="585" y="250" text-anchor="middle">指示文「put the green cube in the box」と目標の色</text>
+  <text class="lab" x="585" y="250" text-anchor="middle">指示文「put the green cube in the box」と目標色</text>
 
   <rect class="bx b" x="60" y="290" width="170" height="84" rx="6"/>
   <text class="bt" x="145" y="314" text-anchor="middle">目標位置のキュー</text>
-  <text class="t" x="145" y="335" text-anchor="middle">俯瞰画像の色の重心</text>
-  <text class="t" x="145" y="354" text-anchor="middle">→ 机の面の (x, y)</text>
+  <text class="t" x="145" y="335" text-anchor="middle">俯瞰画像の色領域の重心</text>
+  <text class="t" x="145" y="354" text-anchor="middle">→ テーブル面上の (x, y)</text>
   <rect class="bx b" x="270" y="280" width="200" height="150" rx="6"/>
   <text class="bt" x="370" y="304" text-anchor="middle">VLA 方策（SmolVLA）</text>
-  <text class="t" x="370" y="325" text-anchor="middle">通常デモと復帰デモで</text>
+  <text class="t" x="370" y="325" text-anchor="middle">成功デモと復帰デモで</text>
   <text class="t" x="370" y="343" text-anchor="middle">追加学習</text>
-  <text class="t" x="370" y="367" text-anchor="middle">入力: 俯瞰・手首画像、</text>
+  <text class="t" x="370" y="367" text-anchor="middle">入力: 俯瞰・手首カメラ画像、</text>
   <text class="t" x="370" y="385" text-anchor="middle">状態 {{state_dim}} 次元、指示文</text>
   <text class="tm" x="370" y="410" text-anchor="middle">Flow Matching で行動を生成</text>
   <rect class="bx b" x="510" y="312" width="170" height="86" rx="6"/>
   <text class="bt" x="595" y="338" text-anchor="middle">アクションチャンク</text>
   <text class="t" x="595" y="359" text-anchor="middle">{{chunk}} 行 × {{act_dim}} 次元</text>
-  <text class="tm" x="595" y="379" text-anchor="middle">{{chunk_s}} s 分の行動</text>
+  <text class="tm" x="595" y="379" text-anchor="middle">{{chunk_s}} s 分の行動系列</text>
   <rect class="bx b" x="720" y="280" width="330" height="150" rx="6"/>
   <text class="bt" x="736" y="304">非同期実行</text>
-  <text class="t" x="736" y="326">{{infer_period_s}} s ごとに推論を始める</text>
-  <text class="t" x="736" y="346">結果は {{delay_s}} s 後に有効（推論遅延 {{delay_d}} ステップ）</text>
-  <text class="t" x="736" y="366">その間は前のチャンクを続ける</text>
-  <text class="t" x="736" y="386">有効な行を {{policy_hz}} Hz で 1 行ずつ出す</text>
-  <text class="tm" x="736" y="410">境界を滑らかにする RTC は使わない</text>
+  <text class="t" x="736" y="326">{{infer_period_s}} s ごとに推論を開始</text>
+  <text class="t" x="736" y="346">{{delay_s}} s 後に結果を反映（推論遅延 {{delay_d}} ステップ）</text>
+  <text class="t" x="736" y="366">その間は直前のチャンクを継続</text>
+  <text class="t" x="736" y="386">{{policy_hz}} Hz で 1 行ずつ出力</text>
+  <text class="tm" x="736" y="410">チャンク境界を平滑化する RTC は不使用</text>
   <line class="cmd" x1="230" y1="332" x2="268" y2="332" marker-end="url(#m1c)"/>
   <line class="cmd" x1="470" y1="355" x2="508" y2="355" marker-end="url(#m1c)"/>
   <line class="cmd" x1="680" y1="355" x2="718" y2="355" marker-end="url(#m1c)"/>
   <line class="cmd" x1="885" y1="430" x2="885" y2="513" marker-end="url(#m1c)"/>
-  <text class="lab" x="895" y="462">{{policy_hz}} Hz: 手先の移動量 Δx</text>
-  <text class="lab" x="895" y="479">と指の開閉（姿勢は固定）</text>
+  <text class="lab" x="895" y="462">{{policy_hz}} Hz: エンドエフェクタの変位 Δx</text>
+  <text class="lab" x="895" y="479">とグリッパの開閉（姿勢は固定）</text>
 
   <rect class="bx c" x="720" y="515" width="330" height="110" rx="6"/>
   <text class="bt" x="736" y="539">安全フィルタ（二次計画）</text>
-  <text class="t" x="736" y="561">障害物に近づく向きの Δx を削る</text>
-  <text class="t" x="736" y="581">障害物: 目標以外の立方体・箱の壁</text>
-  <text class="t" x="736" y="601">距離 {{sf_detect_cm}} cm 以内のものだけ対象</text>
-  <text class="tm" x="736" y="619">方策が指令を出している間だけ働く</text>
+  <text class="t" x="736" y="561">障害物へ接近する方向の Δx を抑制</text>
+  <text class="t" x="736" y="581">障害物: 目標以外の立方体・箱の壁面</text>
+  <text class="t" x="736" y="601">距離 {{sf_detect_cm}} cm 以内のみを対象</text>
+  <text class="tm" x="736" y="619">方策の指令中のみ作用</text>
   <rect class="bx c" x="510" y="530" width="170" height="80" rx="6"/>
   <text class="bt" x="595" y="558" text-anchor="middle">参照位置の積分</text>
-  <text class="t" x="595" y="580" text-anchor="middle">手先の向きは</text>
-  <text class="t" x="595" y="598" text-anchor="middle">真下に固定</text>
+  <text class="t" x="595" y="580" text-anchor="middle">エンドエフェクタの</text>
+  <text class="t" x="595" y="598" text-anchor="middle">姿勢は鉛直下向きに固定</text>
   <rect class="bx c" x="270" y="530" width="200" height="80" rx="6"/>
   <text class="bt" x="370" y="558" text-anchor="middle">逆運動学</text>
   <text class="t" x="370" y="580" text-anchor="middle">減衰最小二乗法</text>
@@ -100,16 +100,16 @@
   <rect class="bx d" x="60" y="698" width="170" height="72" rx="6"/>
   <text class="bt" x="145" y="721" text-anchor="middle">センサ</text>
   <text class="t" x="145" y="741" text-anchor="middle">俯瞰・手首カメラ {{cam_fps}} fps</text>
-  <text class="t" x="145" y="759" text-anchor="middle">手先・指・関節の状態</text>
+  <text class="t" x="145" y="759" text-anchor="middle">エンドエフェクタ・グリッパ・関節の状態</text>
   <rect class="bx d" x="270" y="698" width="780" height="72" rx="6"/>
   <text class="bt" x="660" y="727" text-anchor="middle">Franka Panda（7 軸）と 3 色の立方体・箱</text>
-  <text class="t" x="660" y="751" text-anchor="middle">物理の刻み {{phys_ms}} ms（{{phys_hz}} Hz）</text>
+  <text class="t" x="660" y="751" text-anchor="middle">物理演算の時間刻み {{phys_ms}} ms（{{phys_hz}} Hz）</text>
   <line class="obs" x1="270" y1="734" x2="232" y2="734" marker-end="url(#m1o)"/>
   <polyline class="obs" points="60,734 30,734 30,212 595,212 595,202" marker-end="url(#m1o)"/>
   <polyline class="obs" points="145,212 145,172" marker-end="url(#m1o)"/>
   <polyline class="obs" points="30,332 58,332" marker-end="url(#m1o)"/>
   <polyline class="obs" points="30,440 370,440 370,432" marker-end="url(#m1o)"/>
-  <text class="lab-obs" x="300" y="206" text-anchor="middle">画像・手の状態</text>
+  <text class="lab-obs" x="300" y="206" text-anchor="middle">画像・ロボットの状態</text>
   <text class="lab-obs" x="80" y="434">画像 2 枚・状態 {{state_base}} 次元</text>
   <text class="lab-obs" x="20" y="560" text-anchor="middle" transform="rotate(-90 20 560)">観測</text>
 </svg>

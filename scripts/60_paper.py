@@ -182,7 +182,7 @@ def fig2(v) -> None:
     from PIL import Image, ImageDraw, ImageFont
     font = ImageFont.truetype(str(FONT), 26)
     rows = []
-    for clip, label in (("nat_110001_R1", "R1（復帰デモ\nあり）"), ("nat_110001_N1", "N1（復帰デモ\nなし）")):
+    for clip, label in (("nat_110001_R1", "R1\n（復帰デモ\nあり）"), ("nat_110001_N1", "N1\n（復帰デモ\nなし）")):
         m = _j(OUT / "demo" / clip / "meta.json")
         miss = [e["t"] for e in m["events"] if e["kind"] == "grasp_miss"][0]
         t_end = m["t_end"]
@@ -233,7 +233,7 @@ def fig3(v) -> None:
                     capsize=3, label=f"{lab}  P1 {p1['recovered']}/{p1['established']}")
         ax.plot(q[1], rec / len(est), "o", mfc="none", color=col, ms=8)
     ax.set_xlabel("チャンク境界での速度の不連続 [m/s]")
-    ax.set_ylabel("復帰の割合（塗り: P1、白抜き: P1〜P3）")
+    ax.set_ylabel("復帰成功率（塗り: P1、白抜き: P1〜P3）")
     ax.set_ylim(-0.03, 0.75)
     ax.legend(fontsize=7.5, loc="upper left")
     ax.grid(alpha=0.3)

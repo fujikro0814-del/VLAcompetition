@@ -31,8 +31,8 @@ BG, INK, MUTED = (246, 247, 244), (29, 33, 38), (91, 99, 109)
 C_A, C_B, C_C = (45, 95, 139), (31, 107, 92), (149, 86, 25)
 MODEL_NAME = {"R1": "復帰デモありで学習したモデル（R1）", "N1": "復帰デモなしで学習したモデル（N1）", "R2": "最終モデル（R2）"}
 MODE_NAME = {"naive": "非同期実行", "sync": "同期実行", "rtc": "非同期実行＋RTC"}
-EVENT_NAME = {"grasp_miss": "掴み損ね", "fire": "失敗注入（掴む位置をずらす）", "success": "箱に入った（成功）"}
-RERUN_NOTE = "同じ設定で回し直した映像（結果は評価の本番と同じ。ビット一致ではない）"
+EVENT_NAME = {"grasp_miss": "把持失敗", "fire": "失敗注入（把持位置のオフセット）", "success": "収納に成功"}
+RERUN_NOTE = "同一設定で再実行した映像（結果は本評価と同一。ビット単位では一致しない）"
 TEXTS = []                                     # 画面に出した文字（check で語を調べる）
 
 
@@ -133,7 +133,7 @@ def draw_speed(d, clip, t, box, window=8.0):
     if sel.sum() > 1:
         pts = [(x + (a - t0) / window * w, y + h - 6 - min(b, vmax) / vmax * (h - 34)) for a, b in zip(tt[sel], v[sel])]
         d.line(pts, fill=C_A, width=3)
-    text(d, (x + 10, y + 6), "手先の速さ（縦線はチャンク境界）", 20, MUTED)
+    text(d, (x + 10, y + 6), "エンドエフェクタ速度（縦線はチャンク境界）", 20, MUTED)
 
 
 def box_xyxy(b):
@@ -173,7 +173,7 @@ def draw_events(d, clip, t, xy, size=28):
 
 def legend(d, x, y):
     d.line([(x, y + 14), (x + 40, y + 14)], fill=(230, 126, 34), width=5)
-    text(d, (x + 50, y), "推論遅延の間に過ぎる部分", 20, MUTED)
+    text(d, (x + 50, y), "推論遅延中に実行される部分", 20, MUTED)
     d.line([(x, y + 50), (x + 40, y + 50)], fill=(0, 170, 200), width=4)
     text(d, (x + 50, y + 36), "アクションチャンクの予測経路", 20, MUTED)
 
@@ -254,10 +254,10 @@ def task_scene(cid, title, speed, v):
         im = Image.new("RGB", (W, H), BG)
         draw_video(im, clip, t, (0, 86, 1440, 810), path=False)
         d = ImageDraw.Draw(im)
-        header(d, title, speed, RERUN_NOTE + "。推論の間は物理を止めている（推論遅延はステップ数で模擬）")
+        header(d, title, speed, RERUN_NOTE + "。推論中は物理演算を停止（推論遅延はステップ数で模擬）")
         text(d, (1470, 110), MODEL_NAME["R2"], 26, INK, True)
         text(d, (1470, 160), f"指示「{tk['text']}」", 30, INK, True)
-        text(d, (1470, 210), "LLM（Claude Haiku 4.5）の分解:", 22, MUTED)
+        text(d, (1470, 210), "LLM（Claude Haiku 4.5）によるタスク分解:", 22, MUTED)
         text(d, (1470, 244), " → ".join(plan), 32, C_A, True)
         y = 310
         for s in tk["steps"]:
@@ -266,14 +266,14 @@ def task_scene(cid, title, speed, v):
             active = s["attempts"][0]["t_begin"] <= t and not done
             mark = "✓" if done else ("▶" if active else "・")
             col = C_B if done else (INK if active else MUTED)
-            text(d, (1470, y), f"{mark} {names[s['color']]}を箱へ", 32, col, True)
+            text(d, (1470, y), f"{mark} {names[s['color']]}を箱へ収納", 32, col, True)
             y += 50
             if len(s["attempts"]) > 1 and s["attempts"][1]["t_begin"] <= t:
                 text(d, (1510, y), f"再試行（{s['attempts'][1]['t_begin']:.0f} s〜）", 24, C_C)
                 y += 38
         for r in tk["returns"]:
             if r["t_begin"] <= t <= r["t_end"] + 1.5:
-                text(d, (1470, 620), "手を待機位置へ戻して再試行", 26, C_C, True)
+                text(d, (1470, 620), "待機位置へ戻して再試行", 26, C_C, True)
         text(d, (1470, 680), f"時刻 {t:5.1f} s", 26, INK)
         draw_speed(d, clip, t, (40, 910, 1380, 120))
         return im
@@ -301,18 +301,18 @@ def fig1_image():
 
 def image_scene(img, title, lines, dur):
     im0 = img.copy()
-    im0.thumbnail((1500, 880))
+    im0.thumbnail((1600, H - 100 - 42 * len(lines) - 50))      # 説明文が図に重ならない大きさ
 
     def f(j):
         im = Image.new("RGB", (W, H), BG)
-        im.paste(im0, ((W - im0.width) // 2, 100))
+        im.paste(im0, ((W - im0.width) // 2, 96))
         d = ImageDraw.Draw(im)
         header(d, title)
         k = min(len(lines), 1 + j // int(dur * FPS / max(1, len(lines))))
-        y = H - 40 - 44 * len(lines)
+        y = 96 + im0.height + 20
         for s in lines[:k]:
-            text(d, (W // 2, y), s, 30, INK, False, "ma")
-            y += 44
+            text(d, (W // 2, y), s, 28, INK, False, "ma")
+            y += 42
         return im
     return int(dur * FPS), f
 
@@ -320,33 +320,33 @@ def image_scene(img, title, lines, dur):
 def scenes(v):
     fig1 = fig1_image()
     return [
-        card([("Franka Panda（MuJoCo のシミュレーション）が、日本語の指示で 3 色の立方体を片付ける", 34, MUTED),
-              ("掴み損ねなどの失敗から復帰する動きを、人手の収録なしで作った復帰デモで学習した", 34, INK)], 10,
-             "失敗から復帰する VLA"),
-        single("nat_110001_N1", "問題: 成功例だけで学習すると、掴み損ねた後に立て直せない", 3.0, 26.0, 1.5),
-        image_scene(fig1, "仕組み: 三層の制御ループ",
-                    ["上位層: LLM が指示をサブタスクに分け、カメラで完了を判定する",
-                     f"VLA 層: SmolVLA が {v['policy_hz']} Hz でアクションチャンク（{v['chunk_s']} s 分）を生成し、推論遅延 {v['delay_s']} s を見込んで非同期に実行",
-                     "低位制御: 安全フィルタで障害物への接近を削り、逆運動学で関節を動かす",
-                     f"学習: 成功例 {v['n_normal']} 本に、失敗を注入してから立て直す復帰デモ {v['n_recovery']} 本を自動生成して足した"], 32),
-        task_scene("task_115007", "実演: 日本語の指示 → LLM の分解 → 3 個を片付ける", 3.0, v),
-        pair(["nat_110001_R1", "nat_110001_N1"], [None, None], "対比: 同じシード・失敗注入なしで起きた掴み損ね", 3.0, 17.5, 1.0,
-             top="左は掴み直して箱へ入れ、右は立て直せない"),
-        pair(["p1_111004_R1", "p1_111004_N1"], [None, None], "対比: 失敗を人為的に起こした場面（失敗注入 P1）", 2.0, 17.0, 1.5,
-             top="閉じる直前に手先を横へずらして掴み損ねさせる（失敗注入）"),
-        pair(["p1_111004_R1", "p1_111004_R1_rtc"], [None, None], "RTC のトレードオフ: 滑らかになるが復帰しなくなる（失敗注入 P1）", 2.0, 17.0, 1.5,
-             top=f"チャンク境界での速度の不連続 {v['seam_naive']} → {v['seam_rtc']} m/s、P1 の復帰 {v['e4_x']} → {v['e4_y']}"),
-        card([(f"復帰デモの効果（P1 からの復帰）: 非同期実行 {v['e3a_x']} 対 {v['e3a_y']}（{v['e3a_pairs']} 対）、同期実行 {v['e3s_x']} 対 {v['e3s_y']}（{v['e3s_pairs']} 対）", 32, INK),
-              (f"失敗注入なしの成功: 最終モデル {v['e1_k']}/{v['e1_n']}（{v['e1_pct']}）", 32, INK),
-              (f"安全フィルタ: 失敗注入なしで障害物に触れた試行 {v['e5_y']} → {v['e5_x']}（代償: 止め続けて失敗 {v['e5_blocked']} 本）", 32, INK),
-              (f"目標位置のキュー: 指示した色に向かった {v['e6_k']}/{v['e6_n']}　LLM の分解: {v['llm_k']}/{v['llm_n']} 文", 32, INK),
-              (f"3 個の連続タスク: {v['e7_k']}/{v['e7_n']}（再試行で完了したサブタスク {v['e7_retry']}）", 32, INK),
-              ("どれもテスト用のシード範囲の値。R1＝復帰デモありで学習、N1＝なしで学習", 26, MUTED)], 22, "主な数字"),
-        card([("シミュレーションだけ（実機では未検証。復帰デモの作り方は実機でも使える見込み）", 32, INK),
-              (f"落下（P2）からの復帰は弱い（どの条件でも {v['p2_max']} 以下）。推論の高速化が次の課題", 32, INK),
-              (f"2 段目の復帰デモ（R2）は、R1+ に対して P1 の復帰の差を確かめられなかった（{v['e8_x']} 対 {v['e8_y']}）", 32, INK),
-              (f"3 個の連続タスクの失敗 {v['e7_fail']} 本のうち {v['e7_false']} 本は、立方体の上に乗せたのを「完了」と判定したもの", 32, INK)], 18,
-             "限界と今後"),
+        card([("MuJoCo 上の Franka Panda が、日本語による指示に従い 3 色の立方体を箱へ収納する", 34, MUTED),
+              ("自動生成した復帰デモを用いた追加学習により、人手によるデモ収集なしで把持失敗などからの復帰を実現", 34, INK)], 10,
+             "失敗からの復帰を学習する VLA"),
+        single("nat_110001_N1", "課題: 成功デモのみで学習した方策は把持失敗から回復しない", 3.0, 26.0, 1.5),
+        image_scene(fig1, "システム構成: 三層の制御ループ",
+                    ["上位層: LLM が指示をサブタスク列に分解し、カメラ画像から完了を判定する",
+                     f"VLA 層: SmolVLA が {v['policy_hz']} Hz のアクションチャンク（{v['chunk_s']} s 分）を生成し、推論遅延 {v['delay_s']} s を考慮して非同期に実行する",
+                     "低位制御: 安全フィルタで障害物への接近を抑制し、逆運動学により関節目標を求める",
+                     f"学習: 成功デモ {v['n_normal']} 本に、失敗注入後の回復過程を記録した復帰デモ {v['n_recovery']} 本を自動生成して追加"], 32),
+        task_scene("task_115007", "デモンストレーション: 日本語による指示 → LLM によるタスク分解 → 3 個の収納", 3.0, v),
+        pair(["nat_110001_R1", "nat_110001_N1"], [None, None], "比較: 同一シード・失敗注入なしで生じた把持失敗", 3.0, 17.5, 1.0,
+             top="左は再把持して収納に成功し、右は回復しない"),
+        pair(["p1_111004_R1", "p1_111004_N1"], [None, None], "比較: 人為的に失敗を発生させた場面（失敗注入 P1）", 2.0, 17.0, 1.5,
+             top="把持の直前にエンドエフェクタを水平方向へ偏位させ、把持失敗を発生させる"),
+        pair(["p1_111004_R1", "p1_111004_R1_rtc"], [None, None], "RTC のトレードオフ: 動作は平滑化されるが復帰しなくなる（失敗注入 P1）", 2.0, 17.0, 1.5,
+             top=f"チャンク境界での速度の不連続 {v['seam_naive']} → {v['seam_rtc']} m/s、P1 からの復帰成功率 {v['e4_x']} → {v['e4_y']}"),
+        card([(f"復帰デモの効果（P1 からの復帰成功率、R1 と N1）: 非同期実行 {v['e3a_x']}、{v['e3a_y']}（{v['e3a_pairs']} 対）、同期実行 {v['e3s_x']}、{v['e3s_y']}（{v['e3s_pairs']} 対）", 32, INK),
+              (f"失敗注入なしの成功率: 最終モデル {v['e1_k']}/{v['e1_n']}（{v['e1_pct']}）", 32, INK),
+              (f"安全フィルタ: 失敗注入なしで障害物に接触した試行 {v['e5_y']} → {v['e5_x']}（副作用: 接近の抑制による失敗 {v['e5_blocked']} 件）", 32, INK),
+              (f"目標位置のキュー: 指示した色へ向かった割合 {v['e6_k']}/{v['e6_n']}　LLM によるタスク分解: {v['llm_k']}/{v['llm_n']} 文", 32, INK),
+              (f"3 個の連続タスク: {v['e7_k']}/{v['e7_n']}（再試行により完了したサブタスク {v['e7_retry']} 件）", 32, INK),
+              ("いずれもテスト用のシード範囲の値。R1: 復帰デモありで学習、N1: 復帰デモなしで学習", 26, MUTED)], 22, "主な結果"),
+        card([("シミュレーションに限定した評価（実機では未検証。復帰デモの生成手順は実機にも適用可能と考えられる）", 32, INK),
+              (f"落下（P2）からの復帰成功率は低い（いずれの条件でも {v['p2_max']} 以下）。推論の高速化が今後の課題", 32, INK),
+              (f"2 回目の追加学習（R2）は、R1+ に対して P1 からの復帰で有意な差を確認できなかった（{v['e8_x']}、{v['e8_y']}）", 32, INK),
+              (f"3 個の連続タスクの失敗 {v['e7_fail']} 件のうち {v['e7_false']} 件は、立方体が他の立方体上に載った状態を「完了」と誤判定したもの", 32, INK)], 18,
+             "限界と今後の課題"),
     ]
 
 
