@@ -60,8 +60,12 @@ def cmd_write(a) -> None:
            "written": time.strftime("%Y-%m-%d %H:%M:%S"), "seconds": round(time.time() - t0, 1)}
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     (OUT_DIR / "stepJ_hashes.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
-    pip = subprocess.run([sys.executable, "-m", "pip", "freeze"], capture_output=True, text=True).stdout
-    (OUT_DIR / "pip_freeze.txt").write_text(pip, encoding="utf-8", newline="\n")
+    # この .venv には pip が入っていないので、入っている部品の名前と版を importlib.metadata から書く（pip freeze と同じ形）
+    import importlib.metadata as md
+    pkgs = sorted({f"{d.metadata['Name']}=={d.version}" for d in md.distributions() if d.metadata["Name"]},
+                  key=str.lower)
+    head_line = f"# python {sys.version.split()[0]}（{len(pkgs)} 個、importlib.metadata）\n"
+    (OUT_DIR / "pip_freeze.txt").write_text(head_line + "\n".join(pkgs) + "\n", encoding="utf-8", newline="\n")
     print(json.dumps({k: v for k, v in res.items() if k != "files"}, ensure_ascii=False))
 
 
