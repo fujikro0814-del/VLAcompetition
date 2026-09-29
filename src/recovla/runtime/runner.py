@@ -8,7 +8,8 @@
 - 推論: 行動の区切り（0.1 s）に観測を組み、io.compute で計算する。結果は「始めた時刻＋計算の時間」から使える
   （計算の時間は評価の枠が実測の分布から試行のシードで引く。前処理を含む）。使える前に使うと Pending が止める
 - naive・rtc: 前の推論を始めてから s 行ごとに次の推論を始め、その間は前の塊を実行し続ける。新しい塊は、使えるように
-  なった後の最初の区切りから、観測から数えた行の位置で使う。塊がない間（最初・切り替えの直後）は腕をその場で保持する
+  なった後の最初の区切りから、観測から数えた行の位置で使う。塊がない間（最初・切り替えの直後）は腕をその場で保持し、
+  そのとき届いた塊は 0 行目から使う（保持していた間、腕は観測の時点から動いていないため）
 - sync（止まって推論する）: 推論の間は腕をその場で保持し（世界は進む）、使えるようになった区切りから s 行を実行して、また保持して推論する
 - rtc: 方策に渡す inference_delay は実行系が見積もった値（直前の推論で実際にかかった行の数。最初は configs の d）。
   実際に使う行の位置は、実際に届いた時刻で決まる（未来の計算時間は実行系には分からないため）
@@ -23,6 +24,17 @@ from recovla.runtime.motion import Motion
 
 ACTION_DT = 0.1
 STEPS_PER_ACTION = 50
+
+
+def enable_rtc_for(policy, horizon: int, schedule: str, max_guidance_weight: float) -> dict:
+    """RTC を入れる（旧版の policy.runner.enable_rtc と同じ設定）。"""
+    from recovla.policy.runner import enable_rtc
+    return enable_rtc(policy.policy, horizon, schedule, max_guidance_weight)
+
+
+def disable_rtc_for(policy) -> None:
+    from recovla.policy.runner import disable_rtc
+    disable_rtc(policy.policy)
 
 
 class PolicyRuntime:
@@ -74,7 +86,9 @@ class PolicyRuntime:
             p = self.pending
             post = p["fut"].result(t)
             lag = k - p["k_obs"]
-            o0 = 0 if self.mode == "sync" else lag
+            # 観測から今までに腕が前の塊を実行していたなら、その分だけ先の行から使う。保持していた（塊がなかった）なら、
+            # 腕は観測の時点から動いていないので 0 行目から使う（最初の推論・切り替えの直後・同期）
+            o0 = lag if (self.mode != "sync" and p["was_moving"]) else 0
             self.active = {"i": p["i"], "post": post, "raw": p["raw"](), "k0": k, "o0": o0, "rows_done": 0}
             self.d_est = max(1, lag)
             self.log_inf[-1].update({"k_act": k, "t_act": t, "offset": o0})
@@ -108,6 +122,8 @@ class PolicyRuntime:
 
     def _start_inference(self, k: int, t: float) -> None:
         sensor = self.io.sense(cameras=True)
+        if not {"overhead", "wrist"} <= set(sensor.cameras):
+            return                          # まだこまが届いていない（試行の始め）。保持して次の区切りでやり直す
         i = self.i
         self.i += 1
         rtc = None
@@ -127,7 +143,8 @@ class PolicyRuntime:
             return out
 
         fut = self.io.compute("policy_rtc" if self.mode == "rtc" else "policy", work)
-        self.pending = {"i": i, "k_obs": k, "t_obs": t, "fut": fut, "raw": lambda: holder["raw"]}
+        self.pending = {"i": i, "k_obs": k, "t_obs": t, "fut": fut, "raw": lambda: holder["raw"],
+                        "was_moving": self.active is not None}
         self.next_infer_k = k + self.s
         self.log_inf.append({"i": i, "k_obs": k, "t_obs": t, "t_ready": fut.t_ready, "latency_s": fut.latency,
                              "wall_s": fut.wall_s, "rtc_delay": None if rtc is None else rtc["inference_delay"],

@@ -27,8 +27,9 @@ SUBSTEPS = 2                               # 500 Hz の 1 手あたりの 1 kHz 
 
 
 class Motion:
-    def __init__(self, setup, limiter_enabled: bool = True, margin: float = 0.99):
+    def __init__(self, setup, limiter_enabled: bool = True, margin: float = 0.99, ik_on: str = "commanded"):
         self.setup = setup
+        self.ik_on = ik_on                         # "measured" は診断だけ（旧版と同じく測った関節角で IK を解く）
         self.model = robot_model.load(setup.robot_xml)
         self.data = mujoco.MjData(self.model)
         self.dt = float(self.model.opt.timestep)
@@ -112,7 +113,7 @@ class Motion:
         IK は指令の姿勢の上で解く（実機の関節の位置の制御は 1 kHz で指令をよく追うので、関節の位置の指令の経路では普通の
         作り）。測った関節角で解くと、制限層の加速度の上限の遅れがサーボの遅れと重なって振動した（学習用のシード 59012、
         待機位置から始める配置）。測った関節角は、指令が先へ行き過ぎないための綱（leash、流用元と同じ 0.10 rad）にだけ使う。"""
-        self._load_state(self.limiter.q)
+        self._load_state(self.limiter.q if self.ik_on == "commanded" else joints.q)
         self.controller.update(self.integrator)                    # 追従器 → IK（q_des を data.ctrl に書く）
         leash = self.controller.q_des_leash
         q_ik = np.clip(self.data.ctrl[self.arm_act], joints.q - leash, joints.q + leash)
