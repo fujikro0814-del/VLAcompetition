@@ -19,6 +19,8 @@ actuation:
   finger_pad_solref: [-30000, -600]
   # 握る力を 0.2 s かけて上げる（0.05 s では、握った瞬間の接触の揺れで腕のサーボの力の変化が大きくなった）
   hand: {kv: 10000.0, k_pos: 20.0, move_force: 10.0, ramp_s: 0.2, still_speed: 0.005}
+  # sensor-v1.1（0117）: grasp は開き幅 0 の手前 speed/k_pos（4 mm）で減速し、閉じ切ったら指令の速さを 0 にする（harness/hand.py）。
+  # sensor-v1 では空を掴むと指の腹どうしを握る力で押し合わせ、接触が付いたり離れたりして指が震えた。値は変えていない
 
 sensor:
   frame_hz: 30                  # 【公称】深度・色とも 30 fps

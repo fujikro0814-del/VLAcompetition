@@ -11,7 +11,10 @@
 - グリッパの作動器を、腱 split（長さ = w/2）の**速度のサーボ**（力 = kv·(指令の速さ − 腱の速さ)、力の上限つき）に替える。
   速度の項は implicitfast の積分で陰に扱われるので、kv を大きくしても安定する。指の速さは指令の速さで、力は上限で抑えられる
   - move: 指令の速さ = clip(k_pos·(目標 − w), ±speed)。力の上限は指 1 本 move_force
-  - grasp: 指令の速さ = −speed（閉じ続ける）。力の上限を move_force から force へ ramp_s で上げる（物に当たれば force で握る）。
+  - grasp: 指令の速さ = −min(speed, k_pos·w)（閉じ続ける。開き幅 0 の手前 speed/k_pos＝4 mm で減速し、閉じ切ったら 0）。
+    力の上限を move_force から force へ ramp_s で上げる（物に当たれば force で握る。立方体の幅では指令は −speed のまま）。
+    sensor-v1 は −speed のままで、空を掴むと左右の指の腹を force で押し合わせ、接触が付いたり離れたりして指が震えた
+    （開き幅 −0.9〜0 mm。実機のハンドは閉じ切って止まる）。sensor-v1.1 で直した（0117）
     把持の判定（is_grasped）は、開き幅が [width − eps_inner, width + eps_outer] に入り、指がほぼ止まっていること
     （libfranka の grasp の判定と同じ窓）
 - 上限（目標書 G3）: 開き幅の速さ 0.1 m/s（指 1 本 50 mm/s）、指 1 本の力 70 N。上限を超える指令は受け付けない
@@ -125,7 +128,7 @@ class FrankaHand:
             self._t += self.dt
             ramp = min(1.0, self._t / p.ramp_s) if p.ramp_s > 0 else 1.0
             self._set_force_limit(p.move_force + (self.force - p.move_force) * ramp)
-            v = -self.speed
+            v = -float(np.clip(p.k_pos * w, 0.0, self.speed))     # 閉じ切りで指の腹どうしを押し込まない（sensor-v1.1）
             lo, hi = self.window
             self._grasped = lo <= w <= hi and abs(self.width_speed()) < p.still_speed
         self.d.ctrl[self.act] = v / 2.0                        # 腱の長さ = w/2
