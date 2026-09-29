@@ -7,6 +7,8 @@ sensor_model_version: 1
 actuation:
   # 腕: 関節の位置の指令（1 kHz 相当）を制限層（libfranka の limitRate、目標書 G3 の値 × margin）に通す
   limiter_margin: 0.99
+  # 腕の関節の位置のサーボに重力の補償を作動器を通して足す（実機の内部の制御器と同じ。0110 で諮り 0111 で承認）
+  gravity_compensation: true
   # ハンド（recovla.harness.hand）。把持力は 0108 の 2 の 3 で学習用のシード 59000〜59009 で確かめた値
   # （docs/results/hand_check.json: 30・40・50・70 N で 10/10 成功、めり込み 0.25 mm 以下、指の速さ 0.046 m/s 以下）
   grasp_force: 40.0             # 指 1 本 [N]。【公称】連続 30〜70 N の中ほど

@@ -30,10 +30,12 @@ def actuation_config(cfg=None) -> dict:
 
 
 class WorldRig(SimRig):
-    def __init__(self, render: bool = True, cfg: dict = None, audit_fk: bool = True, gravcomp: bool = True):
+    def __init__(self, render: bool = True, cfg: dict = None, audit_fk: bool = True, gravcomp: bool = None):
         super().__init__(render=render, cfg=cfg or _CFG)
         act = actuation_config(self.cfg)
         m = self.model
+        if gravcomp is None:
+            gravcomp = bool(act["gravity_compensation"])
         # 重力の補償（作動器を通す）と関節の力の上限
         for b in (ROBOT_BODIES if gravcomp else ()):             # gravcomp=False は診断だけ（旧版の世界）
             m.body_gravcomp[m.body(b).id] = 1.0

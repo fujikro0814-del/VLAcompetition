@@ -86,7 +86,7 @@ def cmd_run(a) -> None:
     if out.exists() and any(out.glob("trial_*.json")):
         raise SystemExit(f"{out} already has trials")
     out.mkdir(parents=True, exist_ok=True)
-    world = WorldRig(render=False, cfg=CFG, gravcomp=not a.diag_no_gravcomp)
+    world = WorldRig(render=False, cfg=CFG, gravcomp=False if a.diag_no_gravcomp else None)
     suite = SensorSuite(world.model, CFG)
     rt_cfg, act = CFG["runtime"], CFG["actuation"]
     cache = {}
