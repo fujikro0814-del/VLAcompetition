@@ -1,0 +1,1330 @@
+{
+  "check": "data_v2",
+  "written": "2026-09-29 20:34:52",
+  "run": "outputs/gen/F_data_v2_20260929-181843",
+  "generation_wall_s": 5123.2,
+  "workers": 6,
+  "rig": "v2",
+  "cue_convert_args": [
+    "--target-cue",
+    "--cue-thresholds",
+    "runtime_v2",
+    "--cue-without-flag"
+  ],
+  "code_version": {
+    "git_commit": "37fd23f8809ee9fe3df88cbb3bc2bec89fa97a24",
+    "git_dirty": false,
+    "code_sha256": "1c6fdd2d60dc912b6f4f63b947fb2fa0efdb78a133b6229431b75688cc03b72f",
+    "files_sha256": {
+      "src/recovla/sim/control.py": "45ad3161c41ef6029fbd695f8dd7fdcd0de1d2e7ffa4c10e532254bb138e2355",
+      "src/recovla/sim/controller_ik.py": "6baa9a32965910eab1de0bf97cc58c24196b7615616446117476f68fd071b0d3",
+      "src/recovla/sim/device.py": "ffb17010269a609902141ae1b00b3f25ec8c6f6374f9aa2c25fcf6375a73f2e1",
+      "src/recovla/sim/render.py": "b84c2a5dee9c9e0a46cd2369ed0e69f8509a79477084cb41f706a572d21108e0",
+      "src/recovla/record/recorder.py": "2c6f4b731ad06962faff8f1432cb760d01cbe43fc5fa693a2d5fb2898759be52",
+      "src/recovla/record/replay.py": "cf6075779b639b3583ca007231cb1f229af531e77322e8c98c4c59ec888b6234",
+      "assets/mjcf/scene_g0.xml": "eb699aa4697658f055c547df1e04f8331d6377845def2511322a1096060d9f0d",
+      "assets/mjcf/panda/panda.xml": "ceb1e8c31c777c808565f07d68930ef99098bd405a2178a4c6eff08e8ba13772",
+      "src/recovla/data/vla_image_spec.py": "1c919cc05d6975c4c5135c686eb7772ce2992554ada993c81b281dbafb2e7a8f",
+      "src/recovla/data/vla_state.py": "3a7416f933c053c6b1d91e1235ae3ff1e032431af51fe680d0dc9ebefd9fa3a6",
+      "src/recovla/data/vla_observation.py": "8490fe7584bc63e608fcf37a2da6c212f5d3488e80ea0888ec45bb1ee78dd42f",
+      "src/recovla/data/convert.py": "897a4567b7d5491ace2ddd090f3d051b409a5d851a5e460f7e68599ebe46b889",
+      "src/recovla/policy/train_launcher.py": "ac4e6417c4ddf094d7db30618de2bee2b4be1516e310f2bcb1e7c8c53c62bf3c",
+      "src/recovla/eval/closed_loop.py": "8757bdf27081648252e786ad4bbbb88b590dedb807eb9e92fdfe9777ce8c4e86",
+      "src/recovla/common/code_version.py": "e8d8a25e61a9b707a5ff9165b89b09275e43c4b56ea91c5f37c2604bb512fd22",
+      "src/recovla/common/config.py": "59e27878ff8cdd748386d2a001723b3c0a2aae94fe095ee36338ea46c5fbc434",
+      "configs/default.yaml": "e4b25277110aff1111ab20c21320c5d12d622d7b0278c743bc54a0468d7ba26c",
+      "configs/g0.yaml": "1fae1eb17db6f554f9fae90f493efd5f21135d3b132b08f083d6b403e2ff738a",
+      "assets/mjcf/scene_3cube.xml": "9fbbd17a2031f401b911886f9cb7e4d856607b6400d582ca619f8eb94642c398",
+      "src/recovla/common/seeds.py": "8410f5849e0ffdd0a7f411eb5d56d4ec07ff5020db6a31838dc54045755e26a3",
+      "src/recovla/sim/frames.py": "54706b0ba14a4e90dd1bac7196ef0d72738f5d8492f0ab9d09772bbd58f21628",
+      "src/recovla/sim/scene.py": "dfc23522ba61c99d1ccbefe53494a99f0d3ceb2a8baa87d4292c7b79b8593402",
+      "src/recovla/sim/rig.py": "2268da515c0105de29f90909d1846a85efbc279cc86576331bc7f2e68d926ba9",
+      "src/recovla/sim/contact.py": "bd10dea666c31388b816c292b35f8efc41b60cf25ef087f15e2497400382a569",
+      "src/recovla/expert/script.py": "783f3d43d1329e3a31a3c1f96b771b3ca289d5b1235655d4b1c5de21f225b39d",
+      "src/recovla/expert/generate.py": "45b2588075d75d625d218c1d6cfb8402e7fce33ecc163c1fec515a08268c5b05",
+      "src/recovla/record/episode.py": "8bab3ee35dbeede3c5d37846bfb2a7a98cc4cfb6b88c803ad363a99bb9a3b672",
+      "src/recovla/record/snapshot.py": "01a16b860b9492d8f9d63d52e7a55cc2667e7a861becbbf7ac0c76344e545333"
+    }
+  },
+  "config_used": {
+    "inject": {
+      "A": {
+        "lateral_offset_m": [
+          0.025,
+          0.035
+        ],
+        "raise_ratio": 0.5,
+        "lift_m": [
+          0.03,
+          0.05
+        ],
+        "raise_close_m": [
+          0.025,
+          0.05
+        ],
+        "confirm": {
+          "hand_rise_min_m": 0.03,
+          "cube_rise_max_m": 0.01
+        },
+        "lift_rise_margin_m": 0.002,
+        "lift_done_tol_m": 0.001,
+        "timeout_s": 6.0
+      },
+      "B": {
+        "min_dist_from_box_m": 0.19
+      },
+      "C": {
+        "min_clearance_m": 0.03,
+        "drop_max_tries": 1000
+      },
+      "landing": {
+        "max_tilt_deg": 10,
+        "min_clearance_m": 0.03,
+        "max_invalid_ratio": 0.2,
+        "rest_speed": 0.01,
+        "rest_hold_s": 0.3,
+        "finger_gap_margin_m": 0.005,
+        "timeout_s": 5.0,
+        "view_margin_px": 8
+      },
+      "recovery_time_limit_s": 40.0,
+      "landing_orientation_split_deg": 30
+    },
+    "expert": {
+      "speed_scale": [
+        0.9,
+        1.1
+      ],
+      "speed_ref": {
+        "xy": 0.18,
+        "z": 0.09
+      },
+      "gain_per_s": 4.0,
+      "grasp_jitter_m": 0.003,
+      "approach_height": 0.25,
+      "grasp_z": 0.115,
+      "lift_m": 0.05,
+      "carry_z": 0.25,
+      "release_z": 0.18,
+      "retreat_pose": [
+        0.33,
+        0.15,
+        0.3
+      ],
+      "idle_after_place_s": 1.5,
+      "move_tol_m": 0.001,
+      "hand_still_speed": 0.005,
+      "close_settle_s": 0.3,
+      "finger_rest_speed": 0.005,
+      "slip_retry_max": 3,
+      "time_limit_s": 40.0,
+      "phase": {
+        "grasped_lift_min_m": 0.01,
+        "drop_dist_m": 0.035,
+        "rest_speed": 0.01,
+        "rest_hold_s": 0.3,
+        "above_tol_m": 0.006,
+        "grasp_z_tol_m": 0.004,
+        "release_z_tol_m": 0.004,
+        "min_grip_gap_m": 0.02,
+        "retreat_tol_m": 0.003
+      }
+    },
+    "scene": {
+      "cube_size": 0.04,
+      "cube_mass": 0.05,
+      "cube_friction": [
+        1.0,
+        0.005,
+        0.0001
+      ],
+      "colors": {
+        "red": [
+          1,
+          0,
+          0,
+          1
+        ],
+        "green": [
+          0,
+          1,
+          0,
+          1
+        ],
+        "blue": [
+          0,
+          0,
+          1,
+          1
+        ]
+      },
+      "box": {
+        "pos": [
+          0.45,
+          0.25,
+          0.0
+        ],
+        "inner_half": 0.08,
+        "wall_top_z": 0.06,
+        "success_inner_half": 0.07,
+        "floor_z": 0.01
+      },
+      "region": {
+        "x": [
+          0.33,
+          0.57
+        ],
+        "y": [
+          -0.21,
+          0.05
+        ]
+      },
+      "min_center_dist": 0.09,
+      "yaw_range_deg": 30,
+      "layout_kinds": {
+        "empty": 0.57,
+        "prefilled_1": 0.14,
+        "prefilled_2": 0.29
+      },
+      "start_at_retreat_prob": 0.33,
+      "box_slots": [
+        [
+          0.04,
+          0.04
+        ],
+        [
+          0.04,
+          -0.04
+        ],
+        [
+          -0.04,
+          0.04
+        ],
+        [
+          -0.04,
+          -0.04
+        ]
+      ],
+      "slot_occupied_radius": 0.03,
+      "prefilled_yaw_deg": 0.0,
+      "layout_max_tries": 10000,
+      "box_slot_clearance_m": {
+        "cube": 0.02,
+        "wall": 0.01
+      },
+      "settle_prefilled_s": 1.0,
+      "presentation_camera": {
+        "name": "presentation",
+        "width": 1280,
+        "height": 720,
+        "pos": [
+          1.2,
+          -0.75,
+          0.75
+        ],
+        "xyaxes": [
+          0.72032,
+          0.693642,
+          0.0,
+          -0.362773,
+          0.376726,
+          0.852334
+        ],
+        "fovy": 40
+      }
+    },
+    "sim": {
+      "timestep": 0.002,
+      "steps_per_pad_read": 10,
+      "record_every": 25,
+      "stride": 2,
+      "image_size": 256,
+      "cameras": [
+        "overhead",
+        "wrist"
+      ],
+      "settle_s": 3.0,
+      "start_pos": [
+        0.307,
+        0.0,
+        0.35
+      ],
+      "home_qpos": [
+        0.0,
+        -0.785,
+        0.0,
+        -2.356,
+        0.0,
+        1.571,
+        0.785
+      ],
+      "finger_open": 0.04,
+      "fingertip_offset": 0.1034,
+      "table_top_z": 0.0,
+      "png_compression": 1,
+      "workspace": {
+        "x": [
+          0.28,
+          0.62
+        ],
+        "y": [
+          -0.3,
+          0.4
+        ],
+        "z": [
+          0.115,
+          0.35
+        ]
+      }
+    }
+  },
+  "normal": {
+    "composition": {
+      "n": 240,
+      "color": {
+        "red": 80,
+        "green": 80,
+        "blue": 80
+      },
+      "layout_kind": {
+        "empty": 180,
+        "prefilled_1": 30,
+        "prefilled_2": 30
+      },
+      "start": {
+        "retreat": 78,
+        "home": 162
+      }
+    },
+    "dropped": [
+      0,
+      240,
+      [
+        0.0,
+        0.0158
+      ]
+    ]
+  },
+  "recovery": {
+    "by_kind": {
+      "A": {
+        "n": 40,
+        "color": {
+          "red": 17,
+          "green": 12,
+          "blue": 11
+        },
+        "layout_kind": {
+          "empty": 30,
+          "prefilled_1": 5,
+          "prefilled_2": 5
+        },
+        "start": {
+          "home": 26,
+          "retreat": 14
+        }
+      },
+      "B": {
+        "n": 30,
+        "color": {
+          "red": 9,
+          "green": 11,
+          "blue": 10
+        },
+        "layout_kind": {
+          "empty": 22,
+          "prefilled_1": 4,
+          "prefilled_2": 4
+        },
+        "start": {
+          "retreat": 14,
+          "home": 16
+        }
+      },
+      "C": {
+        "n": 20,
+        "color": {
+          "red": 6,
+          "green": 8,
+          "blue": 6
+        },
+        "layout_kind": {
+          "empty": 15,
+          "prefilled_1": 3,
+          "prefilled_2": 2
+        },
+        "start": {
+          "home": 15,
+          "retreat": 5
+        }
+      }
+    },
+    "cells": [
+      {
+        "kind": "A",
+        "layout_kind": "empty",
+        "need": 30,
+        "got": 30,
+        "examined": 30,
+        "dropped": 0,
+        "short": 0
+      },
+      {
+        "kind": "A",
+        "layout_kind": "prefilled_1",
+        "need": 5,
+        "got": 5,
+        "examined": 5,
+        "dropped": 0,
+        "short": 0
+      },
+      {
+        "kind": "A",
+        "layout_kind": "prefilled_2",
+        "need": 5,
+        "got": 5,
+        "examined": 5,
+        "dropped": 0,
+        "short": 0
+      },
+      {
+        "kind": "B",
+        "layout_kind": "empty",
+        "need": 22,
+        "got": 22,
+        "examined": 23,
+        "dropped": 1,
+        "short": 0
+      },
+      {
+        "kind": "B",
+        "layout_kind": "prefilled_1",
+        "need": 4,
+        "got": 4,
+        "examined": 4,
+        "dropped": 0,
+        "short": 0
+      },
+      {
+        "kind": "B",
+        "layout_kind": "prefilled_2",
+        "need": 4,
+        "got": 4,
+        "examined": 4,
+        "dropped": 0,
+        "short": 0
+      },
+      {
+        "kind": "C",
+        "layout_kind": "empty",
+        "need": 15,
+        "got": 15,
+        "examined": 15,
+        "dropped": 0,
+        "short": 0
+      },
+      {
+        "kind": "C",
+        "layout_kind": "prefilled_1",
+        "need": 3,
+        "got": 3,
+        "examined": 3,
+        "dropped": 0,
+        "short": 0
+      },
+      {
+        "kind": "C",
+        "layout_kind": "prefilled_2",
+        "need": 2,
+        "got": 2,
+        "examined": 2,
+        "dropped": 0,
+        "short": 0
+      }
+    ],
+    "dropped_by_kind": {
+      "A": [
+        0,
+        40,
+        [
+          0.0,
+          0.0876
+        ]
+      ],
+      "B": [
+        1,
+        31,
+        [
+          0.0057,
+          0.1619
+        ]
+      ],
+      "C": [
+        0,
+        20,
+        [
+          0.0,
+          0.1611
+        ]
+      ]
+    },
+    "composition": {
+      "n": 90,
+      "color": {
+        "red": 32,
+        "green": 31,
+        "blue": 27
+      },
+      "layout_kind": {
+        "empty": 67,
+        "prefilled_1": 12,
+        "prefilled_2": 11
+      },
+      "start": {
+        "home": 57,
+        "retreat": 33
+      }
+    }
+  },
+  "chosen": [
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30000,
+      "color": "red",
+      "recovery": "A_30000_red_r0",
+      "twin": "n_30000_red_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30001,
+      "color": "green",
+      "recovery": "A_30001_green_r0",
+      "twin": "n_30001_green_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30002,
+      "color": "blue",
+      "recovery": "A_30002_blue_r0",
+      "twin": "n_30002_blue_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30003,
+      "color": "red",
+      "recovery": "A_30003_red_r0",
+      "twin": "n_30003_red_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30004,
+      "color": "green",
+      "recovery": "A_30004_green_r0",
+      "twin": "n_30004_green_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30005,
+      "color": "blue",
+      "recovery": "A_30005_blue_r0",
+      "twin": "n_30005_blue_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30006,
+      "color": "red",
+      "recovery": "A_30006_red_r0",
+      "twin": "n_30006_red_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30007,
+      "color": "green",
+      "recovery": "A_30007_green_r0",
+      "twin": "n_30007_green_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30008,
+      "color": "blue",
+      "recovery": "A_30008_blue_r0",
+      "twin": "n_30008_blue_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30009,
+      "color": "red",
+      "recovery": "A_30009_red_r0",
+      "twin": "n_30009_red_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30010,
+      "color": "green",
+      "recovery": "A_30010_green_r0",
+      "twin": "n_30010_green_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30011,
+      "color": "blue",
+      "recovery": "A_30011_blue_r1",
+      "twin": "n_30011_blue_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30012,
+      "color": "red",
+      "recovery": "A_30012_red_r0",
+      "twin": "n_30012_red_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30013,
+      "color": "green",
+      "recovery": "A_30013_green_r0",
+      "twin": "n_30013_green_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30014,
+      "color": "blue",
+      "recovery": "A_30014_blue_r0",
+      "twin": "n_30014_blue_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30015,
+      "color": "red",
+      "recovery": "A_30015_red_r1",
+      "twin": "n_30015_red_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30016,
+      "color": "green",
+      "recovery": "A_30016_green_r0",
+      "twin": "n_30016_green_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30017,
+      "color": "blue",
+      "recovery": "A_30017_blue_r0",
+      "twin": "n_30017_blue_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30018,
+      "color": "red",
+      "recovery": "A_30018_red_r0",
+      "twin": "n_30018_red_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30019,
+      "color": "green",
+      "recovery": "A_30019_green_r0",
+      "twin": "n_30019_green_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30020,
+      "color": "blue",
+      "recovery": "A_30020_blue_r0",
+      "twin": "n_30020_blue_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30021,
+      "color": "red",
+      "recovery": "A_30021_red_r0",
+      "twin": "n_30021_red_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30022,
+      "color": "green",
+      "recovery": "A_30022_green_r0",
+      "twin": "n_30022_green_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30023,
+      "color": "blue",
+      "recovery": "A_30023_blue_r0",
+      "twin": "n_30023_blue_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30024,
+      "color": "red",
+      "recovery": "A_30024_red_r0",
+      "twin": "n_30024_red_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30025,
+      "color": "green",
+      "recovery": "A_30025_green_r0",
+      "twin": "n_30025_green_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30026,
+      "color": "blue",
+      "recovery": "A_30026_blue_r0",
+      "twin": "n_30026_blue_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30027,
+      "color": "red",
+      "recovery": "A_30027_red_r0",
+      "twin": "n_30027_red_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30028,
+      "color": "green",
+      "recovery": "A_30028_green_r0",
+      "twin": "n_30028_green_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "empty",
+      "seed": 30029,
+      "color": "blue",
+      "recovery": "A_30029_blue_r1",
+      "twin": "n_30029_blue_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "prefilled_1",
+      "seed": 30060,
+      "color": "red",
+      "recovery": "A_30060_red_r0",
+      "twin": "n_30060_red_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "prefilled_1",
+      "seed": 30061,
+      "color": "blue",
+      "recovery": "A_30061_blue_r0",
+      "twin": "n_30061_blue_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "prefilled_1",
+      "seed": 30062,
+      "color": "red",
+      "recovery": "A_30062_red_r0",
+      "twin": "n_30062_red_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "prefilled_1",
+      "seed": 30063,
+      "color": "green",
+      "recovery": "A_30063_green_r0",
+      "twin": "n_30063_green_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "prefilled_1",
+      "seed": 30064,
+      "color": "red",
+      "recovery": "A_30064_red_r0",
+      "twin": "n_30064_red_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "prefilled_2",
+      "seed": 30070,
+      "color": "red",
+      "recovery": "A_30070_red_r0",
+      "twin": "n_30070_red_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "prefilled_2",
+      "seed": 30071,
+      "color": "red",
+      "recovery": "A_30071_red_r0",
+      "twin": "n_30071_red_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "prefilled_2",
+      "seed": 30072,
+      "color": "green",
+      "recovery": "A_30072_green_r1",
+      "twin": "n_30072_green_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "prefilled_2",
+      "seed": 30073,
+      "color": "red",
+      "recovery": "A_30073_red_r0",
+      "twin": "n_30073_red_r0",
+      "start": "home"
+    },
+    {
+      "kind": "A",
+      "layout_kind": "prefilled_2",
+      "seed": 30074,
+      "color": "red",
+      "recovery": "A_30074_red_r0",
+      "twin": "n_30074_red_r0",
+      "start": "home"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "empty",
+      "seed": 31000,
+      "color": "red",
+      "recovery": "B_31000_red_r1",
+      "twin": "n_31000_red_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "empty",
+      "seed": 31001,
+      "color": "green",
+      "recovery": "B_31001_green_r0",
+      "twin": "n_31001_green_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "empty",
+      "seed": 31002,
+      "color": "blue",
+      "recovery": "B_31002_blue_r0",
+      "twin": "n_31002_blue_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "empty",
+      "seed": 31004,
+      "color": "green",
+      "recovery": "B_31004_green_r0",
+      "twin": "n_31004_green_r0",
+      "start": "home"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "empty",
+      "seed": 31005,
+      "color": "blue",
+      "recovery": "B_31005_blue_r1",
+      "twin": "n_31005_blue_r0",
+      "start": "home"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "empty",
+      "seed": 31006,
+      "color": "red",
+      "recovery": "B_31006_red_r0",
+      "twin": "n_31006_red_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "empty",
+      "seed": 31007,
+      "color": "green",
+      "recovery": "B_31007_green_r1",
+      "twin": "n_31007_green_r0",
+      "start": "home"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "empty",
+      "seed": 31008,
+      "color": "blue",
+      "recovery": "B_31008_blue_r0",
+      "twin": "n_31008_blue_r0",
+      "start": "home"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "empty",
+      "seed": 31009,
+      "color": "red",
+      "recovery": "B_31009_red_r0",
+      "twin": "n_31009_red_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "empty",
+      "seed": 31010,
+      "color": "green",
+      "recovery": "B_31010_green_r2",
+      "twin": "n_31010_green_r0",
+      "start": "home"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "empty",
+      "seed": 31011,
+      "color": "blue",
+      "recovery": "B_31011_blue_r0",
+      "twin": "n_31011_blue_r0",
+      "start": "home"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "empty",
+      "seed": 31012,
+      "color": "red",
+      "recovery": "B_31012_red_r1",
+      "twin": "n_31012_red_r0",
+      "start": "home"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "empty",
+      "seed": 31013,
+      "color": "green",
+      "recovery": "B_31013_green_r0",
+      "twin": "n_31013_green_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "empty",
+      "seed": 31014,
+      "color": "blue",
+      "recovery": "B_31014_blue_r1",
+      "twin": "n_31014_blue_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "empty",
+      "seed": 31015,
+      "color": "red",
+      "recovery": "B_31015_red_r0",
+      "twin": "n_31015_red_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "empty",
+      "seed": 31016,
+      "color": "green",
+      "recovery": "B_31016_green_r0",
+      "twin": "n_31016_green_r0",
+      "start": "home"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "empty",
+      "seed": 31017,
+      "color": "blue",
+      "recovery": "B_31017_blue_r0",
+      "twin": "n_31017_blue_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "empty",
+      "seed": 31018,
+      "color": "red",
+      "recovery": "B_31018_red_r0",
+      "twin": "n_31018_red_r0",
+      "start": "home"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "empty",
+      "seed": 31019,
+      "color": "green",
+      "recovery": "B_31019_green_r0",
+      "twin": "n_31019_green_r0",
+      "start": "home"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "empty",
+      "seed": 31020,
+      "color": "blue",
+      "recovery": "B_31020_blue_r0",
+      "twin": "n_31020_blue_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "empty",
+      "seed": 31021,
+      "color": "red",
+      "recovery": "B_31021_red_r0",
+      "twin": "n_31021_red_r0",
+      "start": "home"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "empty",
+      "seed": 31022,
+      "color": "green",
+      "recovery": "B_31022_green_r2",
+      "twin": "n_31022_green_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "prefilled_1",
+      "seed": 31044,
+      "color": "green",
+      "recovery": "B_31044_green_r0",
+      "twin": "n_31044_green_r0",
+      "start": "home"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "prefilled_1",
+      "seed": 31045,
+      "color": "blue",
+      "recovery": "B_31045_blue_r1",
+      "twin": "n_31045_blue_r0",
+      "start": "home"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "prefilled_1",
+      "seed": 31046,
+      "color": "red",
+      "recovery": "B_31046_red_r0",
+      "twin": "n_31046_red_r0",
+      "start": "home"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "prefilled_1",
+      "seed": 31047,
+      "color": "blue",
+      "recovery": "B_31047_blue_r0",
+      "twin": "n_31047_blue_r0",
+      "start": "home"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "prefilled_2",
+      "seed": 31052,
+      "color": "blue",
+      "recovery": "B_31052_blue_r0",
+      "twin": "n_31052_blue_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "prefilled_2",
+      "seed": 31053,
+      "color": "red",
+      "recovery": "B_31053_red_r0",
+      "twin": "n_31053_red_r0",
+      "start": "home"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "prefilled_2",
+      "seed": 31054,
+      "color": "green",
+      "recovery": "B_31054_green_r0",
+      "twin": "n_31054_green_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "B",
+      "layout_kind": "prefilled_2",
+      "seed": 31055,
+      "color": "green",
+      "recovery": "B_31055_green_r0",
+      "twin": "n_31055_green_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "C",
+      "layout_kind": "empty",
+      "seed": 32000,
+      "color": "red",
+      "recovery": "C_32000_red_r0",
+      "twin": "n_32000_red_r0",
+      "start": "home"
+    },
+    {
+      "kind": "C",
+      "layout_kind": "empty",
+      "seed": 32001,
+      "color": "green",
+      "recovery": "C_32001_green_r0",
+      "twin": "n_32001_green_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "C",
+      "layout_kind": "empty",
+      "seed": 32002,
+      "color": "blue",
+      "recovery": "C_32002_blue_r0",
+      "twin": "n_32002_blue_r0",
+      "start": "home"
+    },
+    {
+      "kind": "C",
+      "layout_kind": "empty",
+      "seed": 32003,
+      "color": "red",
+      "recovery": "C_32003_red_r0",
+      "twin": "n_32003_red_r0",
+      "start": "home"
+    },
+    {
+      "kind": "C",
+      "layout_kind": "empty",
+      "seed": 32004,
+      "color": "green",
+      "recovery": "C_32004_green_r0",
+      "twin": "n_32004_green_r0",
+      "start": "home"
+    },
+    {
+      "kind": "C",
+      "layout_kind": "empty",
+      "seed": 32005,
+      "color": "blue",
+      "recovery": "C_32005_blue_r0",
+      "twin": "n_32005_blue_r0",
+      "start": "home"
+    },
+    {
+      "kind": "C",
+      "layout_kind": "empty",
+      "seed": 32006,
+      "color": "red",
+      "recovery": "C_32006_red_r0",
+      "twin": "n_32006_red_r0",
+      "start": "home"
+    },
+    {
+      "kind": "C",
+      "layout_kind": "empty",
+      "seed": 32007,
+      "color": "green",
+      "recovery": "C_32007_green_r0",
+      "twin": "n_32007_green_r0",
+      "start": "home"
+    },
+    {
+      "kind": "C",
+      "layout_kind": "empty",
+      "seed": 32008,
+      "color": "blue",
+      "recovery": "C_32008_blue_r0",
+      "twin": "n_32008_blue_r0",
+      "start": "home"
+    },
+    {
+      "kind": "C",
+      "layout_kind": "empty",
+      "seed": 32009,
+      "color": "red",
+      "recovery": "C_32009_red_r0",
+      "twin": "n_32009_red_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "C",
+      "layout_kind": "empty",
+      "seed": 32010,
+      "color": "green",
+      "recovery": "C_32010_green_r0",
+      "twin": "n_32010_green_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "C",
+      "layout_kind": "empty",
+      "seed": 32011,
+      "color": "blue",
+      "recovery": "C_32011_blue_r0",
+      "twin": "n_32011_blue_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "C",
+      "layout_kind": "empty",
+      "seed": 32012,
+      "color": "red",
+      "recovery": "C_32012_red_r0",
+      "twin": "n_32012_red_r0",
+      "start": "home"
+    },
+    {
+      "kind": "C",
+      "layout_kind": "empty",
+      "seed": 32013,
+      "color": "green",
+      "recovery": "C_32013_green_r0",
+      "twin": "n_32013_green_r0",
+      "start": "home"
+    },
+    {
+      "kind": "C",
+      "layout_kind": "empty",
+      "seed": 32014,
+      "color": "blue",
+      "recovery": "C_32014_blue_r0",
+      "twin": "n_32014_blue_r0",
+      "start": "home"
+    },
+    {
+      "kind": "C",
+      "layout_kind": "prefilled_1",
+      "seed": 32030,
+      "color": "green",
+      "recovery": "C_32030_green_r0",
+      "twin": "n_32030_green_r0",
+      "start": "home"
+    },
+    {
+      "kind": "C",
+      "layout_kind": "prefilled_1",
+      "seed": 32031,
+      "color": "blue",
+      "recovery": "C_32031_blue_r0",
+      "twin": "n_32031_blue_r0",
+      "start": "retreat"
+    },
+    {
+      "kind": "C",
+      "layout_kind": "prefilled_1",
+      "seed": 32032,
+      "color": "red",
+      "recovery": "C_32032_red_r0",
+      "twin": "n_32032_red_r0",
+      "start": "home"
+    },
+    {
+      "kind": "C",
+      "layout_kind": "prefilled_2",
+      "seed": 32036,
+      "color": "green",
+      "recovery": "C_32036_green_r0",
+      "twin": "n_32036_green_r0",
+      "start": "home"
+    },
+    {
+      "kind": "C",
+      "layout_kind": "prefilled_2",
+      "seed": 32037,
+      "color": "green",
+      "recovery": "C_32037_green_r0",
+      "twin": "n_32037_green_r0",
+      "start": "home"
+    }
+  ],
+  "datasets": {
+    "R1": {
+      "manifest": "outputs\\manifests\\R1v2_20260929-181843.json",
+      "dataset": "outputs\\datasets\\R1v2_20260929-181843",
+      "episodes": 330,
+      "frames": 50996,
+      "convert_exit": 0,
+      "verify_exit": 0,
+      "verify_pass": true,
+      "convert_wall_s": 1521.6,
+      "log": "outputs\\f\\convert_R1v2_20260929-181843.log"
+    },
+    "N1": {
+      "manifest": "outputs\\manifests\\N1v2_20260929-181843.json",
+      "dataset": "outputs\\datasets\\N1v2_20260929-181843",
+      "episodes": 330,
+      "frames": 52436,
+      "convert_exit": 0,
+      "verify_exit": 0,
+      "verify_pass": true,
+      "convert_wall_s": 1524.2,
+      "log": "outputs\\f\\convert_N1v2_20260929-181843.log"
+    }
+  },
+  "frame_diff_ratio_R1_N1": 0.027462048973987338,
+  "same_layouts_and_targets": true,
+  "normal_part_identical": true,
+  "dropped_stop_rule": "復帰の種類ごとの捨てた割合が 10% を超えたら止めて諮る（決裁 0042）",
+  "stop": false
+}
