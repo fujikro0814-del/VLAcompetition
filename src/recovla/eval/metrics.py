@@ -214,8 +214,22 @@ def _target_at(target: np.ndarray, t: np.ndarray, t0: float, steps: list):
     return None
 
 
-def _obstacle_cols(meta: dict) -> dict:
-    return {name: k for k, name in enumerate(meta.get("obstacles") or [])}
+# 目標書 v2 の試行の記録（harness/loop.py）の contact_robot の列（sim.contact.COLUMNS と同じ並び）。0115 より前の v2 の記録は
+# obstacles を書いていなかったので、v2 の記録（audit の欄がある）で列の数が合うときはこの並びとして読む
+V2_OBSTACLES = ("cube_red", "cube_green", "cube_blue", "wall_xp", "wall_xn", "wall_yp", "wall_yn")
+
+
+def obstacle_names(meta: dict, n_cols: int = None) -> list:
+    names = meta.get("obstacles")
+    if names:
+        return list(names)
+    if "audit" in meta and n_cols == len(V2_OBSTACLES):
+        return list(V2_OBSTACLES)
+    return []
+
+
+def _obstacle_cols(meta: dict, n_cols: int = None) -> dict:
+    return {name: k for k, name in enumerate(obstacle_names(meta, n_cols))}
 
 
 def _collateral(rec: TrialRecord, eval_cfg: dict, target, t, t_fire) -> tuple[bool, bool]:
@@ -235,7 +249,7 @@ def _collateral(rec: TrialRecord, eval_cfg: dict, target, t, t_fire) -> tuple[bo
     rest = speed < eval_cfg["success"]["rest_speed"]
     contact_robot = np.asarray(a["contact_robot"], dtype=bool)
     ccc = np.asarray(a["contact_cube_cube"], dtype=bool)
-    cols = _obstacle_cols(rec.meta)
+    cols = _obstacle_cols(rec.meta, contact_robot.shape[1] if contact_robot.ndim == 2 else None)
     n = len(t)
     idx = np.arange(n)
     after_fire = t >= t_fire - 1e-9 if np.isfinite(t_fire) else np.zeros(n, dtype=bool)
@@ -310,7 +324,7 @@ def _ee_speed_jumps(a: dict, k_frames: np.ndarray, frame_dt: float) -> np.ndarra
 def _contacts_n(rec: TrialRecord, target: np.ndarray) -> int:
     """contact_robot の、目標以外の立方体（cube_*）と壁（wall_*）の列で、偽から真に変わった回数（こま 0 の前は偽）。"""
     cr = np.asarray(rec.arrays["contact_robot"], dtype=bool)
-    names = rec.meta.get("obstacles") or []
+    names = obstacle_names(rec.meta, cr.shape[1] if cr.ndim == 2 else None)
     if cr.ndim != 2 or cr.shape[1] == 0:
         return 0
     use = np.zeros(cr.shape, dtype=bool)

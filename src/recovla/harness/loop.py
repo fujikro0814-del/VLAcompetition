@@ -17,7 +17,7 @@ from recovla.expert.script import PhaseParams
 from recovla.harness.robot_io import SimRobotIO
 from recovla.harness.setup import nominal_setup
 from recovla.record import episode as E
-from recovla.sim import frames
+from recovla.sim import contact, frames
 from recovla.sim.rig import quiet
 
 TRUTH_KEYS = ("step", "sim_time", "ee_pos", "ee_quat", "fingertip", "fingers", "x_des", "gripper_closed",
@@ -148,6 +148,7 @@ def run_policy_trial(world, suite, make_runtime, layout, target: str, seed: int,
         "seed": int(seed), "target": target, "instruction": task, "success": state["success_t"] is not None,
         "t_success": state["success_t"], "time_limit_s": time_limit_s, "t_end": float(world.data.time),
         "layout": {"kind": layout.kind, "start": layout.start, "prefilled": sorted(layout.prefilled)},
+        "obstacles": list(contact.COLUMNS),                              # contact_robot の列（旧版の記録と同じ欄）
         "induce": inducer.record() if inducer is not None else {"kind": None, "established": False},
         "audit": {"g1": {"checks": len(audits), "violations": sum(len(x["violations"]) for x in audits),
                          "violating_types": sorted({v for x in audits for v in x["violations"]}),
