@@ -48,6 +48,7 @@ class PolicyRuntime:
         self.motion = motion or Motion(setup, limiter_enabled=limiter_enabled, margin=margin)
         self.action_filter = None          # 評価の道具（失敗注入）が行動を上書きする口。None なら方策のまま
         self.injecting = False             # 評価の道具が上書きしている間は真（安全フィルタを切る。旧版と同じ）
+        self.external = False              # 上位層が速さを直接出している間は真（方策を止め、安全フィルタを切る）
         self.perception = perception       # recovla.runtime.perception.Perception（None なら知覚なし）
         self.safety = safety               # recovla.runtime.safety.PerceptionSafetyFilter（None ならフィルタなし）
         self.checks = dict(checks or {})   # 知覚の失敗の止まり方の閾値（configs の runtime_v2.checks）
@@ -76,6 +77,22 @@ class PolicyRuntime:
         self.i = 0                          # 推論の通し番号（雑音の列）
         self.d_est = self.d_init
         self.log_inf, self.log_act = [], []
+        self.reset_chunks()
+
+    def set_task(self, task: str, seed: int) -> None:
+        """サブタスクの切り替え・やり直し（知覚の起動時の確かめと推定は保つ）。塊は持ち越さない。雑音の列は seed から。"""
+        from recovla.runtime.cue import color_of_instruction
+        self.task, self.seed = task, int(seed)
+        self.color = color_of_instruction(task)
+        self.policy.start_trial(seed)
+        self.i = 0
+        self.t_task0 = None
+        self.stop_reason = None if self.stop_reason == "target_not_found" else self.stop_reason
+        if self.safety is not None:
+            wm = self.wm
+            self.safety.start_trial(self.color)
+            if wm is not None:
+                self.safety.set_world(wm)
         self.reset_chunks()
 
     def reset_chunks(self) -> None:
@@ -177,6 +194,10 @@ class PolicyRuntime:
                 self.motion.set_velocity(np.zeros(3))
                 self.log_act.append((k, t, None, True, np.array([0, 0, 0, 0, 0, 0, 1.0 if self.closed else -1.0])))
                 return
+        if self.external:                                     # 上位層が腕を動かしている間（待機位置へ戻す動き）: 方策は止める
+            if self.safety is not None:
+                self.safety.gate = False
+            return
         # 1) 届いた推論を塊にする
         if self.pending is not None and self.pending["fut"].ready(t):
             p = self.pending

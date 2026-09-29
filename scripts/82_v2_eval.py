@@ -145,6 +145,69 @@ def cmd_run(a) -> None:
                                    encoding="utf-8")
 
 
+def cmd_task(a) -> None:
+    """複数手順（E7 の 3 個の連続タスク）。配置は旧版と同じく空の箱・既定の開始姿勢（scene.sample_layout(種, "empty", "home")）。"""
+    from recovla.harness.sensors import SensorSuite
+    from recovla.harness.task_loop import run_task_trial
+    from recovla.harness.world import WorldRig
+    from recovla.planner import decompose as D
+    from recovla.runtime import cue as C
+    from recovla.runtime.executor import TaskRuntime
+    from recovla.runtime.judge import JudgeV2
+    from recovla.runtime.motion import Motion
+    from recovla.runtime.perception import Params, Perception
+    from recovla.runtime.policy import SensorPolicy
+    from recovla.runtime.runner import PolicyRuntime, disable_rtc_for
+    from recovla.runtime.safety import PerceptionSafetyFilter
+    from recovla.sim import scene
+    out = OUT / a.experiment / a.condition
+    if out.exists() and any(out.glob("run_*.json")):
+        raise SystemExit(f"{out} already has runs")
+    out.mkdir(parents=True, exist_ok=True)
+    world = WorldRig(render=False, cfg=CFG)
+    suite = SensorSuite(world.model, CFG)
+    rt_cfg, act, rtv = CFG["runtime"], CFG["actuation"], CFG["runtime_v2"]
+    thr = C.Thresholds.from_dict(CFG["planner"]["color_detect"])
+    cache = {}
+
+    def make(io, setup):
+        if "pol" not in cache:
+            cache["pol"] = SensorPolicy(config.path(CKPT[a.model]), setup, Motion(setup).hand_pose)
+            disable_rtc_for(cache["pol"])
+        pol = cache["pol"]
+        pol.setup = setup
+        if pol.cue is not None:
+            pol.cue = C.TargetCue(C.calibration_from_setup(setup.cameras["overhead"]), pol.cue.thr,
+                                  setup.table_z + 0.5 * setup.cube_size, setup.cue_fallback_xy)
+        per = Perception(setup, Params.from_config(rtv["perception"]), thr)
+        sf = None if a.no_safety else PerceptionSafetyFilter(setup, CFG["safety_filter"], float(rtv["safety_extra_margin_m"]))
+        prt = PolicyRuntime(io, setup, pol, perception=per, safety=sf, checks=rtv["checks"],
+                            tip_offset=float(CFG["sim"]["fingertip_offset"]), mode="naive", s=int(rt_cfg["exec_interval"]),
+                            d_init=int(rt_cfg["delay_steps"]), motion=Motion(setup, margin=float(act["limiter_margin"])))
+        judge = JudgeV2(setup, per, thr, rtv["judge"])
+        return TaskRuntime(io, setup, prt, judge, CFG, D.decompose, CFG["convert"]["instruction"])
+
+    base, n = (int(x) for x in a.trials.split(":"))
+    rows = []
+    for i, seed in enumerate(range(base, base + n)):
+        lay = scene.sample_layout(seed, "empty", start="home")
+        w0 = time.perf_counter()
+        meta, arrays, rlog = run_task_trial(world, suite, make, lay, a.text, seed, cfg=CFG)
+        meta.update({"run": i, "model": a.model, "wall_s": round(time.perf_counter() - w0, 1)})
+        np.savez(out / f"run_{i:04d}.npz", **arrays)
+        (out / f"run_{i:04d}.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1, default=_json_default), encoding="utf-8")
+        (out / f"run_{i:04d}_runtime.json").write_text(json.dumps(rlog, ensure_ascii=False, default=_json_default), encoding="utf-8")
+        rows.append({"seed": seed, "all_three": meta["all_three_in_box"]})
+        g = meta["audit"]
+        print(f"[v2task] {i} seed {seed} plan {(meta['plan'] or {}).get('steps')} final {meta['final_in_box']} "
+              f"stopped {bool(meta['stopped'])} g1 {g['g1']['violations']} g2 {g['g2']['world_stops']}/{g['g2']['early_use']} "
+              f"g3 {g['g3']['total_violations']} wall {meta['wall_s']}", flush=True)
+    suite.close()
+    (out / "run.json").write_text(json.dumps({"n": len(rows), "all_three": sum(r["all_three"] for r in rows),
+                                               "text": a.text, "model": a.model, "trials": a.trials}, ensure_ascii=False,
+                                              indent=1), encoding="utf-8")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -160,8 +223,15 @@ def main(argv=None) -> int:
     p.add_argument("--diag-ik", default="commanded", choices=("commanded", "measured"), help="診断だけ")
     p.add_argument("--diag-no-gravcomp", action="store_true", help="診断だけ")
     p.add_argument("--ablate", default=None, help="診断だけ: " + ",".join(ABLATIONS))
+    p = sub.add_parser("task")
+    p.add_argument("--experiment", required=True)
+    p.add_argument("--condition", required=True)
+    p.add_argument("--model", default="R2", choices=sorted(CKPT))
+    p.add_argument("--trials", required=True, help="<種の先頭>:<数>")
+    p.add_argument("--text", default="全部片付けて")
+    p.add_argument("--no-safety", action="store_true")
     a = ap.parse_args(argv)
-    {"run": cmd_run}[a.cmd](a)
+    {"run": cmd_run, "task": cmd_task}[a.cmd](a)
     return 0
 
 

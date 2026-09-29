@@ -24,3 +24,14 @@ runtime_v2:
     box_dev_m: 0.061            # 見た最大 30.3 mm
     box_dev_deg: 1.9            # 見た最大 0.95°
     target_missing_s: 1.0       # サブタスクの始めから目標の色が見つからない時間
+  # 完了判定（0107 の 6、runtime/judge.py）。画素の閾値は旧版（planner.presence、学習用の帯で決めた値）から始め、
+  # v2 のセンサの画像で学習用のシードから決め直す（scripts/85 の fit。決め直すまでは旧版の値）
+  judge:
+    box_min_pixels: 56
+    wrist_min_pixels: 33
+    wrist_min_fraction: 0.73
+    height_tol_m: 0.01          # 上面が「箱の底＋一辺＋1 cm」以下（別の立方体の上に乗ったものを落とす。0107 の 6）
+    gripper_open_m: 0.075       # 測った開き幅（開いた 0.08 から 5 mm の余裕）
+    retreat_tol_m: 0.05         # 旧版と同じ（planner.judge）
+    still_speed: 0.01           # 旧版と同じ
+    hold_s: 1.0                 # 旧版と同じ（planner.completion_hold_s。0108 の 2 の 8: 変えない）

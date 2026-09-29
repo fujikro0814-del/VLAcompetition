@@ -24,6 +24,9 @@ from recovla.sim import control
 from recovla.sim.device import ScriptPad, pad_state
 
 SUBSTEPS = 2                               # 500 Hz の 1 手あたりの 1 kHz の刻み
+# 直交座標の上限の余裕。躍度の項を 0 まで縮めても、姿勢が変わるだけで手先の加速度が少し動くので、関節（0.99）より控えめにする
+# （0.99 では 3 個の連続タスクで手先の加速度が上限の 1.008 倍になった刻みが 9 あった。学習用のシード 59500）
+CART_MARGIN = 0.95
 
 
 class Motion:
@@ -148,7 +151,7 @@ class Motion:
         h = self._x_hist
         if len(h) < 3:
             return True
-        dt, mg = L.DT, self.limiter_margin
+        dt, mg = L.DT, CART_MARGIN
         v = (x_new - h[-1]) / dt
         a = (x_new - 2 * h[-1] + h[-2]) / dt ** 2
         j = (x_new - 3 * h[-1] + 3 * h[-2] - h[-3]) / dt ** 3
