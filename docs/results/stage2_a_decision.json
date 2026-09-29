@@ -1,0 +1,553 @@
+{
+ "seeds": "199500:10",
+ "rule": "制限層ありで、制限層が指令を切り詰めたエピソードが 1 本でもあれば (a) を満たす（0107 の 9）",
+ "episodes_clipped": 10,
+ "n": 10,
+ "a_satisfied": true,
+ "success_limiter_on": 10,
+ "success_limiter_off": 10,
+ "gripper_note": "v2 のハンドは開き幅 0.08 m/s（指 1 本 0.04 m/s）。旧版は位置の段差で指が最大 0.26 m/s（0107 の 8-1）",
+ "rows": [
+  {
+   "seed": 199500,
+   "color": "red",
+   "limiter": true,
+   "success": true,
+   "clipped_ticks": 368,
+   "command_violations": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "max_ratio": {
+    "joint_vel": 0.36044410969378665,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000007125,
+    "cart_vel": 0.10895457554053153,
+    "cart_acc": 0.6497812027703307,
+    "cart_jerk": 0.8075016841067333,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   }
+  },
+  {
+   "seed": 199501,
+   "color": "red",
+   "limiter": true,
+   "success": true,
+   "clipped_ticks": 259,
+   "command_violations": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "max_ratio": {
+    "joint_vel": 0.3554478650552393,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000007125,
+    "cart_vel": 0.10801544241827907,
+    "cart_acc": 0.6500494600356851,
+    "cart_jerk": 0.8100187399325033,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   }
+  },
+  {
+   "seed": 199502,
+   "color": "red",
+   "limiter": true,
+   "success": true,
+   "clipped_ticks": 597,
+   "command_violations": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "max_ratio": {
+    "joint_vel": 0.3996816213199691,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000007125,
+    "cart_vel": 0.1251657585495193,
+    "cart_acc": 0.6475234421779311,
+    "cart_jerk": 0.7990139637761795,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   }
+  },
+  {
+   "seed": 199503,
+   "color": "red",
+   "limiter": true,
+   "success": true,
+   "clipped_ticks": 243,
+   "command_violations": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "max_ratio": {
+    "joint_vel": 0.374276588473705,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000007125,
+    "cart_vel": 0.11604756352940845,
+    "cart_acc": 0.6490767347887576,
+    "cart_jerk": 0.8021902210144132,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   }
+  },
+  {
+   "seed": 199504,
+   "color": "red",
+   "limiter": true,
+   "success": true,
+   "clipped_ticks": 371,
+   "command_violations": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "max_ratio": {
+    "joint_vel": 0.3643899942729706,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000007125,
+    "cart_vel": 0.11707056427664948,
+    "cart_acc": 0.6496596124119773,
+    "cart_jerk": 0.8097152148077383,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   }
+  },
+  {
+   "seed": 199505,
+   "color": "red",
+   "limiter": true,
+   "success": true,
+   "clipped_ticks": 277,
+   "command_violations": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "max_ratio": {
+    "joint_vel": 0.3053509398305262,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000007125,
+    "cart_vel": 0.11923176212789194,
+    "cart_acc": 0.629808467683292,
+    "cart_jerk": 0.8185052575812234,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   }
+  },
+  {
+   "seed": 199506,
+   "color": "red",
+   "limiter": true,
+   "success": true,
+   "clipped_ticks": 243,
+   "command_violations": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "max_ratio": {
+    "joint_vel": 0.3648355255286393,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000007125,
+    "cart_vel": 0.12684721413650224,
+    "cart_acc": 0.649753998950679,
+    "cart_jerk": 0.8160160298809342,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   }
+  },
+  {
+   "seed": 199507,
+   "color": "red",
+   "limiter": true,
+   "success": true,
+   "clipped_ticks": 422,
+   "command_violations": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "max_ratio": {
+    "joint_vel": 0.36504584037471427,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000007125,
+    "cart_vel": 0.12761748941108841,
+    "cart_acc": 0.6497877867541468,
+    "cart_jerk": 0.8164093355254838,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   }
+  },
+  {
+   "seed": 199508,
+   "color": "red",
+   "limiter": true,
+   "success": true,
+   "clipped_ticks": 272,
+   "command_violations": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "max_ratio": {
+    "joint_vel": 0.35952269343835885,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000007125,
+    "cart_vel": 0.11543491993460421,
+    "cart_acc": 0.6498950454598695,
+    "cart_jerk": 0.811757320506715,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   }
+  },
+  {
+   "seed": 199509,
+   "color": "red",
+   "limiter": true,
+   "success": true,
+   "clipped_ticks": 360,
+   "command_violations": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "max_ratio": {
+    "joint_vel": 0.3815514932855986,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000007125,
+    "cart_vel": 0.11798672901618318,
+    "cart_acc": 0.6485120887649459,
+    "cart_jerk": 0.7978413718150167,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   }
+  },
+  {
+   "seed": 199500,
+   "color": "red",
+   "limiter": false,
+   "success": true,
+   "clipped_ticks": 0,
+   "command_violations": {
+    "joint_vel": 0,
+    "joint_acc": 59,
+    "joint_jerk": 491,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 15,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "max_ratio": {
+    "joint_vel": 0.3604406666116454,
+    "joint_acc": 2.187934959501092,
+    "joint_jerk": 4.375869919002184,
+    "cart_vel": 0.10895468760851615,
+    "cart_acc": 0.8975356943823343,
+    "cart_jerk": 1.7950933385272094,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   }
+  },
+  {
+   "seed": 199501,
+   "color": "red",
+   "limiter": false,
+   "success": true,
+   "clipped_ticks": 0,
+   "command_violations": {
+    "joint_vel": 0,
+    "joint_acc": 57,
+    "joint_jerk": 325,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 15,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "max_ratio": {
+    "joint_vel": 0.3554434304999875,
+    "joint_acc": 2.187784963112449,
+    "joint_jerk": 4.375569926224898,
+    "cart_vel": 0.10801543748689375,
+    "cart_acc": 0.8975248032421743,
+    "cart_jerk": 1.7950710420637612,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   }
+  },
+  {
+   "seed": 199502,
+   "color": "red",
+   "limiter": false,
+   "success": true,
+   "clipped_ticks": 0,
+   "command_violations": {
+    "joint_vel": 0,
+    "joint_acc": 66,
+    "joint_jerk": 815,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 15,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "max_ratio": {
+    "joint_vel": 0.3996824537787198,
+    "joint_acc": 2.188568527259349,
+    "joint_jerk": 4.377137054518698,
+    "cart_vel": 0.12516568748289222,
+    "cart_acc": 0.8974494952624039,
+    "cart_jerk": 1.7949248995784697,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   }
+  },
+  {
+   "seed": 199503,
+   "color": "red",
+   "limiter": false,
+   "success": true,
+   "clipped_ticks": 0,
+   "command_violations": {
+    "joint_vel": 0,
+    "joint_acc": 61,
+    "joint_jerk": 319,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 15,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "max_ratio": {
+    "joint_vel": 0.3742745388217626,
+    "joint_acc": 2.188036591093123,
+    "joint_jerk": 4.376073182186246,
+    "cart_vel": 0.11604754236008485,
+    "cart_acc": 0.8974828250681093,
+    "cart_jerk": 1.7949885946552353,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   }
+  },
+  {
+   "seed": 199504,
+   "color": "red",
+   "limiter": false,
+   "success": true,
+   "clipped_ticks": 0,
+   "command_violations": {
+    "joint_vel": 0,
+    "joint_acc": 57,
+    "joint_jerk": 489,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 15,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "max_ratio": {
+    "joint_vel": 0.36439654500549407,
+    "joint_acc": 2.1872843474923798,
+    "joint_jerk": 4.3745686949847595,
+    "cart_vel": 0.11707043335800324,
+    "cart_acc": 0.8973403344959926,
+    "cart_jerk": 1.7947020653489434,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   }
+  },
+  {
+   "seed": 199505,
+   "color": "red",
+   "limiter": false,
+   "success": true,
+   "clipped_ticks": 0,
+   "command_violations": {
+    "joint_vel": 0,
+    "joint_acc": 9,
+    "joint_jerk": 385,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 13,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "max_ratio": {
+    "joint_vel": 0.3053509811508865,
+    "joint_acc": 2.1795174608030266,
+    "joint_jerk": 4.359034921606053,
+    "cart_vel": 0.11923176706298337,
+    "cart_acc": 0.8959134903165767,
+    "cart_jerk": 1.7918323684136424,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   }
+  },
+  {
+   "seed": 199506,
+   "color": "red",
+   "limiter": false,
+   "success": true,
+   "clipped_ticks": 0,
+   "command_violations": {
+    "joint_vel": 0,
+    "joint_acc": 72,
+    "joint_jerk": 337,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 15,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "max_ratio": {
+    "joint_vel": 0.3648434425538356,
+    "joint_acc": 2.1861176284687645,
+    "joint_jerk": 4.372235256937529,
+    "cart_vel": 0.12684713561474953,
+    "cart_acc": 0.8970242089367738,
+    "cart_jerk": 1.794068562767593,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   }
+  },
+  {
+   "seed": 199507,
+   "color": "red",
+   "limiter": false,
+   "success": true,
+   "clipped_ticks": 0,
+   "command_violations": {
+    "joint_vel": 0,
+    "joint_acc": 64,
+    "joint_jerk": 611,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 15,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "max_ratio": {
+    "joint_vel": 0.3650567996608621,
+    "joint_acc": 2.185993249668172,
+    "joint_jerk": 4.371986499336344,
+    "cart_vel": 0.12761726125153217,
+    "cart_acc": 0.8969933264320767,
+    "cart_jerk": 1.7940066339547334,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   }
+  },
+  {
+   "seed": 199508,
+   "color": "red",
+   "limiter": false,
+   "success": true,
+   "clipped_ticks": 0,
+   "command_violations": {
+    "joint_vel": 0,
+    "joint_acc": 57,
+    "joint_jerk": 381,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 15,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "max_ratio": {
+    "joint_vel": 0.35952567479732445,
+    "joint_acc": 2.1871908335668877,
+    "joint_jerk": 4.374381667133775,
+    "cart_vel": 0.11543488050807757,
+    "cart_acc": 0.8973418543080229,
+    "cart_jerk": 1.794704694442219,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   }
+  },
+  {
+   "seed": 199509,
+   "color": "red",
+   "limiter": false,
+   "success": true,
+   "clipped_ticks": 0,
+   "command_violations": {
+    "joint_vel": 0,
+    "joint_acc": 63,
+    "joint_jerk": 477,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 15,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "max_ratio": {
+    "joint_vel": 0.38155088270933474,
+    "joint_acc": 2.1882628531244563,
+    "joint_jerk": 4.376525706248913,
+    "cart_vel": 0.11798669332914444,
+    "cart_acc": 0.897479536774899,
+    "cart_jerk": 1.7949832883190806,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   }
+  }
+ ],
+ "written": "2026-09-29 18:06:45"
+}

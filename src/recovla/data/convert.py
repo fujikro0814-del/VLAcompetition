@@ -137,11 +137,26 @@ def features(size: int = 256, target_cue=None) -> dict:
 
 # ------------------------------------------------------------- target cue (決裁 0048)
 
-def cue_tracker():
-    """学習と評価で同じ部品・同じ閾値（recovla.perception.color、configs の planner.color_detect）。"""
+CUE_THRESHOLD_SOURCES = ("training", "runtime_v2")
+
+
+def cue_thresholds(source: str = "training"):
+    """手がかりの色の閾値。training は旧版の学習時の値（planner.color_detect）、runtime_v2 は目標書 v2 の実行系の値
+    （センサの模型の画像で決め直した runtime_v2.color_detect、0114・0115）。段階 2 のデータは実行系と同じ runtime_v2 で作る。"""
+    from recovla.perception import color as PC
+    if source not in CUE_THRESHOLD_SOURCES:
+        raise ValueError(f"cue thresholds source {source!r} not in {CUE_THRESHOLD_SOURCES}")
+    if source == "training":
+        return PC.Thresholds.from_config()
+    c = config.color_detect(config.load_v2())
+    return PC.Thresholds(int(c["min_value"]), int(c["min_margin"]), int(c["min_pixels"]))
+
+
+def cue_tracker(source: str = "training"):
+    """学習と評価で同じ部品・同じ閾値（recovla.perception.color、閾値は cue_thresholds）。"""
     from recovla.perception import color as PC
     from recovla.sim import scene
-    return PC.TargetCue(PC.overhead_calibration(scene.build_model("3cube")), PC.Thresholds.from_config())
+    return PC.TargetCue(PC.overhead_calibration(scene.build_model("3cube")), cue_thresholds(source))
 
 
 def episode_tracker(meta: dict, default):
@@ -156,11 +171,12 @@ def episode_tracker(meta: dict, default):
     return C.TargetCue(calib, default.thr, float(cc["plane_z"]), cc["fallback"])
 
 
-def cue_record(tracker, mode: str = "xyv") -> dict:
+def cue_record(tracker, mode: str = "xyv", source: str = "training") -> dict:
     """conversion.json の target_cue。評価の入口（vla_observation）はこれを見て同じ手がかりを足す。
     names が方策の入力に入る手がかりの次元（xy のときは旗を外し、旗は sources の cue_flag0_frames にだけ残す）。"""
     keep = mode == "xyv"
     return {"version": 1, "mode": mode, "names": vla_state.cue_names(keep), "thresholds": tracker.thr.to_json(),
+            "thresholds_source": source,
             "plane_z": float(tracker.plane_z), "fallback_xy": [float(v) for v in tracker.fallback],
             "calibration": tracker.calib.to_json(), "fixed_stats": vla_state.CUE_FIXED_STATS if keep else {},
             "definition": "overhead raw render → pixels of the instructed color (recovla.perception.color) → "
@@ -226,7 +242,8 @@ def sha256(path: pathlib.Path) -> str:
 
 # ------------------------------------------------------------ conversion
 
-def convert(episodes: list, out: pathlib.Path, name: str, manifest: dict = None, target_cue=None) -> None:
+def convert(episodes: list, out: pathlib.Path, name: str, manifest: dict = None, target_cue=None,
+            cue_source: str = "training") -> None:
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
 
     mode = _cue_mode(target_cue)
@@ -235,7 +252,7 @@ def convert(episodes: list, out: pathlib.Path, name: str, manifest: dict = None,
     first_meta, _ = load_raw(episodes[0])
     ds = LeRobotDataset.create(repo_id=f"local/{name}", fps=FPS, features=features(
         int(first_meta["cameras"]["width"]), mode), root=out, robot_type="panda", use_videos=False)
-    tracker = cue_tracker() if mode else None
+    tracker = cue_tracker(cue_source) if mode else None
     sources = []
     try:
         for ep_index, path in enumerate(episodes):
@@ -284,7 +301,7 @@ def convert(episodes: list, out: pathlib.Path, name: str, manifest: dict = None,
         **spec.spec_record(),
         "images": "PNG from raw -> vla_image_spec net transform per view (image_transforms)",
         "state": state_names(mode), "action": ACTION_NAMES,
-        **({"target_cue": cue_record(tracker, mode)} if tracker is not None else {}),
+        **({"target_cue": cue_record(tracker, mode, cue_source)} if tracker is not None else {}),
         "action_definition": "xyz = x_des[raw 2k+2] - x_des[raw 2k] (m, world); rot = 0; "
                              "gripper = +1 closed / -1 open at raw frame 2k+2",
         "orientation": "world-frame axis-angle of ee_quat * conj(q_down), q_down = (0,1,0,0) "
@@ -340,10 +357,11 @@ def verify(out: pathlib.Path, export_dir, check_image=None) -> bool:
     names_state = state_names(mode)
     check(ds.meta.features["observation.state"]["names"] == names_state and conv["state"] == names_state,
           f"state names == {len(names_state)} (target_cue {mode})")
-    tracker = cue_tracker() if mode else None
+    source = conv["target_cue"].get("thresholds_source", "training") if mode else None
+    tracker = cue_tracker(source) if mode else None
     if tracker is not None:
         check(conv["target_cue"]["thresholds"] == tracker.thr.to_json(),
-              f"target_cue thresholds recorded == configs planner.color_detect {tracker.thr.to_json()}")
+              f"target_cue thresholds recorded == configs ({source}) {tracker.thr.to_json()}")
     fixed = vla_state.CUE_FIXED_STATS if mode == "xyv" else {}
 
     # stats: finite, and normalization never divides by zero
@@ -476,6 +494,8 @@ def main(argv=None) -> int:
                     help="add the target position cue to observation.state (15 -> 18; board 0048)")
     ap.add_argument("--cue-without-flag", action="store_true",
                     help="with --target-cue: leave the visibility flag out of the input (15 -> 17; board 0050-2)")
+    ap.add_argument("--cue-thresholds", default="training", choices=CUE_THRESHOLD_SOURCES,
+                    help="with --target-cue: color thresholds of the cue (runtime_v2 for stage 2; board 0115)")
     args = ap.parse_args(argv)
     if args.verify:
         return 0 if verify(pathlib.Path(args.verify), args.export_actions, args.check_image) else 1
@@ -489,7 +509,7 @@ def main(argv=None) -> int:
     if not episodes or not args.out or not args.name:
         ap.error("need --out, --name and episodes (paths, --manifest or --raw-dir)")
     mode = ("xy" if args.cue_without_flag else "xyv") if args.target_cue else None
-    convert(episodes, pathlib.Path(args.out), args.name, manifest, target_cue=mode)
+    convert(episodes, pathlib.Path(args.out), args.name, manifest, target_cue=mode, cue_source=args.cue_thresholds)
     return 0
 
 

@@ -4,6 +4,7 @@
     .venv\\Scripts\\python.exe scripts\\40_h.py train R1 --smoke     # 1000 手で最後まで通す
     .venv\\Scripts\\python.exe scripts\\40_h.py train R1             # 3 万手（5000 手ごとに保存）
     ... train N1 [--smoke]
+    ... train R1v2 / N1v2 [--smoke]                                   # 段階 2（目標書 v2、outputs/f/data_v2.json、0115）
 
 データは目標の手がかりつき（17 次元、旗は記録のみ）の R1cue・N1cue（outputs/f/data_cue.json、掲示板 0053）。
 学習の種は R1・N1 で同じ（configs の train.seed）。行動エキスパートのみ、バッチ 32。学習時の手がかりのずらし
@@ -30,21 +31,24 @@ def write(name: str, obj: dict) -> pathlib.Path:
 
 
 def cmd_train(a) -> None:
+    """R1・N1（旧版、data_cue.json）と、段階 2 の R1v2・N1v2（目標書 v2、data_v2.json。同じ手順・同じ設定、0115）。"""
     from recovla.policy import train_launcher as tl
-    d = json.loads((config.path(CFG["paths"]["outputs"]) / "f" / "data_cue.json").read_text(encoding="utf-8"))
+    stage2 = a.name.endswith("v2")
+    base = a.name[:-2] if stage2 else a.name
+    d = json.loads((config.path(CFG["paths"]["outputs"]) / "f" / ("data_v2.json" if stage2 else "data_cue.json"))
+                   .read_text(encoding="utf-8"))
     dec_path = OUT / "cue_aug_decision.json"
     if not dec_path.is_file():
         raise SystemExit(f"{dec_path} がない（K1 での手がかりのずらしの採否を先に決める＝掲示板 0054）")
     dec = json.loads(dec_path.read_text(encoding="utf-8"))
-    run = "smoke" if a.smoke else a.name
-    rc = CFG["train"]["runs"][a.name]
+    rc = CFG["train"]["runs"][base]
     steps = 1000 if a.smoke else int(rc["steps"])
-    cfg = {"dataset": str(config.path(d["datasets"][a.name]["dataset"])), "train_scope": CFG["train"]["scope"],
+    cfg = {"dataset": str(config.path(d["datasets"][base]["dataset"])), "train_scope": CFG["train"]["scope"],
            "batch_size": int(CFG["train"]["batch_size"]), "steps": steps,
            "save_freq": steps if a.smoke else int(rc["save_freq"]), "seed": int(CFG["train"]["seed"]),
            "log_freq": int(CFG["train"]["log_freq"]), "num_workers": int(CFG["train"]["num_workers"]),
-           "note": f"Step H {a.name}{' smoke' if a.smoke else ''}: {steps} steps on {d['datasets'][a.name]['dataset']} "
-                   f"(target cue 17-d, cue_augment {'on' if dec['adopt'] else 'off'} per board 0054)"}
+           "note": f"{'Stage 2' if stage2 else 'Step H'} {a.name}{' smoke' if a.smoke else ''}: {steps} steps on "
+                   f"{d['datasets'][base]['dataset']} (target cue, cue_augment {'on' if dec['adopt'] else 'off'} per board 0054)"}
     if dec["adopt"]:
         cfg["cue_augment"] = dict(CFG["train"]["cue_augment"])
     tag = f"{a.name}{'_smoke' if a.smoke else ''}"
@@ -176,7 +180,7 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("decide")
     s = sub.add_parser("train")
-    s.add_argument("name", choices=["R1", "N1"])
+    s.add_argument("name", choices=["R1", "N1", "R1v2", "N1v2"], help="R1v2・N1v2: 段階 2（outputs/f/data_v2.json）")
     s.add_argument("--smoke", action="store_true", help="1000 手で最後まで通す")
     s = sub.add_parser("statscopy")
     s.add_argument("name", choices=["R2", "R1plus"])

@@ -123,7 +123,8 @@ def start_condition(data: dict, meta: dict, cfg: dict = None) -> dict:
     if kind == "A":
         hand_rise = float(data["ee_pos"][0, 2]) - float(info["hand_z_at_close"])
         checks.update(closed=bool(data["gripper_closed"][0]), nothing_between=gap < float(ph["min_grip_gap_m"]),
-                      fingers_rested=float(info.get("finger_rest_s", 0.0)) >= float(cfg["expert"]["close_settle_s"]) - 1e-9,
+                      fingers_rested=max(float(info.get("finger_rest_s", 0.0)), float(info.get("finger_closed_s", 0.0)))
+                      >= float(cfg["expert"]["close_settle_s"]) - 1e-9,
                       hand_rise=hand_rise >= float(ic["A"]["confirm"]["hand_rise_min_m"]),
                       cube_low=cube_rise < float(ic["A"]["confirm"]["cube_rise_max_m"]))
     else:
@@ -157,6 +158,7 @@ class Injector:
         self.info = {}                 # 確定の時点の物理の量（記録と完了条件 2 の検査に使う）
         self.reason = None
         self._rest_s = 0.0
+        self._closed_s = 0.0
         self._press_prev = False
 
     # -------------------------------------------------------------- helpers
@@ -210,9 +212,23 @@ class Injector:
         self.info["target_z_at_fire"] = float(truth.target_pos[2])
         return self._run_a(cmd, truth)
 
+    def _fingers_closed(self, truth) -> bool:
+        """閉じ切り: 指の速さが close_settle_s 続けて止まっている。closed_width_m があるとき（目標書 v2 の生成＝0115）は、
+        開き幅がその値以下に close_settle_s 続けてあることでもよい（v2 のハンドの模型は、空を掴んで閉じ切ると関節の下限で
+        指が細かく震え、指の速さの静止が成り立たない）。"""
+        ex = self.ex
+        if not truth.gripper_closed:
+            return False
+        if ex.clocks.finger_rest_s >= ex.close_settle_s - 1e-9:
+            return True
+        return self.ic["A"].get("closed_width_m") is not None and self._closed_s >= ex.close_settle_s - 1e-9
+
     def _run_a(self, cmd, truth):
         ex, a = self.ex, self.ic["A"]
         x = np.asarray(truth.x_cmd, float)
+        cw = a.get("closed_width_m")
+        if cw is not None:
+            self._closed_s = self._closed_s + ex.dt if float(np.sum(truth.fingers)) <= float(cw) else 0.0
         if truth.t - self._t_arm > float(a["timeout_s"]):
             self.status, self.reason = "not_effective", "timeout"
             return self._cmd(phase=cmd.phase)
@@ -231,7 +247,7 @@ class Injector:
                 return self._press_once(S.Phase.close)
             return self._cmd(ex._vel_to(x, goal), False, S.Phase.descend)
         if self.stage == "closing":
-            if truth.gripper_closed and ex.clocks.finger_rest_s >= ex.close_settle_s - 1e-9:
+            if self._fingers_closed(truth):
                 self.stage = "lift"
                 rise = max(float(self.p.a_lift_m), float(a["confirm"]["hand_rise_min_m"]) + float(a["lift_rise_margin_m"]))
                 self._hand_goal_z = self._hand_z0 + rise
@@ -244,9 +260,10 @@ class Injector:
             c = a["confirm"]
             hand_rise = float(truth.hand_pos[2]) - self._hand_z0
             cube_rise = float(truth.target_pos[2]) - frames.CUBE_REST_Z
-            closed_rest = truth.gripper_closed and ex.clocks.finger_rest_s >= ex.close_settle_s - 1e-9
+            closed_rest = self._fingers_closed(truth)
             self.info.update(hand_rise_m=hand_rise, cube_rise_m=cube_rise, fingers=[float(v) for v in truth.fingers],
                              finger_rest_s=round(ex.clocks.finger_rest_s, 3),
+                             **({"finger_closed_s": round(self._closed_s, 3)} if cw is not None else {}),
                              finger_speed=float(np.sum(np.abs(truth.finger_vel))),
                              gripper_closed=bool(truth.gripper_closed))
             if cube_rise < float(c["cube_rise_max_m"]) and truth.gripper_closed and not closed_rest:

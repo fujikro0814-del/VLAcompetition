@@ -551,20 +551,28 @@ def cmd_gen_data(a) -> None:
     runrel = str(run.relative_to(config.ROOT)).replace("\\", "/")
     entries_r1 = [{"run": runrel, "key": k} for k in normal_keys] + [{"run": runrel, "key": c["recovery"]} for c in chosen]
     entries_n1 = [{"run": runrel, "key": k} for k in normal_keys] + [{"run": runrel, "key": c["twin"]} for c in chosen]
-    stamp = run.name.split("_", 2)[-1] if not a.smoke else "smoke_" + run.name.rsplit("_", 1)[-1]
+    stamp = run.name.rsplit("_", 1)[-1] if a.rig == "v2" else run.name.split("_", 2)[-1]
+    if a.smoke:
+        stamp = "smoke_" + run.name.rsplit("_", 1)[-1]
+    # 段階 2（0115）: 旧版と同じ手がかりの形（data_cue.json の旗の採否）で、閾値は v2 の実行系の値（runtime_v2）で直接変換する
+    cue_args = []
+    if a.rig == "v2":
+        keep_flag = json.loads((OUT / "data_cue.json").read_text(encoding="utf-8"))["keep_flag_in_input"]
+        cue_args = ["--target-cue", "--cue-thresholds", "runtime_v2"] + ([] if keep_flag else ["--cue-without-flag"])
+    suffix = "v2" if a.rig == "v2" else ""
     out = {}
     for name, entries, rule in (
             ("R1", entries_r1, "Step F R1: normal demos (seeds 20000-) + recovery A/B/C (seeds 30000-), plan.json"),
             ("N1", entries_n1, "Step F N1: normal demos (seeds 20000-) + one-shot normal demos on the same recovery layouts")):
-        dname = f"{name}_{stamp}"
+        dname = f"{name}{suffix}_{stamp}"
         mpath = config.path(CFG["paths"]["outputs"]) / "manifests" / f"{dname}.json"
-        C.write_manifest(mpath, dname, entries, rule)
+        C.write_manifest(mpath, dname, entries, rule + (" (goals v2 stage 2: sensor-v1, rig v2)" if suffix else ""))
         ds = config.path(CFG["paths"]["outputs"]) / "datasets" / dname
         log = OUT / f"convert_{dname}.log"
         t1 = time.perf_counter()
         with open(log, "w", encoding="utf-8") as f:
             c1 = subprocess.run([sys.executable, "-m", "recovla.data.convert", "--manifest", str(mpath), "--out",
-                                 str(ds), "--name", dname], stdout=f, stderr=subprocess.STDOUT)
+                                 str(ds), "--name", dname, *cue_args], stdout=f, stderr=subprocess.STDOUT)
             c2 = subprocess.run([sys.executable, "-m", "recovla.data.convert", "--verify", str(ds)],
                                 stdout=f, stderr=subprocess.STDOUT)
         text = log.read_text(encoding="utf-8", errors="replace")
@@ -592,8 +600,9 @@ def cmd_gen_data(a) -> None:
         if not a.smoke else None
     stop = any(v[1] and v[0] / v[1] > DROPPED_STOP for v in dropped_by_kind.values())
     from recovla.common import code_version
-    write("data_smoke" if a.smoke else "data", {
-        "run": runrel, "generation_wall_s": round(gen_wall, 1), "workers": a.workers,
+    write(("data_smoke" if a.smoke else "data") + ("_v2" if a.rig == "v2" else ""), {
+        "run": runrel, "generation_wall_s": round(gen_wall, 1), "workers": a.workers, "rig": a.rig,
+        "cue_convert_args": cue_args,
         # 決裁 0044: 生成に使ったコミットと設定の値
         "code_version": code_version.code_version(),
         "config_used": {"inject": CFG["inject"], "expert": CFG["expert"], "scene": CFG["scene"], "sim": CFG["sim"]},
