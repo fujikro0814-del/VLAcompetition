@@ -1,6 +1,7 @@
 # センサと作動の模型 v1（目標書 v2 の G3・G4。0107 の 3・8、0108 の 2 で直した値）。configs/default.yaml に重ねて読む
 # （config.load("sensor_v1")）。10/3 にタグ sensor-v1 で固定し、以後は評価の途中で変えない（G4）。
-# 【公称】は公式の文書の値、【仮定】は公式の値がなく決めた値（0108 の 3 の決まりで、10/2 の夜までに届いた実物の測定だけで置き換える）。
+# 【公称】は公式の文書の値、【仮定】は公式の値がなく決めた値。実物の測定はしない（0109）。固定の前に、独立に測った論文・技術報告と
+# 照らし、2 倍を超える食い違いは控えめな側（誤差・遅延・雑音が大きい方）を採る。照らした出典は sources に書く。
 sensor_model_version: 1
 
 actuation:
@@ -16,3 +17,46 @@ actuation:
   finger_pad_solref: [-30000, -600]
   # 握る力を 0.2 s かけて上げる（0.05 s では、握った瞬間の接触の揺れで腕のサーボの力の変化が大きくなった）
   hand: {kv: 10000.0, k_pos: 20.0, move_force: 10.0, ramp_s: 0.2, still_speed: 0.005}
+
+sensor:
+  frame_hz: 30                  # 【公称】深度・色とも 30 fps
+  cameras:
+    overhead:                   # D455 相当（0107 の 3-1）。位置は場面の overhead カメラ（本当の位置）
+      mount: world
+      model_camera: overhead
+      color: {width: 520, height: 520, fovy: 45.0, out: 256}   # 色 90°×65°・1280×800 の中央 45° の正方形（520 px）を 256 に縮める
+      depth: {width: 848, height: 480, fovy: 56.5}             # 【公称】深度 87°×58°（848×480 で横 87° になる縦の画角）
+      baseline: 0.095           # 【公称】
+      min_z: 0.52               # 【公称】
+      max_z: 6.0                # 【公称】適した範囲の上限
+      depth_unit: 0.001         # 【公称】既定の深度の単位
+      accuracy: {rel: 0.02, at: 4.0}   # 【公称】Z 精度 <2% at 4 m。4σ とみなして視差の系統のずれを試行ごとに引く【仮定】
+    wrist:                      # D405 相当。色は深度と同じ撮像素子（0108 の 2 の 1: 87°×58° で描き、中央の 58°×58° を切り出す）
+      mount: hand
+      model_camera: wrist
+      color: {width: 848, height: 480, fovy: 58.0, crop: 480, out: 256}
+      depth: {width: 848, height: 480, fovy: 58.0}
+      baseline: 0.018           # 【公称】（代理店の資料。データシートの表で要確認）
+      min_z: 0.07               # 【公称】848×480 で 7 cm
+      max_z: 2.0                # 【仮定】（公称の適した範囲は 7〜50 cm。遠くは雑音の式で大きくなる）
+      depth_unit: 0.0001        # 【公称】D405 の既定 0.1 mm
+      accuracy: {rel: 0.02, at: 0.5}   # 【公称】±2% at 50 cm。4σ【仮定】
+  depth_noise:
+    subpixel: 0.08              # 【公称】白書の典型値（RMS = Z²·subpixel /（f·B））
+    corr_px: 1.5                # 【仮定】ステレオの照合の窓の分の空間の相関（ガウスでならして σ を保つ）
+    edge_step: 0.02             # 【仮定】深度の段差がこれ以上の縁の 1 px を「空飛ぶ画素」の候補にする
+    edge_prob: 0.5              # 【仮定】
+    hole_area: 0.01             # 【仮定】3×3 の穴が占める画素の割合（公称の充填率 ≥99% の端）
+  color_noise:
+    read_sigma: 2.0             # 【仮定】読み出しの雑音 [8 bit の値]
+    shot_gain: 0.3              # 【仮定】ショットの雑音の分散 = shot_gain × 輝度
+    exposure_gain: [0.85, 1.15] # 【仮定】試行ごとの露出の倍率（照明のばらつき）
+    white_balance: [0.95, 1.05] # 【仮定】試行ごとのチャネルごとの倍率
+  latency_ms: [33, 100]         # 【仮定】こまごとに一様に引く（撮った時刻から実行系に届くまで）
+  calibration:
+    overhead: {trans_sigma: 0.004, rot_sigma_deg: 0.4}    # 【仮定】固定カメラの外部パラメータの誤差（軸ごと）
+    wrist: {trans_sigma: 0.003, rot_sigma_deg: 0.5}       # 【仮定】hand-eye の誤差
+    table: {z_sigma: 0.001, tilt_sigma_deg: 0.1}          # 【仮定】
+  joints: {q_sigma: 1.0e-4, dq_sigma: 1.0e-3}             # 【仮定】1 kHz、遅延なし
+  gripper: {rate_hz: 10, width_sigma: 1.0e-4, width_unit: 1.0e-4}   # 【公称】franka_gripper は 10 Hz で読む。雑音と丸めは【仮定】
+  sources: []                   # 照らした独立の出典（0109 の 3。固定の前に書く）

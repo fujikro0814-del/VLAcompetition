@@ -28,6 +28,7 @@ def nominal_setup(cfg: dict, cameras: dict = None, table_z: float = None, table_
         cameras=dict(cameras or {}),
         retreat_pose=frozen_array(cfg["expert"]["retreat_pose"]),
         workspace={k: tuple(float(v) for v in sim["workspace"][k]) for k in ("x", "y", "z")},
+        cue_fallback_xy=frozen_array([np.mean(sc["region"]["x"]), np.mean(sc["region"]["y"])]),
         grasp_force=float(act["grasp_force"]),
         gripper_speed=float(act["gripper_speed"]),
     )

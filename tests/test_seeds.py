@@ -8,7 +8,8 @@ def test_stream_is_the_named_spawn_key():
     for name, sid in seeds.STREAM_ID.items():
         want = np.random.Generator(np.random.PCG64(np.random.SeedSequence(123, spawn_key=(sid,)))).random(5)
         assert np.array_equal(seeds.stream(123, name).random(5), want)
-    assert seeds.STREAM_ID == {"layout": 0, "induce": 1, "noise": 2, "script": 3, "inject": 4, "order": 5}
+    assert seeds.STREAM_ID == {"layout": 0, "induce": 1, "noise": 2, "script": 3, "inject": 4, "order": 5,
+                               "sensor_setup": 6, "sensor_frame": 7, "latency": 8}
 
 
 def test_streams_are_independent_and_reproducible():

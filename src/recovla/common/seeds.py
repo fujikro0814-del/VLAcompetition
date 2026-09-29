@@ -10,7 +10,11 @@
 """
 import numpy as np
 
-STREAM_ID = {"layout": 0, "induce": 1, "noise": 2, "script": 3, "inject": 4, "order": 5}   # 変えない
+STREAM_ID = {"layout": 0, "induce": 1, "noise": 2, "script": 3, "inject": 4, "order": 5,   # 変えない
+             # 目標書 v2（0107・0108）で足した。前の番号は変えない
+             "sensor_setup": 6,      # 試行ごとのセンサの値（較正誤差・深度の系統誤差・照明・こまの位相）
+             "sensor_frame": 7,      # こまごとの雑音 (7, カメラの添字, こまの番号)。描く順によらず同じ値
+             "latency": 8}           # 推論・カメラの遅延の抽選
 COLORS = ("red", "green", "blue")
 
 
