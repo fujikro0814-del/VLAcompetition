@@ -185,7 +185,10 @@ def cmd_task(a) -> None:
                             tip_offset=float(CFG["sim"]["fingertip_offset"]), mode="naive", s=int(rt_cfg["exec_interval"]),
                             d_init=int(rt_cfg["delay_steps"]), motion=Motion(setup, margin=float(act["limiter_margin"])))
         judge = JudgeV2(setup, per, thr, rtv["judge"])
-        return TaskRuntime(io, setup, prt, judge, CFG, D.decompose, CFG["convert"]["instruction"])
+        e = CFG["expert"]
+        mp = {"gain": float(e["gain_per_s"]), "xy_max": float(e["speed_ref"]["xy"]), "z_max": float(e["speed_ref"]["z"]),
+              "z_tol": float(e["move_tol_m"]), "tol": float(e["phase"]["retreat_tol_m"])}
+        return TaskRuntime(io, setup, prt, judge, CFG["planner"], mp, D.decompose, CFG["convert"]["instruction"])
 
     base, n = (int(x) for x in a.trials.split(":"))
     rows = []

@@ -51,15 +51,15 @@ class ReturnMotion:
 
 
 class TaskRuntime:
-    def __init__(self, io, setup, prt, judge, cfg: dict, decompose, instruction_fmt: str):
+    def __init__(self, io, setup, prt, judge, planner_cfg: dict, motion_params: dict, decompose, instruction_fmt: str):
+        """planner_cfg: configs の planner（step_timeout_s・retry・return_to_retreat）。motion_params: 戻す動きの速さの決まり
+        （旧版の台本と同じ値。gain・xy_max・z_max・z_tol・tol。入口のスクリプトが configs の expert から作る）。"""
         self.io, self.setup, self.prt, self.judge = io, setup, prt, judge
         self.decompose, self.fmt = decompose, instruction_fmt
-        p, e = cfg["planner"], cfg["expert"]
+        p = planner_cfg
         self.step_timeout, self.retries = float(p["step_timeout_s"]), int(p["retry"])
         self.ret = dict(p["return_to_retreat"])
-        self.rm = dict(goal=setup.retreat_pose, rise_z=float(self.ret["rise_z"]), gain=float(e["gain_per_s"]),
-                       xy_max=float(e["speed_ref"]["xy"]), z_max=float(e["speed_ref"]["z"]), z_tol=float(e["move_tol_m"]),
-                       tol=float(e["phase"]["retreat_tol_m"]))
+        self.rm = dict(goal=setup.retreat_pose, rise_z=float(self.ret["rise_z"]), **motion_params)
         self.open_m = float(judge.p["gripper_open_m"])
         self.judge_tol = float(judge.p["retreat_tol_m"])
 
