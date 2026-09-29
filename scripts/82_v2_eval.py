@@ -17,7 +17,7 @@ import numpy as np
 
 from recovla.common import config
 
-CFG = config.load("sensor_v1")
+CFG = config.load("sensor_v1", "runtime_v2")
 os.environ["HF_HOME"] = str(config.path(CFG["paths"]["models_home"]))
 os.environ["HF_HUB_OFFLINE"] = "1"
 OUT = config.path(CFG["paths"]["outputs"]) / "v2eval"
@@ -81,7 +81,9 @@ def cmd_run(a) -> None:
     from recovla.runtime import cue as C
     from recovla.runtime.motion import Motion
     from recovla.runtime.policy import SensorPolicy
+    from recovla.runtime.perception import Params, Perception
     from recovla.runtime.runner import PolicyRuntime, disable_rtc_for, enable_rtc_for
+    from recovla.runtime.safety import PerceptionSafetyFilter
     out = OUT / a.experiment / a.condition
     if out.exists() and any(out.glob("trial_*.json")):
         raise SystemExit(f"{out} already has trials")
@@ -106,7 +108,13 @@ def cmd_run(a) -> None:
         if pol.cue is not None:                         # 試行ごとの較正誤差（信じている値）で作り直す
             pol.cue = C.TargetCue(C.calibration_from_setup(setup.cameras["overhead"]), pol.cue.thr,
                                   setup.table_z + 0.5 * setup.cube_size, setup.cue_fallback_xy)
-        return PolicyRuntime(io, setup, pol, mode=a.mode, s=int(rt_cfg["exec_interval"]), d_init=int(rt_cfg["delay_steps"]),
+        rtv = CFG["runtime_v2"]
+        per = Perception(setup, Params.from_config(rtv["perception"]), C.Thresholds.from_dict(CFG["planner"]["color_detect"]))
+        sf = None
+        if not a.no_safety:
+            sf = PerceptionSafetyFilter(setup, CFG["safety_filter"], float(rtv["safety_extra_margin_m"] or 0.0))
+        return PolicyRuntime(io, setup, pol, perception=per, safety=sf, checks=rtv["checks"],
+                             tip_offset=float(CFG["sim"]["fingertip_offset"]), mode=a.mode, s=int(rt_cfg["exec_interval"]), d_init=int(rt_cfg["delay_steps"]),
                              rtc_horizon=int(rt_cfg["rtc_guidance_horizon"]),
                              motion=Motion(setup, limiter_enabled=not a.no_limiter, margin=float(act["limiter_margin"]),
                                            ik_on=a.diag_ik))
@@ -118,7 +126,7 @@ def cmd_run(a) -> None:
         w0 = time.perf_counter()
         meta, arrays, rlog = run_policy_trial(world, suite, make_runtime, lay, tgt, seed, inducer=ind, cfg=CFG)
         meta.update({"trial": i, "experiment": a.experiment, "condition": a.condition, "model": a.model, "ablate": a.ablate,
-                     "mode": a.mode, "limiter": not a.no_limiter, "wall_s": round(time.perf_counter() - w0, 2)})
+                     "mode": a.mode, "limiter": not a.no_limiter, "safety": not a.no_safety, "wall_s": round(time.perf_counter() - w0, 2)})
         np.savez(out / f"trial_{i:04d}.npz", **arrays)
         (out / f"trial_{i:04d}.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1, default=_json_default), encoding="utf-8")
         (out / f"trial_{i:04d}_runtime.json").write_text(json.dumps(rlog, ensure_ascii=False, default=_json_default), encoding="utf-8")
@@ -148,6 +156,7 @@ def main(argv=None) -> int:
     p.add_argument("--mode", default="naive", choices=("naive", "sync", "rtc"))
     p.add_argument("--induce", default=None)
     p.add_argument("--no-limiter", action="store_true")
+    p.add_argument("--no-safety", action="store_true", help="安全フィルタを切る（E5 の比べる側）")
     p.add_argument("--diag-ik", default="commanded", choices=("commanded", "measured"), help="診断だけ")
     p.add_argument("--diag-no-gravcomp", action="store_true", help="診断だけ")
     p.add_argument("--ablate", default=None, help="診断だけ: " + ",".join(ABLATIONS))

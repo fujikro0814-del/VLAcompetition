@@ -38,16 +38,32 @@ class JointLimiter:
         self.v = np.zeros(7)
         self.a = np.zeros(7)
 
-    def step(self, v_des) -> np.ndarray:
+    def propose(self, v_des) -> np.ndarray:
+        """切り詰めた速さの候補（まだ確定しない）。"""
         v_des = np.asarray(v_des, float)
-        if self.enabled:
-            v = limit_rate(self.max_vel, self.max_acc, self.max_jerk, v_des, self.v, self.a)
-            d = float(np.max(np.abs(v - v_des)))
-            if d > 1e-9:
-                self.n_clipped += 1
-                self.max_clip = max(self.max_clip, d)
-        else:
-            v = v_des
+        if not self.enabled:
+            return v_des
+        v = limit_rate(self.max_vel, self.max_acc, self.max_jerk, v_des, self.v, self.a)
+        d = float(np.max(np.abs(v - v_des)))
+        if d > 1e-9:
+            self.n_clipped += 1
+            self.max_clip = max(self.max_clip, d)
+        return v
+
+    def shrink(self, v_cand, s: float) -> np.ndarray:
+        """躍度の項だけを s 倍に縮めた速さ（加速度は前の値と候補の間、躍度は候補の s 倍なので関節の上限は保たれる）。"""
+        v0 = self.v + self.a * DT
+        return v0 + s * (np.asarray(v_cand) - v0)
+
+    def position_of(self, v) -> np.ndarray:
+        q = self.q + np.asarray(v) * DT
+        return q if self.q_min is None else np.clip(q, self.q_min, self.q_max)
+
+    def step(self, v_des) -> np.ndarray:
+        return self.commit(self.propose(v_des))
+
+    def commit(self, v) -> np.ndarray:
+        v = np.asarray(v, float)
         q = self.q + v * DT
         if self.q_min is not None:
             q = np.clip(q, self.q_min, self.q_max)

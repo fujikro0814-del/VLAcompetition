@@ -1,8 +1,8 @@
 """監査（目標書 v2 の G1〜G3。0107 の 2-3・7-3・8-2）。評価の枠の側で、試行ごとに記録して集計する。
 
 CommandAudit（G3）: RobotIO の口を通った指令（関節の位置 1 kHz、ハンドの move・grasp）を、Franka Panda の公称の上限と比べる。
-  関節の速度・加速度・躍度は 1 kHz の差分（libfranka と同じ）、トルクとその変化は物理の周期（500 Hz）の作動器の力、
-  直交座標は指令の順運動学の手先。上限は目標書の値そのもの（制限層の margin は掛けない）
+  関節の速度・加速度・躍度は 1 kHz の差分（libfranka と同じ）、直交座標は指令の順運動学の手先。上限は目標書の値そのもの
+  （制限層の margin は掛けない）。位置のサーボの力とその変化（500 Hz）は参考（reference）として別に書く
 """
 import numpy as np
 
@@ -72,5 +72,9 @@ class CommandAudit:
         put("gripper_force", np.array(forces) / MAX_FINGER_FORCE if forces else np.zeros(0))
         out["n_hand_commands"] = len(self.hand)
         out["finger_speed_measured_max"] = self.finger_speed_max
+        # 口を通る指令の項目だけを数える（0108 の 2 の 2）。位置のサーボの力（torque・torque_rate）は実機の内部の制御器の出力で、
+        # 関節の位置の指令の口では指令されないので参考として別に書く（力の大きさは作動器の上限で切られる）
+        ref = ("torque", "torque_rate")
+        out["reference"] = {k: {"max_ratio": out["max_ratio"].pop(k, 0.0), "violations": out["violations"].pop(k, 0)} for k in ref}
         out["total_violations"] = int(sum(out["violations"].values()))
         return out

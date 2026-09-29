@@ -16,49 +16,15 @@ IK の手前で、参照位置の増分 Δx（並進 3 つ）だけを制限す�
 - 不等式: d_ref < d_detect の障害物について n·Δx ≥ −γ (d_ref − d_min)。これを全部満たす最も近い Δx に置き換える
   （変数 3 つ・不等式は高々 7 本の二次計画。有効な組を数え上げ、KKT を満たす解を取る。外部の解法器は使わない）
 """
-import itertools
-
 import mujoco
 import numpy as np
 
 from recovla.common import config
+from recovla.runtime.qp import project  # noqa: F401（二次計画は実行系と共通。0108）
 from recovla.sim import contact
 
 _CFG = config.load()
 _EPS = 1e-12
-
-
-def project(dx, A, b):
-    """min ‖x − dx‖² s.t. A x ≥ b（A は (m, 3)）。満たす解がなければ、残る違反の小さい近似（Dykstra）を返す。"""
-    dx = np.asarray(dx, float)
-    if not len(A) or np.all(A @ dx >= b - 1e-15):
-        return dx, True
-    m = len(A)
-    viol = [i for i in range(m) if A[i] @ dx < b[i]]
-    order = viol + [i for i in range(m) if i not in viol]
-    for size in range(1, min(3, m) + 1):
-        for S in itertools.combinations(order, size):
-            As, bs = A[list(S)], b[list(S)]
-            G = As @ As.T
-            if abs(np.linalg.det(G)) < 1e-12:
-                continue
-            lam = np.linalg.solve(G, bs - As @ dx)
-            if np.any(lam < -1e-12):
-                continue
-            x = dx + As.T @ lam
-            if np.all(A @ x >= b - 1e-12):
-                return x, True
-    x = dx.copy()                                       # Dykstra（交わりが空に近い、向きが揃った組）
-    p = np.zeros((m, 3))
-    for _ in range(200):
-        for i in range(m):
-            y = x + p[i]
-            s = A[i] @ y - b[i]
-            nn = A[i] @ A[i]
-            x_new = y - (min(s, 0.0) / nn) * A[i] if nn > _EPS else y
-            p[i] = y - x_new
-            x = x_new
-    return x, False
 
 
 class SafetyFilter:

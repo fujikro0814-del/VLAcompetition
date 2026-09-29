@@ -50,6 +50,10 @@ class Motion:
                                       enabled=limiter_enabled)
         self.vel = np.zeros(3)
         self.hand_id = self.controller.hand_body_id
+        self.limiter_margin = margin
+        self._fk_data = mujoco.MjData(self.model)
+        self._x_hist = []
+        self.n_cart_clipped = 0
 
     # ------------------------------------------------------------------ kinematics
     def _load_state(self, q, dq=None, width=None) -> None:
@@ -89,6 +93,7 @@ class Motion:
         c.target_ref_quat = c.target_quat.copy()
         c.prev_clutch = True
         self.limiter.reset(q0)
+        self._x_hist = [self._fk_hand(q0)] * 3
         self.vel = np.zeros(3)
         self.pad.state = pad_state(vel=self.vel)
         integ.refresh()
@@ -118,6 +123,48 @@ class Motion:
         leash = self.controller.q_des_leash
         q_ik = np.clip(self.data.ctrl[self.arm_act], joints.q - leash, joints.q + leash)
         v_des = (q_ik - self.limiter.q) / self.dt                  # 500 Hz の 1 手で q_ik に着く速さ
-        out = [self.limiter.step(v_des) for _ in range(SUBSTEPS)]
+        out = []
+        for _ in range(SUBSTEPS):
+            v = self.limiter.propose(v_des)
+            if self.limiter.enabled:
+                v = self._cartesian_limit(v)
+            q = self.limiter.commit(v)
+            self._x_hist.append(self._fk_hand(q))
+            del self._x_hist[:-4]
+            out.append(q)
         self.controller.q_des = out[-1].copy()                     # IK の次の出発点は制限層の出力
         return out
+
+    # 直交座標の上限（目標書 G3: 並進の速度 1.7 m/s・加速度 13 m/s²・躍度 6500 m/s³。関節の上限では抑えきれないので足す。0107 の 8-2）
+    CART = (1.7, 13.0, 6500.0)
+
+    def _fk_hand(self, q) -> np.ndarray:
+        d = self._fk_data
+        d.qpos[self.arm_qadr] = q
+        mujoco.mj_kinematics(self.model, d)
+        return d.xpos[self.hand_id].copy()
+
+    def _cart_ok(self, x_new) -> bool:
+        h = self._x_hist
+        if len(h) < 3:
+            return True
+        dt, mg = L.DT, self.limiter_margin
+        v = (x_new - h[-1]) / dt
+        a = (x_new - 2 * h[-1] + h[-2]) / dt ** 2
+        j = (x_new - 3 * h[-1] + 3 * h[-2] - h[-3]) / dt ** 3
+        return (np.linalg.norm(v) <= self.CART[0] * mg and np.linalg.norm(a) <= self.CART[1] * mg
+                and np.linalg.norm(j) <= self.CART[2] * mg)
+
+    def _cartesian_limit(self, v_cand) -> np.ndarray:
+        lim = self.limiter
+        if self._cart_ok(self._fk_hand(lim.position_of(v_cand))):
+            return v_cand
+        lo, hi = 0.0, 1.0                                          # 躍度の項を縮める割合を二分法で探す
+        for _ in range(12):
+            mid = 0.5 * (lo + hi)
+            if self._cart_ok(self._fk_hand(lim.position_of(lim.shrink(v_cand, mid)))):
+                lo = mid
+            else:
+                hi = mid
+        self.n_cart_clipped += 1
+        return lim.shrink(v_cand, lo)

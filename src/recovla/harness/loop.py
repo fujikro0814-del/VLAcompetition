@@ -38,7 +38,8 @@ def run_policy_trial(world, suite, make_runtime, layout, target: str, seed: int,
     pp = PhaseParams.from_config()
     world.reset(layout)
     setup = suite.start_trial(seed, world.data, nominal_setup(cfg))
-    io = SimRobotIO(world, suite, seed)
+    rtv = cfg.get("runtime_v2", {})
+    io = SimRobotIO(world, suite, seed, fixed_latency={"perception": float(rtv.get("perception_latency_s", 0.0))})
     rt = make_runtime(io, setup)
     task = instruction(target, cfg)
     rt.start(task, seed)
@@ -54,6 +55,7 @@ def run_policy_trial(world, suite, make_runtime, layout, target: str, seed: int,
         def act_filter(k, a):
             out = inducer.filter(k, a, truth())
             state["induced"].append((k, bool(inducer.active)))
+            rt.injecting = bool(inducer.active)                 # 上書きの間は安全フィルタを切る（旧版と同じ）
             return out
         rt.action_filter = act_filter
 

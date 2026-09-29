@@ -39,14 +39,19 @@ def disable_rtc_for(policy) -> None:
 
 class PolicyRuntime:
     def __init__(self, io, setup, policy, mode: str = "naive", s: int = 10, d_init: int = 4, rtc_horizon: int = 40,
-                 motion: Motion = None, limiter_enabled: bool = True, margin: float = 0.99):
+                 motion: Motion = None, limiter_enabled: bool = True, margin: float = 0.99,
+                 perception=None, safety=None, checks: dict = None, tip_offset: float = 0.1034):
         if mode not in ("sync", "naive", "rtc"):
             raise ValueError(mode)
         self.io, self.setup, self.policy = io, setup, policy
         self.mode, self.s, self.d_init, self.E = mode, int(s), int(d_init), int(rtc_horizon)
         self.motion = motion or Motion(setup, limiter_enabled=limiter_enabled, margin=margin)
         self.action_filter = None          # 評価の道具（失敗注入）が行動を上書きする口。None なら方策のまま
-        self.safety = None                 # 安全フィルタ（知覚の障害物）。motion の差し込み口に付ける
+        self.injecting = False             # 評価の道具が上書きしている間は真（安全フィルタを切る。旧版と同じ）
+        self.perception = perception       # recovla.runtime.perception.Perception（None なら知覚なし）
+        self.safety = safety               # recovla.runtime.safety.PerceptionSafetyFilter（None ならフィルタなし）
+        self.checks = dict(checks or {})   # 知覚の失敗の止まり方の閾値（configs の runtime_v2.checks）
+        self.tip_offset = float(tip_offset)
 
     # -------------------------------------------------------------------- trial
     def start(self, task: str, seed: int) -> None:
@@ -54,6 +59,17 @@ class PolicyRuntime:
         sensor = self.io.sense(cameras=False)
         self.motion.reset(sensor.joints)
         self.policy.start_trial(seed)
+        from recovla.runtime.cue import color_of_instruction
+        self.color = color_of_instruction(task)
+        self.ready = self.perception is None          # 知覚があるなら、起動時の確かめ（テーブル面・箱）の後に始める
+        self.boxf = []
+        self.pend_per = None
+        self.wm = None
+        self.stop_reason = None
+        self.t_task0 = None
+        self.log_per = []
+        if self.safety is not None:
+            self.safety.start_trial(self.color)
         self.n_tick = 0
         self.k = -1
         self.closed = False
@@ -74,13 +90,93 @@ class PolicyRuntime:
         if self.n_tick % STEPS_PER_ACTION == 0:
             self.k += 1
             self._action_boundary()
-        self.n_tick += 1
         sensor = self.io.sense(cameras=False)
+        if self.perception is not None:
+            self.perception.record_joints(sensor.joints)
+        if self.safety is not None and self.n_tick % 10 == 0:          # 入力の読み取り（50 Hz）ごと。旧版と同じ
+            self.safety.begin_read(sensor.joints.q, sensor.gripper.width, self.motion.x_cmd)
+            self.motion.set_command_filter(self.safety.filter if self.safety.on() else None)
+        self.n_tick += 1
         for q in self.motion.step(sensor.joints):
             self.io.command_joints(q)
 
+    # ------------------------------------------------------------------ perception
+    def _tip(self, q) -> np.ndarray:
+        pos, quat = self.motion.hand_pose(q)
+        w, x, y, z = quat
+        zaxis = np.array([2 * (x * z + w * y), 2 * (y * z - w * x), 1 - 2 * (x * x + y * y)])
+        return pos + self.tip_offset * zaxis
+
+    def _perception(self, t: float) -> None:
+        per = self.perception
+        if self.pend_per is not None and self.pend_per.ready(t):
+            out = self.pend_per.result(t)
+            self.pend_per = None
+            if out["kind"] == "startup":
+                self._after_startup(out)
+            else:
+                self.wm = out["wm"]
+                if self.safety is not None:
+                    self.safety.set_world(self.wm)
+                self.log_per.append({"t": t, "t_obs": out["t_obs"],
+                                     "cubes": {c: {"pos": e.pos.tolist(), "status": e.status, "in_box": e.in_box,
+                                                   "source": e.source} for c, e in self.wm.cubes.items()},
+                                     "box": {"xy": np.asarray(self.wm.box["xy"]).tolist(), "yaw": self.wm.box["yaw"],
+                                             "ok": self.wm.box["ok"]}})
+                self._check_target(t)
+        if self.pend_per is not None or self.stop_reason:
+            return
+        sensor = self.io.sense(cameras=True)
+        if not {"overhead", "wrist"} <= set(sensor.cameras):
+            return
+        if not self.ready:
+            self.boxf.append((sensor.cameras["overhead"], sensor.gripper.width))
+            if len(self.boxf) < int(self.checks.get("box_frames", 5)):
+                return
+            frames, self.boxf = self.boxf, []
+
+            def startup():
+                chk = per.check_table(frames[0][0], frames[0][1])
+                box = per.init_box(frames)
+                return {"kind": "startup", "table": chk, "box": box}
+            self.pend_per = self.io.compute("perception", startup)
+            return
+        tip = self._tip(sensor.joints.q)
+        t_obs = t
+
+        def work():
+            return {"kind": "update", "wm": per.update(sensor.cameras, sensor.gripper, sensor.t, tip), "t_obs": t_obs}
+        self.pend_per = self.io.compute("perception", work)
+
+    def _after_startup(self, out) -> None:
+        c = self.checks
+        tab, box = out["table"], out["box"]
+        self.startup = {"table": tab, "box": {k: (np.asarray(v).tolist() if isinstance(v, np.ndarray) else v)
+                                               for k, v in box.items()}}
+        if abs(tab["dz_m"]) > float(c.get("table_dz_m", 1e9)) or tab["angle_deg"] > float(c.get("table_angle_deg", 1e9)):
+            self.stop_reason = "table_mismatch"
+        elif not box.get("ok"):
+            self.stop_reason = "box_not_found"
+        elif box.get("dev_m", 0.0) > float(c.get("box_dev_m", 1e9)) or box.get("dev_yaw_deg", 0.0) > float(c.get("box_dev_deg", 1e9)):
+            self.stop_reason = "box_moved"
+        self.ready = self.stop_reason is None
+
+    def _check_target(self, t: float) -> None:
+        if self.t_task0 is None:
+            self.t_task0 = t
+        e = self.wm.cubes.get(self.color)
+        missing = e is None or e.status == "lost"
+        if missing and t - self.t_task0 > float(self.checks.get("target_missing_s", 1e9)) and self.active is None:
+            self.stop_reason = "target_not_found"
+
     def _action_boundary(self) -> None:
         k, t = self.k, self.io.now()
+        if self.perception is not None:
+            self._perception(t)
+            if not self.ready or self.stop_reason:           # 起動時の確かめの間・知覚の失敗: 腕をその場で保持する
+                self.motion.set_velocity(np.zeros(3))
+                self.log_act.append((k, t, None, True, np.array([0, 0, 0, 0, 0, 0, 1.0 if self.closed else -1.0])))
+                return
         # 1) 届いた推論を塊にする
         if self.pending is not None and self.pending["fut"].ready(t):
             p = self.pending
@@ -117,6 +213,8 @@ class PolicyRuntime:
             a[6] = 1.0 if self.closed else -1.0
         if self.action_filter is not None:
             a = np.asarray(self.action_filter(k, a), float)
+        if self.safety is not None:                          # 方策が指令を出している間だけ（保持・評価の道具の上書き中は切る）
+            self.safety.gate = (not held) and not self.injecting
         self._apply(a)
         self.log_act.append((k, t, None if held else self.active["i"], held, a.copy()))
 
@@ -165,4 +263,6 @@ class PolicyRuntime:
 
     def trace(self) -> dict:
         return {"inference": self.log_inf, "actions": [
-            {"k": k, "t": t, "chunk": c, "held": h, "a": a.tolist()} for k, t, c, h, a in self.log_act]}
+            {"k": k, "t": t, "chunk": c, "held": h, "a": a.tolist()} for k, t, c, h, a in self.log_act],
+            "perception": self.log_per, "startup": getattr(self, "startup", None), "stop_reason": self.stop_reason,
+            "safety": None if self.safety is None else self.safety.summary()}
