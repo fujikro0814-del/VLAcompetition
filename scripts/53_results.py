@@ -15,7 +15,7 @@ import time
 
 import numpy as np
 
-from recovla.common import config
+from recovla.common import config, goals
 
 CFG = config.load()
 ROOT = config.ROOT
@@ -99,7 +99,7 @@ def blocked_detail(on, off, blocked):
     return out
 
 
-def build() -> str:
+def build(goals: dict) -> str:
     fin, pre = _j(RES / "e_report_final.json"), _j(RES / "e_report_pre.json")
     P, Q = fin["primary"], pre["primary"]
     S = fin["sets"]
@@ -114,6 +114,10 @@ def build() -> str:
       "評価はコードを凍結した後に行い、チェックポイントとデータの版は `docs/freeze/` の SHA-256 の一覧で固定している。"
       f"テスト用のシード範囲（110000〜）で回した。最終モデルは、検証用のシード範囲（199000〜）での予備評価で事前に決めた "
       f"**{fin['final_model']}**（以後変えない決まり）。予備評価の値も並べて示す。")
+    w("")
+    w(f"目標書: この表を作ったときの版は v{goals['version']}（タグ {goals['tag']}、`{goals['path']}` の SHA-256 `{goals['sha256']}`）。"
+      f"この表の評価（{FREEZE_TAG}）は目標書 v1 の実行系、すなわち安全フィルタが立方体の真値を使い、推論中に物理演算を止める"
+      "理想化した実行系によるもの（0105・0106）。")
     w("")
     # ------------------------------------------------------------------ 主な検定
     w("## 1. 主要評価項目（予備評価の前に固めたもの）")
@@ -337,10 +341,15 @@ def build() -> str:
 
 
 def main() -> int:
+    try:
+        fp = goals.fingerprint()          # 変更履歴にない版の目標書なら作らない（0106）
+    except goals.GoalsMismatch as e:
+        print(f"目標書の照合に通らないので止める: {e}", file=sys.stderr)
+        return 1
     py = sys.executable
     for args in (["scripts/50_e_eval.py", "report", "--stage", "final"], ["scripts/51_planner.py", "e7-summary", "--tag", "E7_final"]):
         subprocess.run([py, *args], cwd=ROOT, check=True, stdout=subprocess.DEVNULL)
-    text = build()
+    text = build(fp)
     (RES / "results.md").write_text(text, encoding="utf-8")
     # 監督・決裁が読めるように、Git で管理する写しも置く（outputs は Git 管理外）
     docs = ROOT / "docs" / "results"

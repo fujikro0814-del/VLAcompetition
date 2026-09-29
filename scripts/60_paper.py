@@ -18,7 +18,7 @@ import sys
 
 import numpy as np
 
-from recovla.common import config
+from recovla.common import config, goals
 
 CFG = config.load()
 ROOT = config.ROOT
@@ -255,8 +255,19 @@ def render(v) -> str:
     return sub(body).replace("@@FIG1@@", svg)
 
 
+def goals_or_exit() -> dict:
+    """変更履歴にない版の目標書なら作らない・照合しない（0106）。"""
+    try:
+        return goals.fingerprint()
+    except goals.GoalsMismatch as e:
+        print(f"目標書の照合に通らないので止める: {e}", file=sys.stderr)
+        raise SystemExit(1)
+
+
 def cmd_build(a) -> None:
+    fp = goals_or_exit()
     BUILD.mkdir(parents=True, exist_ok=True)
+    (BUILD / "goals.json").write_text(json.dumps(fp, ensure_ascii=False, indent=1), encoding="utf-8")
     v = values()
     (BUILD / "values.json").write_text(json.dumps(v, ensure_ascii=False, indent=1), encoding="utf-8")
     fig2(v)
@@ -294,8 +305,12 @@ FORBIDDEN = ["\u584a", "\u3053\u307e", "\u7a2e(?!\u985e)", "\u5e2f", "\u53f0\u67
 
 
 def cmd_check(a) -> None:
+    fp = goals_or_exit()
     v = values()
     problems = []
+    built_goals = BUILD / "goals.json"
+    if not built_goals.is_file() or _j(built_goals) != fp:
+        problems.append("組み上げたときの目標書の版が今の版と違う（build をやり直す）")
     # (1) 原稿に手で書いた数字がない
     for name in ("template.html", "fig1.svg"):
         text = (PAPER / name).read_text(encoding="utf-8")
@@ -326,7 +341,7 @@ def cmd_check(a) -> None:
     pages = pdf_pages(BUILD / "paper.pdf")
     if not 2 <= pages <= 4:
         problems.append(f"ページ数 {pages}（2〜4）")
-    res = {"slots": n_slots, "keys": len(v), "pages": pages, "forbidden_hits": len(hits), "problems": problems}
+    res = {"goals": fp, "slots": n_slots, "keys": len(v), "pages": pages, "forbidden_hits": len(hits), "problems": problems}
     (BUILD / "check.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
     print(json.dumps(res, ensure_ascii=False, indent=1))
     raise SystemExit(1 if problems else 0)
