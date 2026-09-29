@@ -73,5 +73,57 @@
    }
   }
  },
- "note": "scripts/81_hand_check.py（0108 の 2 の 3）。エキスパート 10 本、学習用のシード 59000〜59009。指の当て板の接触を solref (-30000,-300)（剛さ 30000 N/m）にした。速度のサーボの利得 10000"
+ "note": "scripts/81_hand_check.py（0108 の 2 の 3）。エキスパート 10 本、学習用のシード 59000〜59009。指の当て板の接触を solref (-30000,-300)（剛さ 30000 N/m）にした。速度のサーボの利得 10000。v1（sensor_v1 に書いた値）: 当て板の減衰を 600、握る力の立ち上げを 0.2 s にして測り直した",
+ "v1": {
+  "seeds": "59000:10",
+  "pad_solref": [
+   -30000.0,
+   -600.0
+  ],
+  "ramp_s": 0.2,
+  "summary": {
+   "30.0": {
+    "success": 10,
+    "n": 10,
+    "finger_speed_max_worst": 0.041287406687211516,
+    "held_s_worst": 6.232,
+    "width_held_med_worst": 0.03937771142438301,
+    "is_grasped_while_held_worst": 1.0,
+    "penetration_max_mm_worst": 0.20021422446253365,
+    "penetration_med_mm_worst": 0.1583135843480264,
+    "slip_max_mm_worst": 1.0067839491541934,
+    "relvel_med_mm_s_worst": 0.2660629907186228,
+    "relvel_p99_mm_s_worst": 1.6039768951131723,
+    "relvel_max_mm_s_worst": 1.7330943815107982
+   },
+   "40.0": {
+    "success": 10,
+    "n": 10,
+    "finger_speed_max_worst": 0.040820753933908,
+    "held_s_worst": 6.232,
+    "width_held_med_worst": 0.03918782422649613,
+    "is_grasped_while_held_worst": 1.0,
+    "penetration_max_mm_worst": 0.2462911055890148,
+    "penetration_med_mm_worst": 0.20563039094692676,
+    "slip_max_mm_worst": 1.00662262107423,
+    "relvel_med_mm_s_worst": 0.2639222875399165,
+    "relvel_p99_mm_s_worst": 1.6017396562113655,
+    "relvel_max_mm_s_worst": 1.7309191574420055
+   },
+   "70.0": {
+    "success": 10,
+    "n": 10,
+    "finger_speed_max_worst": 0.041255871568837976,
+    "held_s_worst": 6.232,
+    "width_held_med_worst": 0.03869442773887899,
+    "is_grasped_while_held_worst": 1.0,
+    "penetration_max_mm_worst": 0.36475235568867437,
+    "penetration_med_mm_worst": 0.3284234522751226,
+    "slip_max_mm_worst": 0.9531328509277642,
+    "relvel_med_mm_s_worst": 0.2576707434330806,
+    "relvel_p99_mm_s_worst": 1.59370590243653,
+    "relvel_max_mm_s_worst": 1.7233318573888985
+   }
+  }
+ }
 }

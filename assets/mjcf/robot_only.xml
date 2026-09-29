@@ -1,0 +1,12 @@
+<mujoco model="panda_robot_only">
+  <!-- 実行系が使うロボットの模型（目標書 v2 の G1 の「ロボットのモデル」）。panda.xml（場面と同じ腕）と、
+       制御器が要る目標の印（mocap、描画・衝突なし）だけを持つ。机・立方体・箱・俯瞰カメラは持たない（0107 の 2-3）。 -->
+  <option timestep="0.002" gravity="0 0 -9.81"/>
+  <include file="panda/panda.xml"/>
+  <compiler meshdir="panda/assets"/>
+  <worldbody>
+    <body name="target" mocap="true" pos="0.4 0 0.3">
+      <geom type="sphere" size="0.02" rgba="1 0 0 0.3" group="5" contype="0" conaffinity="0"/>
+    </body>
+  </worldbody>
+</mujoco>

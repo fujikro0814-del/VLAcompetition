@@ -1,0 +1,61 @@
+{
+ "limiter_on": {
+  "success": 20,
+  "n": 20,
+  "max_ratio": {
+   "joint_vel": 0.387,
+   "joint_acc": 0.99,
+   "joint_jerk": 0.99,
+   "cart_vel": 0.129,
+   "cart_acc": 0.735,
+   "cart_jerk": 0.819,
+   "torque": 0.488,
+   "torque_rate": 0.699,
+   "gripper_speed": 0.8,
+   "gripper_force": 0.571
+  },
+  "violations": {
+   "joint_vel": 0,
+   "joint_acc": 0,
+   "joint_jerk": 0,
+   "cart_vel": 0,
+   "cart_acc": 0,
+   "cart_jerk": 0,
+   "torque": 0,
+   "torque_rate": 0,
+   "gripper_speed": 0,
+   "gripper_force": 0
+  },
+  "limiter_clipped_ticks": 6233
+ },
+ "limiter_off": {
+  "success": 20,
+  "n": 20,
+  "max_ratio": {
+   "joint_vel": 0.387,
+   "joint_acc": 6.961,
+   "joint_jerk": 13.922,
+   "cart_vel": 0.128,
+   "cart_acc": 1.098,
+   "cart_jerk": 2.196,
+   "torque": 0.488,
+   "torque_rate": 1.186,
+   "gripper_speed": 0.8,
+   "gripper_force": 0.571
+  },
+  "violations": {
+   "joint_vel": 0,
+   "joint_acc": 1028,
+   "joint_jerk": 7882,
+   "cart_vel": 0,
+   "cart_acc": 18,
+   "cart_jerk": 342,
+   "torque": 0,
+   "torque_rate": 9,
+   "gripper_speed": 0,
+   "gripper_force": 0
+  },
+  "limiter_clipped_ticks": 0
+ },
+ "note": "エキスパート（通常）を目標書 v2 の指令の口（指令の姿勢で解く IK → 制限層 → 関節の位置の指令 1 kHz、ハンドの move/grasp、重力の補償）に通した。学習用のシード 59010〜59029（配置の種類は乱数列のまま）。max_ratio は上限に対する比、violations は上限を超えた刻みの数。torque・torque_rate は位置のサーボ（実機の内部の制御器にあたる）の出力で、口を通る指令ではない（参考）"
+}

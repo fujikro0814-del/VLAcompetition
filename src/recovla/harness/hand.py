@@ -34,7 +34,7 @@ class HandParams:
     kv: float = 10000.0          # 腱の速度のサーボの利得 [N/(m/s)]。止まったときの力 kv·speed/2 が力の上限（腱 140 N）を超える大きさ
     k_pos: float = 20.0          # move の位置の利得 [1/s]（目標の手前で減速する）
     move_force: float = 10.0     # move の指 1 本あたりの力の上限 [N]
-    ramp_s: float = 0.05         # 握る力を move_force から force へ上げる時間 [s]
+    ramp_s: float = 0.2          # 握る力を move_force から force へ上げる時間 [s]
     still_speed: float = 0.005   # 把持の判定で「指が止まっている」とみなす開き幅の速さ [m/s]
 
     @classmethod
