@@ -47,6 +47,64 @@ FORBIDDEN_KEYS = {"cube_pos", "cube_quat", "cube_linvel", "cube_in_box", "phase"
 FORBIDDEN_NAMES = {"rig", "SimRig"}
 
 
+# 目標書 v2 の実行系（src/recovla/runtime/ の全ファイル）の厳しい検査（0107 の 2-3 の (i)）。既知の違反は認めない（0 件で合格）
+RUNTIME_V2_DIR = "src/recovla/runtime"
+ALLOWED_IMPORTS = ("recovla.runtime", "recovla.common", "recovla.data.vla_", "recovla.sim.control", "recovla.sim.controller_ik",
+                   "recovla.sim.device", "recovla.policy.schedule", "recovla.policy.runner",
+                   "numpy", "scipy", "cv2", "mujoco", "torch", "lerobot", "dataclasses", "math", "itertools", "typing",
+                   "functools", "pathlib", "contextlib", "io", "time", "json", "collections", "__future__")
+V2_FORBIDDEN_NAMES = {"rig", "SimRig", "WorldRig", "SensorSuite", "SimRobotIO", "Truth", "truth", "world"}
+V2_FORBIDDEN_KEYS = {"cube_pos", "cube_quat", "cube_linvel", "cube_in_box", "contact_robot", "contact_cube_cube", "min_dist",
+                     "phase", "scene"}
+IO_API = {"sense", "command_joints", "gripper_move", "gripper_grasp", "compute", "now"}
+MODEL_LOADERS = {"from_xml_path", "from_xml_string", "from_file", "from_binary_path"}
+
+
+def scan_runtime(src: str, filename: str) -> collections.Counter:
+    """実行系の 1 ファイル: import は許可した一覧だけ、世界・真値の名前と記録の欄を使わない、RobotIO は 6 つの口だけ、
+    mujoco の模型を読むのは robot_model.py だけ（読む XML は robot_only.xml に限る。robot_model.load が確かめる）。"""
+    c = collections.Counter()
+    for node in ast.walk(ast.parse(src)):
+        if isinstance(node, ast.Import):
+            for a in node.names:
+                if not a.name.startswith(ALLOWED_IMPORTS):
+                    c[f"import:{a.name}"] += 1
+        elif isinstance(node, ast.ImportFrom):
+            if node.level:
+                c["import:relative"] += 1
+            elif node.module and not node.module.startswith(ALLOWED_IMPORTS):
+                for a in node.names:                            # from recovla.sim import control などは名前まで見る
+                    full = f"{node.module}.{a.name}"
+                    if not full.startswith(ALLOWED_IMPORTS):
+                        c[f"import:{full}"] += 1
+        elif isinstance(node, ast.Name) and node.id in V2_FORBIDDEN_NAMES:
+            c[f"name:{node.id}"] += 1
+        elif isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant) and node.slice.value in V2_FORBIDDEN_KEYS:
+            c[f"key:{node.slice.value}"] += 1
+        elif isinstance(node, ast.Attribute):
+            base = node.value
+            is_io = (isinstance(base, ast.Name) and base.id == "io") or (
+                isinstance(base, ast.Attribute) and base.attr == "io")
+            if is_io and node.attr not in IO_API:
+                c[f"io:{node.attr}"] += 1
+            if node.attr in MODEL_LOADERS and not filename.endswith("robot_model.py"):
+                c[f"loader:{node.attr}"] += 1
+            if node.attr in V2_FORBIDDEN_NAMES:
+                c[f"attr:{node.attr}"] += 1
+        elif isinstance(node, ast.Constant) and isinstance(node.value, str) and ("scene_3cube" in node.value
+                                                                                 or "scene_g0" in node.value):
+            c["str:scene_xml"] += 1
+    return c
+
+
+def runtime_v2_files(rev) -> list:
+    if rev is None:
+        return sorted(str(p.relative_to(ROOT)).replace("\\", "/") for p in (ROOT / RUNTIME_V2_DIR).glob("*.py"))
+    out = subprocess.run([str(GIT), "-C", str(ROOT), "ls-tree", "--name-only", f"{rev}:{RUNTIME_V2_DIR}/"],
+                         capture_output=True, text=True)
+    return sorted(f"{RUNTIME_V2_DIR}/{n}" for n in out.stdout.split() if n.endswith(".py"))
+
+
 def read(path: str, rev):
     if rev is None:
         p = ROOT / path
@@ -127,13 +185,23 @@ def main(argv=None) -> int:
                     problems.append(f"既知の一覧が {BASELINE_TAG} から増えた: {f}: {k}")
     else:
         problems.append(f"タグ {BASELINE_TAG} がない")
+    # 目標書 v2 の実行系（runtime/）は既知の違反を認めない
+    v2_files = runtime_v2_files(a.rev)
+    v2_hits = 0
+    for f in v2_files:
+        src = read(f, a.rev)
+        if src is None:
+            continue
+        for k, n in scan_runtime(src, f).items():
+            v2_hits += n
+            problems.append(f"v2 の実行系 {f}: {k} が {n} 件（0 件でなければならない）")
     total = sum(sum(v.values()) for v in now.values())
     if problems:
         print(f"G1 の境界の検査: 不合格（{len(problems)} 件）")
         for p in problems:
             print("  " + p)
         return 1
-    print(f"G1 の境界の検査: 合格（新しい違反 0、既知の違反 {total} 件が残る。関門 1 で 0 にする）")
+    print(f"G1 の境界の検査: 合格（v2 の実行系 {len(v2_files)} ファイルで違反 0。旧版の実行系の既知の違反 {total} 件は増えていない）")
     return 0
 
 

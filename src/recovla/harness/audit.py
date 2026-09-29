@@ -4,9 +4,61 @@ CommandAudit（G3）: RobotIO の口を通った指令（関節の位置 1 kHz�
   関節の速度・加速度・躍度は 1 kHz の差分（libfranka と同じ）、直交座標は指令の順運動学の手先。上限は目標書の値そのもの
   （制限層の margin は掛けない）。位置のサーボの力とその変化（500 Hz）は参考（reference）として別に書く
 """
+import gc
+import types
+
 import numpy as np
 
 from recovla.runtime import limiter as L
+
+
+def _cell_ok(c) -> bool:
+    try:
+        c.cell_contents
+        return True
+    except ValueError:
+        return False
+
+
+def reachable_forbidden(root, forbidden_ids: set, forbidden_types: tuple, boundary_types: tuple, limit: int = 2_000_000):
+    """G1 の到達検査（0107 の 2-3 の (ii)）: root（実行系）から参照を辿って届くものに、世界の物（forbidden_ids の id を持つもの、
+    forbidden_types の型）がないかを数える。boundary_types（RobotIO の実装）の中には入らない（実機では libfranka の接続に
+    あたる境界。実行系が使える口は静的な検査で 6 つに限っている）。numpy の配列・torch のテンソル・文字列・数は葉として扱う。
+    → {"visited": 数, "violations": [型の名前, ...], "truncated": 真偽}"""
+    leaf = (np.ndarray, str, bytes, int, float, bool, complex, type(None), types.ModuleType, type)
+    try:
+        import torch
+        leaf = leaf + (torch.Tensor,)
+    except ImportError:
+        pass
+    seen, stack, bad = set(), [root], []
+    while stack:
+        o = stack.pop()
+        i = id(o)
+        if i in seen:
+            continue
+        seen.add(i)
+        if i in forbidden_ids or isinstance(o, forbidden_types):
+            bad.append(type(o).__name__)
+            continue
+        if isinstance(o, boundary_types) or isinstance(o, leaf):
+            continue
+        if len(seen) > limit:
+            return {"visited": len(seen), "violations": bad, "truncated": True}
+        if isinstance(o, types.FunctionType):                # モジュールの大域（ライブラリ全体）には入らず、閉包と既定値だけ
+            stack.extend(c.cell_contents for c in (o.__closure__ or ()) if _cell_ok(c))
+            stack.extend(o.__defaults__ or ())
+            continue
+        if isinstance(o, types.MethodType):
+            stack.extend([o.__self__, o.__func__])
+            continue
+        if isinstance(o, types.BuiltinFunctionType):
+            s = getattr(o, "__self__", None)
+            if s is not None and not isinstance(s, types.ModuleType):
+                stack.append(s)
+            continue
+        stack.extend(gc.get_referents(o))
+    return {"visited": len(seen), "violations": bad, "truncated": False}
 
 TORQUE = np.array([87.0, 87.0, 87.0, 87.0, 12.0, 12.0, 12.0])
 TORQUE_RATE = 1000.0

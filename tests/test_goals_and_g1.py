@@ -58,3 +58,37 @@ def test_g1_scan_allows_sensor_only_code():
 
 def test_g1_no_new_violations_in_work_tree():
     assert _g1().main([]) == 0
+
+
+def test_g1_runtime_v2_strict_scan():
+    g = _g1()
+    bad = ("from recovla.sim import rig\nimport recovla.eval.induce\n"
+           "def f(self):\n    x = self.io.world.data\n    return truth['cube_pos']\n")
+    hits = g.scan_runtime(bad, "x.py")
+    for k in ("import:recovla.sim.rig", "import:recovla.eval.induce", "io:world", "key:cube_pos", "name:truth"):
+        assert hits[k] >= 1, k
+    ok = "from recovla.sim import control\nimport numpy as np\ndef f(self):\n    return self.io.sense(cameras=False).joints.q\n"
+    assert not g.scan_runtime(ok, "y.py")
+
+
+def test_reachability_audit_finds_planted_reference():
+    from recovla.harness.audit import reachable_forbidden
+
+    class World:
+        pass
+
+    class Boundary:
+        def __init__(self, w):
+            self.w = w
+
+    class Runtime:
+        pass
+
+    w = World()
+    rt = Runtime()
+    rt.io = Boundary(w)                                       # 境界の中は辿らない
+    rt.cb = (lambda: 1)
+    assert reachable_forbidden(rt, {id(w)}, (), (Boundary,))["violations"] == []
+    holder = {"x": [w]}
+    rt.cb = (lambda: holder)                                  # 閉包を通って届く
+    assert reachable_forbidden(rt, {id(w)}, (), (Boundary,))["violations"] == ["World"]

@@ -25,6 +25,27 @@ TRUTH_KEYS = ("step", "sim_time", "ee_pos", "ee_quat", "fingertip", "fingers", "
               "contact_cube_cube", "min_dist", "safety_active")
 
 
+class HarnessHook:
+    """評価の道具（失敗注入）が実行系に差し込む口。実機では外からの乱れにあたる。到達検査はこの中に入らない（境界）。"""
+
+    def __init__(self, fn):
+        self._fn = fn
+
+    def __call__(self, *a):
+        return self._fn(*a)
+
+
+def g1_audit(rt, world, suite) -> dict:
+    """G1 の到達検査: 実行系から世界の物（world・MjData・MjModel・センサの模型の中身・真値）に届かないこと。"""
+    from recovla.expert.script import Truth
+    from recovla.harness.audit import reachable_forbidden
+    from recovla.harness.sensors import SensorSuite
+    from recovla.sim.rig import SimRig
+    ids = {id(x) for x in (world, world.data, world.model, world.scratch, world.meter, world.meter.ddata,
+                           world.meter.dmodel, suite, suite.scratch)}
+    return reachable_forbidden(rt, ids, (SimRig, SensorSuite, Truth), (SimRobotIO, HarnessHook))
+
+
 def instruction(color: str, cfg: dict) -> str:
     return cfg["convert"]["instruction"].format(color=color)
 
@@ -58,7 +79,7 @@ def run_policy_trial(world, suite, make_runtime, layout, target: str, seed: int,
             state["induced"].append((k, bool(inducer.active)))
             rt.injecting = bool(inducer.active)                 # 上書きの間は安全フィルタを切る（旧版と同じ）
             return out
-        rt.action_filter = act_filter
+        rt.action_filter = HarnessHook(act_filter)
 
     def capture():
         world.integrator.x_cmd = rt.motion.x_cmd                # 段階の判定（記録だけ）が読む値を実行系の指令に合わせる
@@ -86,6 +107,7 @@ def run_policy_trial(world, suite, make_runtime, layout, target: str, seed: int,
             capture()
 
     stops = 0
+    audits = [g1_audit(rt, world, suite)]                        # 試行の始め・5 s ごと・終わり
     capture()
     with quiet():
         while state["success_t"] is None and world.step * dt < time_limit_s - 1e-9:
@@ -98,6 +120,9 @@ def run_policy_trial(world, suite, make_runtime, layout, target: str, seed: int,
             suite.on_physics_step(world.data)
             if abs(float(world.data.time) - t_before - dt) > 1e-9:
                 stops += 1                                      # 世界が 1 手ぶん進まなかった（G2 の監査。0 のはず）
+            if world.step % 2500 == 0:
+                audits.append(g1_audit(rt, world, suite))
+    audits.append(g1_audit(rt, world, suite))
     arrays = {k: np.array([f[k] for f in truth_log]) for k in TRUTH_KEYS}
     arrays["target"] = np.full(len(truth_log), ti, dtype=np.int8)
     arrays["phase"] = arrays["phase"].astype(np.int8)
@@ -108,7 +133,10 @@ def run_policy_trial(world, suite, make_runtime, layout, target: str, seed: int,
         "t_success": state["success_t"], "time_limit_s": time_limit_s, "t_end": float(world.data.time),
         "layout": {"kind": layout.kind, "start": layout.start, "prefilled": sorted(layout.prefilled)},
         "induce": inducer.record() if inducer is not None else {"kind": None, "established": False},
-        "audit": {"g2": {"world_stops": stops, "physics_steps": int(world.step),
+        "audit": {"g1": {"checks": len(audits), "violations": sum(len(x["violations"]) for x in audits),
+                         "violating_types": sorted({v for x in audits for v in x["violations"]}),
+                         "max_visited": max(x["visited"] for x in audits), "truncated": any(x["truncated"] for x in audits)},
+                  "g2": {"world_stops": stops, "physics_steps": int(world.step),
                          "time_consistent": abs(world.step * dt - float(world.data.time)) < 1e-6,
                          "early_use": ioa["early_use"], "n_compute": ioa["n_compute"]},
                   "g3": g3},
