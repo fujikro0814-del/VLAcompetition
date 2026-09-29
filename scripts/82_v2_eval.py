@@ -4,7 +4,7 @@
         [--mode naive|sync|rtc] [--induce P1] [--no-limiter]
 
 試行の並びは 41_results.py と同じ（natural・induced・selection）。出力: outputs/v2eval/<実験>/<条件>/trial_NNNN.{json,npz}
-（json に成否・監査・センサの試行ごとの値、npz に真値のこま）と trial_NNNN_runtime.json（実行系の記録: 推論・行動・計算の時間）。
+（json に成否・監査・センサの試行ごとの値、npz に真値のこま）と runtime_NNNN.json（実行系の記録: 推論・行動・計算の時間・知覚）。
 """
 import argparse
 import importlib.util
@@ -109,7 +109,7 @@ def cmd_run(a) -> None:
             pol.cue = C.TargetCue(C.calibration_from_setup(setup.cameras["overhead"]), pol.cue.thr,
                                   setup.table_z + 0.5 * setup.cube_size, setup.cue_fallback_xy)
         rtv = CFG["runtime_v2"]
-        per = Perception(setup, Params.from_config(rtv["perception"]), C.Thresholds.from_dict(CFG["planner"]["color_detect"]))
+        per = Perception(setup, Params.from_config(rtv["perception"]), C.Thresholds.from_dict(config.color_detect(CFG)))
         sf = None
         if not a.no_safety:
             sf = PerceptionSafetyFilter(setup, CFG["safety_filter"], float(rtv["safety_extra_margin_m"] or 0.0))
@@ -131,7 +131,7 @@ def cmd_run(a) -> None:
                      "mode": a.mode, "limiter": not a.no_limiter, "safety": not a.no_safety, "wall_s": round(time.perf_counter() - w0, 2)})
         np.savez(out / f"trial_{i:04d}.npz", **arrays)
         (out / f"trial_{i:04d}.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1, default=_json_default), encoding="utf-8")
-        (out / f"trial_{i:04d}_runtime.json").write_text(json.dumps(rlog, ensure_ascii=False, default=_json_default), encoding="utf-8")
+        (out / f"runtime_{i:04d}.json").write_text(json.dumps(rlog, ensure_ascii=False, default=_json_default), encoding="utf-8")
         rows.append({"trial": i, "seed": seed, "target": tgt, "success": meta["success"],
                      "established": meta["induce"].get("established")})
         g = meta["audit"]
@@ -169,7 +169,7 @@ def cmd_task(a) -> None:
     world = WorldRig(render=False, cfg=CFG)
     suite = SensorSuite(world.model, CFG)
     rt_cfg, act, rtv = CFG["runtime"], CFG["actuation"], CFG["runtime_v2"]
-    thr = C.Thresholds.from_dict(CFG["planner"]["color_detect"])
+    thr = C.Thresholds.from_dict(config.color_detect(CFG))
     cache = {}
 
     def make(io, setup):
@@ -213,6 +213,83 @@ def cmd_task(a) -> None:
                                               indent=1), encoding="utf-8")
 
 
+def cmd_e6(a) -> None:
+    """E6（v2）: 旧版（20_k1.py e6）と同じ手順を、センサの模型の画像・測った状態・テーブル面で直した較正の手がかりで行う。
+    配置ごとに試行の始め（時刻 0 の先読みのこま）の観測から、指示と手がかりを一緒に（cue_only なら手がかりだけ）差し替えて
+    塊を 5 回引き、1 回目の塊の行き先の多数決が差し替えた色かを見る。"""
+    import collections
+    from recovla.common import seeds
+    from recovla.common.seeds import COLORS
+    from recovla.eval.swap_test import chunk_target, majority
+    from recovla.harness import setup as HS
+    from recovla.harness.sensors import SensorSuite
+    from recovla.harness.world import WorldRig
+    from recovla.runtime import cue as C
+    from recovla.runtime.motion import Motion
+    from recovla.runtime.perception import Params, Perception
+    from recovla.runtime.policy import SensorPolicy
+    from recovla.runtime.runner import disable_rtc_for
+    from recovla.runtime.types import JointState
+    from recovla.sim import scene
+    world = WorldRig(render=False, cfg=CFG)
+    suite = SensorSuite(world.model, CFG)
+    rtv = CFG["runtime_v2"]
+    thr = C.Thresholds.from_dict(config.color_detect(CFG))
+    pol, mo = None, None
+    rows = []
+    base, n = map(int, a.trials.split(":"))
+    for seed in range(base, base + n):
+        lay = scene.sample_layout(seed, "empty", start="home")
+        world.reset(lay)
+        setup = suite.start_trial(seed, world.data, HS.nominal_setup(CFG))
+        suite.prime(world.data)
+        if pol is None:
+            mo = Motion(setup)
+            pol = SensorPolicy(config.path(CKPT[a.model]), setup, mo.hand_pose)
+            disable_rtc_for(pol)
+        sf = suite.sense(world.data, world.hand, world._last_cmd, True)
+        per = Perception(setup, Params.from_config(rtv["perception"]), thr)
+        for i in range(10):
+            per.record_joints(JointState(-0.05 + 0.005 * i, sf.joints.q, sf.joints.dq))
+        per.record_joints(sf.joints)
+        per.check_table(sf.cameras["overhead"], sf.gripper.width)
+        R, t = per.camera_pose("overhead", sf.t, sf.gripper.width)
+        pol.setup = setup
+        pol.cue = C.TargetCue(C.calibration_from_setup(setup.cameras["overhead"]), thr, setup.table_z + 0.5 * setup.cube_size,
+                              setup.cue_fallback_xy)
+        pol.set_cue_pose(R, t)
+        x_des = mo.hand_pose(sf.joints.q)[0]
+        cubes_xy = {c: world.data.xpos[world.cube_ids[i]][:2].tolist() for i, c in enumerate(COLORS)}
+        pol.start_trial(seed)
+        for ci, color in enumerate(COLORS):
+            instr_color = COLORS[(ci + 1) % len(COLORS)] if a.cue_mode == "cue_only" else color
+            samples = []
+            for j in range(5):
+                gen = pol.torch.Generator().manual_seed(seeds.torch_seed(seeds.seed_sequence(seed, "noise", ci, j)))
+                pol.reset_cue()
+                obs = pol.observe(sf, CFG["convert"]["instruction"].format(color=instr_color), cue_color=color)
+                ch = pol.infer(obs, gen)
+                samples.append(chunk_target(ch, x_des, cubes_xy))
+            maj = majority([s["nearest"] for s in samples])
+            rows.append({"seed": seed, "instruction": color, "instruction_text_color": instr_color, "majority": maj,
+                         "correct_majority": maj == color, "follows_instruction_text_majority": maj == instr_color,
+                         "correct_samples": sum(s["nearest"] == color for s in samples),
+                         "votes": dict(collections.Counter(s["nearest"] for s in samples)),
+                         "cue": None if pol.last_cue is None else [float(v) for v in pol.last_cue]})
+        print(f"[e6] seed {seed} {[r['majority'] for r in rows[-3:]]}", flush=True)
+    suite.close()
+    nrow = len(rows)
+    res = {"model": a.model, "trials": a.trials, "cue_mode": a.cue_mode, "pairs": nrow,
+           "accuracy_majority": sum(r["correct_majority"] for r in rows) / nrow,
+           "accuracy_samples": sum(r["correct_samples"] for r in rows) / (5 * nrow),
+           "follows_instruction_text_majority": sum(r["follows_instruction_text_majority"] for r in rows) / nrow,
+           "rows": rows, "written": time.strftime("%Y-%m-%d %H:%M:%S")}
+    out = OUT / a.experiment
+    out.mkdir(parents=True, exist_ok=True)
+    (out / f"e6_{a.condition}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=_json_default), encoding="utf-8")
+    print(json.dumps({k: v for k, v in res.items() if k != "rows"}, ensure_ascii=False))
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -235,8 +312,14 @@ def main(argv=None) -> int:
     p.add_argument("--trials", required=True, help="<種の先頭>:<数>")
     p.add_argument("--text", default="全部片付けて")
     p.add_argument("--no-safety", action="store_true")
+    p = sub.add_parser("e6")
+    p.add_argument("--experiment", required=True)
+    p.add_argument("--condition", required=True)
+    p.add_argument("--model", default="R2", choices=sorted(CKPT))
+    p.add_argument("--trials", required=True, help="<種の先頭>:<配置の数>")
+    p.add_argument("--cue-mode", default="both", choices=("both", "cue_only"))
     a = ap.parse_args(argv)
-    {"run": cmd_run, "task": cmd_task}[a.cmd](a)
+    {"run": cmd_run, "task": cmd_task, "e6": cmd_e6}[a.cmd](a)
     return 0
 
 

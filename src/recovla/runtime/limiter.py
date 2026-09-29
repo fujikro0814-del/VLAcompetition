@@ -55,6 +55,14 @@ class JointLimiter:
         v0 = self.v + self.a * DT
         return v0 + s * (np.asarray(v_cand) - v0)
 
+    def brake(self) -> np.ndarray:
+        """加速度の大きさを躍度の上限いっぱいで 0 へ近づける速さ（関節の上限を保ったまま、いちばん早く加速度を落とす）。"""
+        da = np.clip(-self.a, -self.max_jerk * DT, self.max_jerk * DT)
+        return self.v + (self.a + da) * DT
+
+    def between(self, v_from, v_to, s: float) -> np.ndarray:
+        return np.asarray(v_from) + s * (np.asarray(v_to) - np.asarray(v_from))
+
     def position_of(self, v) -> np.ndarray:
         q = self.q + np.asarray(v) * DT
         return q if self.q_min is None else np.clip(q, self.q_min, self.q_max)

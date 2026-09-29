@@ -54,10 +54,13 @@ class SensorPolicy:
         self.cue = None
         self.cue_keep_flag = True
         rec = self.conversion.get("target_cue")
+        self.cue_threshold_note = None
         if rec is not None:
-            thr = C.Thresholds.from_dict(_CFG["planner"]["color_detect"])
+            # 色の閾値は v2 の実行系の値（センサの模型の画像で学習用のシードから決め直した runtime_v2.color_detect、0114）。
+            # 学習データの手がかりを計算した閾値と違うときは、止めずに記録する（旧版は一致を求めた）
+            thr = C.Thresholds.from_dict(config.color_detect(config.load_v2()))
             if rec["thresholds"] != thr.to_json():
-                raise spec.ImageSpecError(f"target_cue thresholds {rec['thresholds']} != runtime {thr.to_json()}")
+                self.cue_threshold_note = {"training": rec["thresholds"], "runtime": thr.to_json()}
             self.cue_keep_flag = "cue_visible" in rec["names"]
             if rec["names"] != vla_state.cue_names(self.cue_keep_flag):
                 raise spec.ImageSpecError(f"target_cue names {rec['names']}")

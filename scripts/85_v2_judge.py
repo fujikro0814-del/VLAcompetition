@@ -52,7 +52,7 @@ def cmd_data(a) -> None:
     rtv = cfg["runtime_v2"]
     rig = SensedDrivenRig(cfg)
     suite = rig.suite
-    thr = C.Thresholds.from_dict(cfg["planner"]["color_detect"])
+    thr = C.Thresholds.from_dict(config.color_detect(cfg))
     base, n = map(int, a.seeds.split(":"))
     seeds_ = list(range(base, base + n))
     lays = [scene.sample_layout(s, "empty", start="home") for s in seeds_]

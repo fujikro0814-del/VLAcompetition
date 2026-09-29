@@ -159,15 +159,21 @@ class Motion:
                 and np.linalg.norm(j) <= self.CART[2] * mg)
 
     def _cartesian_limit(self, v_cand) -> np.ndarray:
+        """候補が手先の上限を超えるなら、「加速度を躍度の上限いっぱいで落とす速さ」と候補の間を二分法で探す（どちらの端も関節の
+        上限を保つ）。落とす側でも超えるときは落とす側を使う（次の刻みでさらに落ちる）。躍度の項だけを縮める前の作りでは、
+        関節の加速度がそのまま続いて手先の加速度が上限の 1.118 倍になった試行があった（学習用のシード 59800 番台）。"""
         lim = self.limiter
         if self._cart_ok(self._fk_hand(lim.position_of(v_cand))):
             return v_cand
-        lo, hi = 0.0, 1.0                                          # 躍度の項を縮める割合を二分法で探す
+        v_brake = lim.brake()
+        self.n_cart_clipped += 1
+        if not self._cart_ok(self._fk_hand(lim.position_of(v_brake))):
+            return v_brake
+        lo, hi = 0.0, 1.0
         for _ in range(12):
             mid = 0.5 * (lo + hi)
-            if self._cart_ok(self._fk_hand(lim.position_of(lim.shrink(v_cand, mid)))):
+            if self._cart_ok(self._fk_hand(lim.position_of(lim.between(v_brake, v_cand, mid)))):
                 lo = mid
             else:
                 hi = mid
-        self.n_cart_clipped += 1
-        return lim.shrink(v_cand, lo)
+        return lim.between(v_brake, v_cand, lo)

@@ -32,7 +32,7 @@ import numpy as np
 
 from recovla.common import config
 
-CFG = config.load("sensor_v1")
+CFG = config.load_v2()           # センサの模型と、色の閾値（runtime_v2_color）など。知覚の値（M・H など）は引数で渡す
 OUT = config.path(CFG["paths"]["outputs"]) / "perception"
 H_GRID = [0.005, 0.01, 0.015, 0.02, 0.025]
 M_GRID = [0.0, 0.005, 0.01, 0.015, 0.02, 0.03]
@@ -93,7 +93,7 @@ def cmd_thresholds(a) -> None:
     suite = SensorSuite(rig.model, CFG)
     cat = categories(rig.model)
     cube_bodies = [rig.model.body(f"cube_{c}").id for c in COLORS]
-    thr = Cq.Thresholds.from_dict(CFG["planner"]["color_detect"])
+    thr = Cq.Thresholds.from_dict(config.color_detect(CFG))
     rays = {n: pixel_rays(intrinsics(c["depth"]["width"], c["depth"]["height"], c["depth"]["fovy"]))
             for n, c in CFG["sensor"]["cameras"].items()}
     nM, nH = len(M_GRID), len(H_GRID)
@@ -228,7 +228,7 @@ def cmd_accuracy(a) -> None:
     from recovla.sim import scene
     rig = DrivenRig(render=False)
     suite = SensorSuite(rig.model, CFG)
-    thr = Cq.Thresholds.from_dict(CFG["planner"]["color_detect"])
+    thr = Cq.Thresholds.from_dict(config.color_detect(CFG))
     pp = Params(self_margin_m=float(a.margin), table_h=float(a.table_h), top_band=float(a.top_band))
     cube_bodies = [rig.model.body(f"cube_{c}").id for c in COLORS]
     rows, boxes, walls, checks = [], [], [], []
@@ -361,6 +361,127 @@ def cmd_accuracy(a) -> None:
                      ensure_ascii=False))
 
 
+def truth_seg_rgb(suite, name, qpos):
+    """方策の RGB の切り出し（256×256）と画素が揃う、真のカメラの形状の分割（色の描画と同じ位置・画角で描き、同じ切り出し・
+    最近傍で縮める）。"""
+    import cv2
+    c = suite.sc["cameras"][name]["color"]
+    m, d = suite.model, suite.scratch
+    d.qpos[:] = qpos
+    mujoco.mj_forward(m, d)
+    cid = suite.cam_ids[name]
+    key = ("segc", c["width"], c["height"])
+    if key not in suite.renderers:
+        r = mujoco.Renderer(m, c["height"], c["width"])
+        r.enable_segmentation_rendering()
+        suite.renderers[key] = r
+    f0 = float(m.cam_fovy[cid])
+    m.cam_fovy[cid] = c["fovy"]
+    try:
+        suite.renderers[key].update_scene(d, camera=cid)
+        seg = suite.renderers[key].render()
+    finally:
+        m.cam_fovy[cid] = f0
+    geom = np.where(seg[..., 1] == int(mujoco.mjtObj.mjOBJ_GEOM), seg[..., 0], -1).astype(np.int32)
+    if c.get("crop"):
+        H, W = geom.shape
+        k = int(c["crop"])
+        geom = geom[(H - k) // 2:(H - k) // 2 + k, (W - k) // 2:(W - k) // 2 + k]
+    return cv2.resize(geom, (int(c["out"]), int(c["out"])), interpolation=cv2.INTER_NEAREST)
+
+
+MARGIN_GRID = list(range(30, 161, 5))
+
+
+def cmd_colors(a) -> None:
+    """色の閾値（min_margin）を、センサの模型の画像で学習用のシードから決め直す（0114。露出と白の釣り合いのばらつきで、
+    黄色の箱が赤に数えられた）。エキスパートを回し、0.5 s ごとのこまの方策の RGB（俯瞰・手首）を真の分割と照らし、
+    色ごとに「その色の立方体の画素なのに外れた数（見落とし）」と「ほかの画素なのに入った数（取り違え）」を数える。
+    決め方: 箱（黄）の画素（ほかの物との境目の 2 画素を除く。縮めた分割は境目で 1 画素ほどずれる）がどの立方体の色にも入らない
+    （学習用のこま全部で 0 画素）最小の min_margin。min_value は元のまま。
+    経緯（0113 の 4 の手続きで直した）: 回す前は「見落としと取り違えの画素の合計が最小」としたが、手首の近接の大きな立方体の
+    画素の見落としに引っぱられて 55 を選び、55 では箱の画素が 1 こまで最大 53 画素赤に入って、赤の立方体の取り違え（15 点以上）を
+    作りうる。この問題を除くための閾値なので、箱の漏れで決める。結果は configs/runtime_v2_color.yaml（自動）"""
+    import yaml
+    from recovla.expert import generate as G
+    from recovla.harness import setup as HS
+    from recovla.harness.driven import DrivenRig
+    from recovla.harness.sensors import SensorSuite
+    from recovla.sim import scene
+    rig = DrivenRig(render=False)
+    suite = SensorSuite(rig.model, CFG)
+    base_thr = CFG["planner"]["color_detect"]
+    cube_body = {c: rig.model.body(f"cube_{c}").id for c in COLORS}
+    fn = np.zeros(len(MARGIN_GRID))
+    fp = np.zeros(len(MARGIN_GRID))
+    box_leak = np.zeros(len(MARGIN_GRID))
+    box_body = rig.model.body("goal_box").id
+    npos = 0
+    b0, n = (int(x) for x in a.seeds.split(":"))
+    for s in range(b0, b0 + n):
+        lay = scene.sample_layout(s)
+        sp = G.EpisodeSpec(s, lay.table_colors[0], lay.kind, "n")
+
+        def reset_hook(layout):
+            orig_reset(layout)
+            suite.start_trial(s, rig.data, HS.nominal_setup(CFG))
+            suite.prime(rig.data)
+
+        def step_hook(on_step_inner=None):
+            nonlocal npos
+            orig_step(on_step_inner)
+            suite.on_physics_step(rig.data)
+            if rig.step % 250:
+                return
+            sf = suite.sense(rig.data, rig.hand, rig._last_cmd)
+            for cam, fr in sf.cameras.items():
+                qpos = [c for c in suite.streams[cam].captures if c[0] == fr.seq][0][3]
+                geom = truth_seg_rgb(suite, cam, qpos)
+                body = np.where(geom >= 0, rig.model.geom_bodyid[np.clip(geom, 0, None)], -1)
+                px = fr.rgb.astype(np.int16)
+                import cv2
+                box_in = cv2.erode((body == box_body).astype(np.uint8), np.ones((5, 5), np.uint8)).astype(bool)   # 境目の 2 画素を除く
+                for c in COLORS:
+                    ch = {"red": 0, "green": 1, "blue": 2}[c]
+                    others = np.max(np.delete(px, ch, axis=2), axis=2)
+                    diff = px[:, :, ch] - others
+                    val = px[:, :, ch] >= int(base_thr["min_value"])
+                    pos = body == cube_body[c]
+                    npos += int(pos.sum())
+                    for i, mg in enumerate(MARGIN_GRID):
+                        m = val & (diff >= mg)
+                        fn[i] += int((pos & ~m).sum())
+                        fp[i] += int((~pos & m).sum())
+                        box_leak[i] += int((m & box_in).sum())
+
+        orig_reset, orig_step = rig.reset, rig.physics_step
+        rig.reset, rig.physics_step = reset_hook, step_hook
+        r = G.run_attempt(rig, sp, 0, None, False)
+        rig.reset, rig.physics_step = orig_reset, orig_step
+        print(f"[colors] seed {s} ok {r['success']}", flush=True)
+    tot = fn + fp
+    zero = [j for j in range(len(MARGIN_GRID)) if box_leak[j] == 0]
+    i = zero[0] if zero else int(np.argmin(box_leak))
+    res = {"seeds": a.seeds, "grid": MARGIN_GRID, "missed_px": fn.tolist(), "false_px": fp.tolist(), "box_leak_px": box_leak.tolist(),
+           "cube_px": npos, "chosen_min_margin": MARGIN_GRID[i], "pixel_sum_rule_would_choose": MARGIN_GRID[int(np.argmin(tot))],
+           "base": base_thr,
+           "rule": "箱の画素がどの立方体の色にも入らない最小の min_margin（回す前の「画素の合計が最小」から直した。0113 の 4）",
+           "written": time.strftime("%Y-%m-%d %H:%M:%S")}
+    OUT.mkdir(parents=True, exist_ok=True)
+    (OUT / f"colors_{a.tag}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
+    (config.ROOT / "docs" / "results" / f"perception_colors_{a.tag}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1) + "\n",
+                                                                                       encoding="utf-8")
+    out = {"runtime_v2": {"color_detect": {"min_value": int(base_thr["min_value"]), "min_margin": int(MARGIN_GRID[i]),
+                                           "min_pixels": int(base_thr["min_pixels"])}},
+           "derived_from": {"colors": f"colors_{a.tag}.json", "written": res["written"]}}
+    head = ("# 自動で書いた値（scripts/83_perception_check.py colors）。センサの模型の画像で学習用のシードから決めた色の閾値（0114）。\n"
+            "# 知覚・完了判定・方策の手がかりの色の判定に共通。学習時の閾値（planner.color_detect）とは別に記録する\n")
+    (config.CONFIG_DIR / "runtime_v2_color.yaml").write_text(head + yaml.safe_dump(out, allow_unicode=True, sort_keys=False),
+                                                              encoding="utf-8")
+    print(json.dumps({k: res[k] for k in ("chosen_min_margin", "pixel_sum_rule_would_choose", "cube_px")}, ensure_ascii=False),
+          {g: (int(fn[j]), int(fp[j]), int(box_leak[j])) for j, g in enumerate(MARGIN_GRID) if g in (50, 55, 60, 65, 70, 80, 100)})
+
+
 def cmd_derive(a) -> None:
     """0113 の 1・2 の決まりを、測った結果に当てはめて configs/runtime_v2_derived.yaml を書く（知覚を変えたら測り直して、これを回す）。
       M・H: thresholds_<tag>.json の選んだ値（知覚の出力で決める。0112・0113 の 1）
@@ -417,12 +538,15 @@ def main(argv=None) -> int:
     p.add_argument("--table-h", required=True, type=float)
     p.add_argument("--top-band", default=0.006, type=float)
     p.add_argument("--tag", default="v1")
+    p = sub.add_parser("colors")
+    p.add_argument("--seeds", default="59100:10")
+    p.add_argument("--tag", default="v1")
     p = sub.add_parser("derive")
     p.add_argument("--thresholds", required=True)
     p.add_argument("--acc0", required=True, help="M = 0 の accuracy の tag")
     p.add_argument("--acc1", required=True, help="M = 1 cm の accuracy の tag")
     a = ap.parse_args(argv)
-    {"thresholds": cmd_thresholds, "accuracy": cmd_accuracy, "derive": cmd_derive}[a.cmd](a)
+    {"thresholds": cmd_thresholds, "accuracy": cmd_accuracy, "derive": cmd_derive, "colors": cmd_colors}[a.cmd](a)
     return 0
 
 

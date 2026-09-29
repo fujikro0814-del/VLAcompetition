@@ -47,10 +47,15 @@ def path(rel) -> pathlib.Path:
     return p if p.is_absolute() else ROOT / p
 
 
-V2_LAYERS = ("sensor_v1", "runtime_v2", "runtime_v2_derived", "runtime_v2_judge")
+V2_LAYERS = ("sensor_v1", "runtime_v2", "runtime_v2_color", "runtime_v2_derived", "runtime_v2_judge")
 
 
 def load_v2() -> dict:
     """目標書 v2 の設定: センサと作動の模型（sensor_v1）、実行系の手段（runtime_v2）、自動で決めた値（runtime_v2_derived・
     runtime_v2_judge。まだ作っていなければ飛ばす）を順に重ねる。"""
     return load(*[n for n in V2_LAYERS if (CONFIG_DIR / f"{n}.yaml").is_file()])
+
+
+def color_detect(cfg: dict) -> dict:
+    """色の判定の閾値。v2 の実行系はセンサの模型の画像で決め直した値（runtime_v2.color_detect）、なければ学習時の値。"""
+    return (cfg.get("runtime_v2") or {}).get("color_detect") or cfg["planner"]["color_detect"]
