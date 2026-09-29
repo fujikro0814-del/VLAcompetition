@@ -38,8 +38,12 @@ def repo(tmp_path):
     git(r, "config", "core.autocrlf", "false")
     (r / "ok.md").write_text("鍵らしい文字列（sk-ant- など）は置かない。終了時に Y:\\ へ複写。hf_home を使う。\n"
                              "BEGIN CERTIFICATE という名前だけの言及。\n", encoding="utf-8")
-    git(r, "add", "ok.md")
+    (r / "docs").mkdir()
+    (r / "docs" / "目標書.md").write_text("# 目標書 v1\n\n## 変更履歴\n- → v1: 作成\n", encoding="utf-8")   # 0106 の (e)(f)
+    git(r, "add", "ok.md", "docs")
     git(r, "commit", "-q", "-m", "clean")
+    git(r, "tag", "goals-v1")
+    git(r, "tag", "g1-baseline")
     patterns = tmp_path / "patterns.txt"
     patterns.write_text("# test\n" + FAKE_PROXY + "\n", encoding="utf-8")
     return r, patterns
@@ -80,6 +84,14 @@ def test_problem_only_in_history_stops_the_push(repo):
     git(r, "commit", "-q", "-m", "removed")
     res = check(r, patterns)
     assert res.returncode == 1 and "コミット" in res.stdout
+
+
+def test_changed_goals_stop_the_push(repo):
+    r, patterns = repo
+    (r / "docs" / "目標書.md").write_text("# 目標書 v1（書き換え）\n\n## 変更履歴\n- → v1: 作成\n", encoding="utf-8")
+    git(r, "commit", "-q", "-am", "edit goals")
+    res = check(r, patterns)
+    assert res.returncode == 1 and "目標書" in res.stdout
 
 
 def test_missing_pattern_file_stops_the_push(repo, tmp_path):

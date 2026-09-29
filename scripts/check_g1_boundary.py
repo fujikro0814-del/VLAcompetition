@@ -23,7 +23,7 @@ import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-GIT = ROOT / ".tools" / "git" / "cmd" / "git.exe"
+GIT = pathlib.Path(__file__).resolve().parents[1] / ".tools" / "git" / "cmd" / "git.exe"
 BASELINE = "docs/g1_known_violations.json"
 BASELINE_TAG = "g1-baseline"
 
@@ -98,7 +98,11 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--rev", default=None, help="git の版から読む（既定は作業ツリー）")
     ap.add_argument("--write-baseline", action="store_true")
+    ap.add_argument("--root", default=None, help="調べるリポジトリ（既定はこのスクリプトのあるリポジトリ）")
     a = ap.parse_args(argv)
+    global ROOT
+    if a.root:
+        ROOT = pathlib.Path(a.root).resolve()
     now = current(a.rev)
     if a.write_baseline:
         doc = {"note": "G1 の既知の違反（scripts/check_g1_boundary.py が数える）。減らすだけ。関門 1 で空にする（0106）",

@@ -58,9 +58,11 @@ def fingerprint(root=ROOT) -> dict:
     return {"version": version, "tag": tag, "sha256": hashlib.sha256(data).hexdigest(), "path": GOALS_PATH}
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    import sys
+    argv = sys.argv[1:] if argv is None else argv
     try:
-        fp = fingerprint()
+        fp = fingerprint(argv[0] if argv else ROOT)
     except GoalsMismatch as e:
         print(f"目標書の照合: 不合格: {e}")
         return 1

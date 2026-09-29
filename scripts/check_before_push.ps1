@@ -77,7 +77,7 @@ foreach ($t in $targets) {
 # (e) 目標書（0106）: 送るコミットと索引の docs/目標書.md が、goals-v* タグのどれかの版と同じ。HEAD はいちばん新しい版と同じ。
 #     版の登録（タグ・変更履歴の行）は recovla.common.goals でも確かめる
 $GoalsPath = 'docs/目標書.md'
-$goalTags = @(Invoke-Git @('tag', '--list', 'goals-v*') | Where-Object { $_ -match '^goals-v\d+$' } |
+$goalTags = @(Invoke-Git @('tag', '--list', 'goals-v*') | ForEach-Object { $_ } | Where-Object { $_ -match '^goals-v\d+$' } |
     Sort-Object { [int]($_ -replace '^goals-v', '') })
 if ($goalTags.Count -eq 0) {
     $findings.Add('目標書: goals-v* のタグがない')
@@ -97,14 +97,15 @@ if ($goalTags.Count -eq 0) {
 
 # (f) G1 の実機境界（0106）: 送る HEAD の実行系のコードに、真値に触れる新しい書き方がない（scripts/check_g1_boundary.py）
 #     と、目標書の版の登録（recovla.common.goals）
-$py = Join-Path $Repo '.venv\Scripts\python.exe'
+$ToolRoot = Split-Path -Parent $PSScriptRoot
+$py = Join-Path $ToolRoot '.venv\Scripts\python.exe'
 if (-not (Test-Path $py)) {
     $findings.Add("Python がない: $py")
 } else {
     $env:PYTHONDONTWRITEBYTECODE = '1'
-    $g1 = & $py (Join-Path $Repo 'scripts\check_g1_boundary.py') --rev HEAD
+    $g1 = & $py (Join-Path $PSScriptRoot 'check_g1_boundary.py') --rev HEAD --root $Repo
     if ($LASTEXITCODE -ne 0) { $findings.Add('G1 の境界の検査が不合格'); $g1 | ForEach-Object { Write-Host "  $_" } } else { Write-Host ($g1 -join ' ') }
-    $gv = & $py -m recovla.common.goals
+    $gv = & $py -m recovla.common.goals $Repo
     if ($LASTEXITCODE -ne 0) { $findings.Add('目標書の版の照合が不合格'); Write-Host "  $gv" }
 }
 
