@@ -60,7 +60,7 @@ def depth_model(z: np.ndarray, f: float, baseline: float, rng, sys_px: float, ca
     if s > 0:
         n = cv2.GaussianBlur(n, (0, 0), s)
         n /= max(float(n.std()), 1e-12)
-    d2 = disp + sys_px + float(dn["subpixel"]) * n
+    d2 = disp + sys_px + float(cam["subpixel"]) * n
     out = np.where(valid & (d2 > 1e-6), f * baseline / np.maximum(d2, 1e-6), 0.0)
     # 縁の空飛ぶ画素: 段差の大きい縁の画素を、近い側と遠い側の間の値にする
     zmax = cv2.dilate(z.astype(np.float32), np.ones((3, 3), np.uint8)).astype(np.float64)
@@ -128,7 +128,7 @@ class SensorSuite:
         import dataclasses
         self.seed = int(seed)
         rng = seeds.stream(seed, "sensor_setup")
-        self.lat_rng = seeds.stream(seed, "latency")
+        self.lat_rng = np.random.default_rng(seeds.seed_sequence(seed, "latency", 0))   # カメラの遅延（計算の時間は 1）
         self.joint_rng = np.random.default_rng(seeds.seed_sequence(seed, "sensor_frame", 99))
         sc, cal = self.sc, self.sc["calibration"]
         period = 1.0 / float(sc["frame_hz"])
@@ -142,9 +142,7 @@ class SensorSuite:
         mujoco.mj_forward(self.model, data)
         for n, c in sc["cameras"].items():
             dI = intrinsics(c["depth"]["width"], c["depth"]["height"], c["depth"]["fovy"])
-            z_at = float(c["accuracy"]["at"])
-            d_at = dI.fx * float(c["baseline"]) / z_at
-            self.sys_px[n] = float(rng.normal(0.0, float(c["accuracy"]["rel"]) * d_at / 4.0))
+            self.sys_px[n] = float(rng.normal(0.0, float(c["sys_sigma_px"])))
             true = self._true_extrinsic(n, data)
             e = cal[n]
             dR = small_rotation(rng, float(e["rot_sigma_deg"]))

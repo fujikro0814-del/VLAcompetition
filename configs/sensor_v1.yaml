@@ -30,7 +30,10 @@ sensor:
       min_z: 0.52               # 【公称】
       max_z: 6.0                # 【公称】適した範囲の上限
       depth_unit: 0.001         # 【公称】既定の深度の単位
-      accuracy: {rel: 0.02, at: 4.0}   # 【公称】Z 精度 <2% at 4 m。4σ とみなして視差の系統のずれを試行ごとに引く【仮定】
+      subpixel: 0.08            # 【公称】白書の典型値。独立の測定（Rustler 2025、Ahn 2019 を D455 に換算）とは 2 倍以内
+      # 視差の系統のずれ（試行ごと）σ [px]。公称の Z 精度（<2% at 4 m）を 4σ とみなすと 0.053 px（1.3 m で 2 mm）だが、独立の測定
+      # （Servi 2021、0.5〜1.5 m の系統誤差の標準偏差 4.25 mm）と 2.1 倍食い違うので、控えめな側を採る（0109 の 3）: 1.0 m で 4.25 mm
+      sys_sigma_px: 0.180
     wrist:                      # D405 相当。色は深度と同じ撮像素子（0108 の 2 の 1: 87°×58° で描き、中央の 58°×58° を切り出す）
       mount: hand
       model_camera: wrist
@@ -40,13 +43,18 @@ sensor:
       min_z: 0.07               # 【公称】848×480 で 7 cm
       max_z: 2.0                # 【仮定】（公称の適した範囲は 7〜50 cm。遠くは雑音の式で大きくなる）
       depth_unit: 0.0001        # 【公称】D405 の既定 0.1 mm
-      accuracy: {rel: 0.02, at: 0.5}   # 【公称】±2% at 50 cm。4σ【仮定】
+      # 公称（±2% at 50 cm を 4σ）と白書の 0.08 では 33 cm で合わせて約 1.5 mm。独立の測定（Henrich 2026、33 cm で 3.28 mm）と
+      # 2.2 倍食い違うので、控えめな側を採る（0109 の 3）: 雑音と系統のずれをどちらも 2.13 倍にする
+      subpixel: 0.17
+      sys_sigma_px: 0.171
   depth_noise:
-    subpixel: 0.08              # 【公称】白書の典型値（RMS = Z²·subpixel /（f·B））
+    # RMS = Z²·subpixel /（f·B）。subpixel はカメラごとに上で与える
     corr_px: 1.5                # 【仮定】ステレオの照合の窓の分の空間の相関（ガウスでならして σ を保つ）
     edge_step: 0.02             # 【仮定】深度の段差がこれ以上の縁の 1 px を「空飛ぶ画素」の候補にする
     edge_prob: 0.5              # 【仮定】
-    hole_area: 0.01             # 【仮定】3×3 の穴が占める画素の割合（公称の充填率 ≥99% の端）
+    # 3×3 の穴が占める画素の割合。公称の充填率 ≥99% からは 1% だが、独立の測定（Kuhlmann 2026 の D435i で有効な画素 90.5%）と
+    # 2 倍を超えて食い違う（この場面の隠れ・範囲外を含めて有効 96%）ので、控えめな側を採る（0109 の 3）: 有効がおよそ 90% になる値
+    hole_area: 0.06
   color_noise:
     read_sigma: 2.0             # 【仮定】読み出しの雑音 [8 bit の値]
     shot_gain: 0.3              # 【仮定】ショットの雑音の分散 = shot_gain × 輝度
@@ -54,9 +62,23 @@ sensor:
     white_balance: [0.95, 1.05] # 【仮定】試行ごとのチャネルごとの倍率
   latency_ms: [33, 100]         # 【仮定】こまごとに一様に引く（撮った時刻から実行系に届くまで）
   calibration:
-    overhead: {trans_sigma: 0.004, rot_sigma_deg: 0.4}    # 【仮定】固定カメラの外部パラメータの誤差（軸ごと）
-    wrist: {trans_sigma: 0.003, rot_sigma_deg: 0.5}       # 【仮定】hand-eye の誤差
+    # 【仮定】固定カメラの外部パラメータの誤差（軸ごと）。独立の測定（Enebuse 2022、方法により 3〜8 mm・0.5〜2.5°）の最もよい
+    # 方法の値に回転を合わせた（0.4° → 0.5°。実際の設置では最もよい方法を使う前提）
+    overhead: {trans_sigma: 0.004, rot_sigma_deg: 0.5}
+    wrist: {trans_sigma: 0.003, rot_sigma_deg: 0.5}       # 【仮定】hand-eye の誤差（D435i の手首の報告 1.1 mm・0.66° より並進は大きい側）
     table: {z_sigma: 0.001, tilt_sigma_deg: 0.1}          # 【仮定】
   joints: {q_sigma: 1.0e-4, dq_sigma: 1.0e-3}             # 【仮定】1 kHz、遅延なし
   gripper: {rate_hz: 10, width_sigma: 1.0e-4, width_unit: 1.0e-4}   # 【公称】franka_gripper は 10 Hz で読む。雑音と丸めは【仮定】
-  sources: []                   # 照らした独立の出典（0109 の 3。固定の前に書く）
+  # 照らした独立の出典（0109 の 3）。見つからなかった項目: 色の雑音・露出と白の釣り合いのばらつき（仮定のまま）、
+  # 空飛ぶ画素、深度の量子化の実効の分解能、D405 の最小距離（公称のまま）
+  sources:
+    - {item: D455 の雑音・系統誤差, ref: "Servi et al., Sensors 21:7770, 2021", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC8622561/"}
+    - {item: D455 の雑音, ref: "Rustler, Volprecht, Hoffmann, arXiv:2501.07421, 2025", url: "https://arxiv.org/html/2501.07421v1"}
+    - {item: D435 の雑音の式（D455 へ換算）, ref: "Ahn et al., UR 2019", url: "https://ieeexplore.ieee.org/document/8768489/"}
+    - {item: サブピクセルの値（D415、平面からのずれ 1 m で 4.74 mm。非平坦を含むので系統の項で扱う）, ref: "Carfagni et al., Sensors 2019", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC6387018/"}
+    - {item: D405 の誤差, ref: "Henrich et al., arXiv:2606.13028, 2026", url: "https://arxiv.org/html/2606.13028"}
+    - {item: 有効な画素の割合, ref: "Kuhlmann et al., arXiv:2606.12112, 2026", url: "https://arxiv.org/html/2606.12112"}
+    - {item: 遅延（画面までで 30 fps 中央値 132 ms、表示を含む）, ref: "librealsense issue #4955", url: "https://github.com/IntelRealSense/librealsense/issues/4955"}
+    - {item: 遅延（届いた時刻と時刻印の差、深度 9 ms・色 66 ms）, ref: "librealsense issue #11667", url: "https://github.com/IntelRealSense/librealsense/issues/11667"}
+    - {item: 較正の誤差, ref: "Enebuse et al., PLOS ONE 2022", url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC9581431/"}
+    - {item: 手首の hand-eye（D435i）, ref: "librealsense issue #11736", url: "https://github.com/realsenseai/librealsense/issues/11736"}
