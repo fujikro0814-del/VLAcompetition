@@ -1,0 +1,77 @@
+{
+ "stiff": {
+  "seeds": "59000:10",
+  "pad_solref": [
+   -30000.0,
+   -300.0
+  ],
+  "summary": {
+   "30.0": {
+    "success": 10,
+    "n": 10,
+    "finger_speed_max_worst": 0.04305944494793883,
+    "held_s_worst": 6.232,
+    "width_held_med_worst": 0.039377713614284784,
+    "is_grasped_while_held_worst": 1.0,
+    "penetration_max_mm_worst": 0.20821542772195306,
+    "penetration_med_mm_worst": 0.15842435561579246,
+    "slip_max_mm_worst": 2.175955686778088,
+    "relvel_med_mm_s_worst": 0.5017019123263868,
+    "relvel_p99_mm_s_worst": 3.1954731333454607,
+    "relvel_max_mm_s_worst": 3.4560076313018673
+   },
+   "50.0": {
+    "success": 10,
+    "n": 10,
+    "finger_speed_max_worst": 0.046106799515918666,
+    "held_s_worst": 6.208,
+    "width_held_med_worst": 0.03901033047417678,
+    "is_grasped_while_held_worst": 1.0,
+    "penetration_max_mm_worst": 0.4336897879204425,
+    "penetration_med_mm_worst": 0.42303950557638703,
+    "slip_max_mm_worst": 5.422194607517632,
+    "relvel_med_mm_s_worst": 0.7874124355574591,
+    "relvel_p99_mm_s_worst": 3.190922721228859,
+    "relvel_max_mm_s_worst": 3.4518079836245934
+   },
+   "70.0": {
+    "success": 10,
+    "n": 10,
+    "finger_speed_max_worst": 0.04311551737930688,
+    "held_s_worst": 6.232,
+    "width_held_med_worst": 0.0386944383730313,
+    "is_grasped_while_held_worst": 1.0,
+    "penetration_max_mm_worst": 0.37039582781225233,
+    "penetration_med_mm_worst": 0.32875567114011073,
+    "slip_max_mm_worst": 2.0268127394613606,
+    "relvel_med_mm_s_worst": 0.4757066967510065,
+    "relvel_p99_mm_s_worst": 3.18548739462642,
+    "relvel_max_mm_s_worst": 3.4469850210251476
+   }
+  }
+ },
+ "f40": {
+  "seeds": "59000:10",
+  "pad_solref": [
+   -30000.0,
+   -300.0
+  ],
+  "summary": {
+   "40.0": {
+    "success": 10,
+    "n": 10,
+    "finger_speed_max_worst": 0.04565551663887048,
+    "held_s_worst": 6.232,
+    "width_held_med_worst": 0.03918782637024369,
+    "is_grasped_while_held_worst": 1.0,
+    "penetration_max_mm_worst": 0.2538542819522465,
+    "penetration_med_mm_worst": 0.20581097092602857,
+    "slip_max_mm_worst": 2.1362183794318783,
+    "relvel_med_mm_s_worst": 0.5073964282342412,
+    "relvel_p99_mm_s_worst": 3.1993054532849436,
+    "relvel_max_mm_s_worst": 3.4600490640323556
+   }
+  }
+ },
+ "note": "scripts/81_hand_check.py（0108 の 2 の 3）。エキスパート 10 本、学習用のシード 59000〜59009。指の当て板の接触を solref (-30000,-300)（剛さ 30000 N/m）にした。速度のサーボの利得 10000"
+}
