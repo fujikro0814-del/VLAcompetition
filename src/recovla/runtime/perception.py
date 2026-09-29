@@ -33,11 +33,15 @@ class Params:
     self_margin_m: float = 0.01        # 自己除去の太らせ方（0108 の 2 の 4 で学習用のシードから決める）
     table_h: float = 0.015             # テーブル面からの閾値（0108 の 2 の 5 で決める）
     box_band: tuple = (-0.025, 0.012)  # 壁の上端の高さからの帯（箱の点）
-    sigma_overhead: float = 0.008      # 立方体の位置の測定の誤差の目安（融合の重み）[m]
-    sigma_wrist: float = 0.002
+    # 立方体の位置の測定の誤差の目安（融合の重み）[m]。深度の雑音に加えて、較正誤差による位置のずれを入れる（0113 の 3 の 1）:
+    # 俯瞰は補正の後に残る向き（0.5°）と水平の位置（4 mm）で約 1 cm、手首は hand-eye（3 mm・0.5°、20 cm 先で約 2 mm）で約 4 mm
+    sigma_overhead: float = 0.010
+    sigma_wrist: float = 0.004
     moved_tol: float = 0.025           # 推定から測定がこれ以上離れたら「動いた」とみなして置き換える
     min_points: int = 15               # 色の点がこれ以上で「見えた」
     lost_s: float = 1.0                # 見えない時間がこれを超えたら「失った」
+    top_band: float = 0.006            # 立方体の上面とみなす点の帯（最高点からの高さ）。1 cm より側面の点が混ざりにくい（0114）
+    correct_overhead: bool = True      # 起動時にテーブル面で俯瞰の外部パラメータ（傾き 2 つと高さ）を直す（0113 の 3 の 2）
 
     @classmethod
     def from_config(cls, c: dict) -> "Params":
@@ -94,6 +98,17 @@ def fit_plane(pts: np.ndarray, rng, iters: int = 120, tol: float = 0.004):
     _, _, vt = np.linalg.svd(inl - c, full_matrices=False)
     n = vt[-1] if vt[-1][2] > 0 else -vt[-1]
     return n, c, int(len(inl))
+
+
+def _rot_between(a, b) -> np.ndarray:
+    """単位ベクトル a を b に重ねる最小の回転。"""
+    a, b = np.asarray(a, float) / np.linalg.norm(a), np.asarray(b, float) / np.linalg.norm(b)
+    v, c = np.cross(a, b), float(a @ b)
+    s = float(np.linalg.norm(v))
+    if s < 1e-12:
+        return np.eye(3)
+    K = np.array([[0, -v[2], v[1]], [v[2], 0, -v[0]], [-v[1], v[0], 0]])
+    return np.eye(3) + K + K @ K * ((1 - c) / s ** 2)
 
 
 def pixel_rays(intr) -> np.ndarray:
@@ -173,6 +188,7 @@ class Perception:
         self.rays = {n: pixel_rays(c.depth) for n, c in setup.cameras.items()}
         self.hist_t, self.hist_q = [], []
         self.planes = {}                       # {カメラ: (法線, 点)}（固定のカメラだけ、起動時に当てはめて保つ）
+        self.corrections = {}                  # {カメラ: (回転, 中心, 平行移動)}（テーブル面での外部パラメータの補正）
         self.rng = np.random.default_rng(0)
         self.n0 = np.asarray(setup.table_normal, float)
         self.p0 = np.array([0.0, 0.0, setup.table_z])
@@ -204,7 +220,12 @@ class Perception:
         q = self.q_at(t_capture)
         self.selfr.set_q(q, width)
         if cam.mount == "world":
-            return np.asarray(cam.extrinsic.R), np.asarray(cam.extrinsic.t)
+            R, t = np.asarray(cam.extrinsic.R), np.asarray(cam.extrinsic.t)
+            corr = self.corrections.get(name)
+            if corr is not None:                               # テーブル面での補正（傾き 2 つと高さ。0113 の 3 の 2）
+                Rc, c, d = corr
+                return Rc @ R, Rc @ (t - c) + c + d
+            return R, t
         hp, hR = self.selfr.hand_pose()
         return hR @ np.asarray(cam.extrinsic.R), hR @ np.asarray(cam.extrinsic.t) + hp
 
@@ -231,7 +252,7 @@ class Perception:
         pw = pc @ R.T + t
         # テーブル面からの高さは、そのカメラ自身の深度から当てはめた平面で測る（カメラの較正誤差・深度の系統のずれが、
         # 物の点と机の点に同じように効くので打ち消される）。俯瞰は起動時に当てはめた平面、手首はこまごとに当てはめる
-        plane = self.planes.get(name) if cam.mount == "world" else None
+        plane = self.planes.get(name) if cam.mount == "world" else None     # 俯瞰は起動時の平面（補正の後は既知の平面）
         if plane is None:
             hb = (pw - self.p0) @ self.n0
             f = fit_plane(pw[np.abs(hb) < 0.03], self.rng)
@@ -255,17 +276,28 @@ class Perception:
 
     # ------------------------------------------------------------------ table
     def check_table(self, frame, width: float) -> dict:
-        """起動時（俯瞰）: 自分の深度から平面を当てはめて保ち（以後の高さの基準）、信じているテーブル面とのずれを返す。"""
-        self.planes.pop(frame.name, None)
+        """起動時（俯瞰）: 自分の深度から平面を当てはめ、信じているテーブル面とのずれ（高さ・傾き）を返す（止まり方の判定に使う）。
+        correct が真なら、当てはめた平面が設置情報の既知の平面に重なるように、俯瞰カメラの信じている外部パラメータの傾き 2 つと
+        高さを直す（0113 の 3 の 2。向き（鉛直まわり）と水平の位置は直せない）。以後の高さの基準は既知の平面になる。"""
+        name = frame.name
+        self.planes.pop(name, None)
+        self.corrections.pop(name, None)
         P = self.points(frame, width)
-        plane = P["plane"]
-        self.planes[frame.name] = plane
-        n, c = plane
+        n, c = P["plane"]
         wc = np.array([np.mean(self.setup.workspace["x"]), np.mean(self.setup.workspace["y"])])
         z_fit = c[2] - (n[0] * (wc[0] - c[0]) + n[1] * (wc[1] - c[1])) / n[2]
         z_bel = self.p0[2] - (self.n0[0] * wc[0] + self.n0[1] * wc[1]) / self.n0[2]
         ang = math.degrees(math.acos(float(np.clip(n @ self.n0, -1, 1))))
-        return {"dz_m": float(z_fit - z_bel), "angle_deg": ang}
+        out = {"dz_m": float(z_fit - z_bel), "angle_deg": ang, "corrected": False}
+        if self.p.correct_overhead:
+            Rc = _rot_between(n, self.n0)                      # n を既知の法線へ回す（c を中心に）
+            d = self.n0 * float((self.p0 - c) @ self.n0)       # c を既知の平面の上へ
+            self.corrections[name] = (Rc, c, d)
+            self.planes[name] = (self.n0.copy(), c + d)
+            out["corrected"] = True
+        else:
+            self.planes[name] = (n, c)
+        return out
 
     # -------------------------------------------------------------------- box
     def fit_box(self, P) -> dict:
@@ -343,7 +375,7 @@ class Perception:
             if len(pts) < self.p.min_points:
                 continue
             top = np.percentile(hh, 95)
-            tp = pts[hh > top - 0.01]
+            tp = pts[hh > top - self.p.top_band]
             xy = tp[:, :2].mean(axis=0) if len(tp) >= 5 else pts[:, :2].mean(axis=0)
             yaw = 0.0
             if len(tp) >= 8:

@@ -62,8 +62,8 @@ class JudgeV2:
             corners = self._box_corners(wm)
             ov = sensor.cameras.get("overhead")
             if ov is not None:
-                cam = s.cameras["overhead"]
-                reg = self._region(corners, np.asarray(cam.extrinsic.R), np.asarray(cam.extrinsic.t), cam.rgb_crop)
+                R, t = self.per.camera_pose("overhead", ov.t_capture, sensor.gripper.width)   # テーブル面での補正を含む
+                reg = self._region(corners, R, t, s.cameras["overhead"].rgb_crop)
                 if reg is not None:
                     out["box_pixels"] = int((C.color_mask(ov.rgb, color, self.thr) & reg).sum())
             wr = sensor.cameras.get("wrist")

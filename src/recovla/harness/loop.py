@@ -87,6 +87,9 @@ def run_policy_trial(world, suite, make_runtime, layout, target: str, seed: int,
         f, _ = E.capture_frame(world, target, state["rest"], pp, render=False)
         f["x_des"] = rt.motion.x_cmd
         f["gripper_closed"] = bool(rt.closed)
+        la = rt.log_act[-1] if getattr(rt, "log_act", None) else None      # 旧版の記録と同じ欄（集計の互換。実行系の記録から写す）
+        f["action"] = np.asarray(la[4], float) if la is not None and not la[3] else np.full(7, np.nan)
+        f["chunk_id"] = -1 if la is None or la[2] is None else int(la[2])
         truth_log.append(f)
 
     def on_step(r):
@@ -126,9 +129,22 @@ def run_policy_trial(world, suite, make_runtime, layout, target: str, seed: int,
     arrays = {k: np.array([f[k] for f in truth_log]) for k in TRUTH_KEYS}
     arrays["target"] = np.full(len(truth_log), ti, dtype=np.int8)
     arrays["phase"] = arrays["phase"].astype(np.int8)
+    cid = np.array([f["chunk_id"] for f in truth_log], dtype=np.int32)
+    sw = np.zeros(len(cid), dtype=bool)
+    prev = -1
+    for i, c in enumerate(cid):                                 # 塊が切り替わった最初のこま（旧版 scene_trial と同じ）
+        if c >= 0 and c != prev and prev >= 0:
+            sw[i] = True
+        if c >= 0:
+            prev = c
+    arrays.update({"action": np.array([f["action"] for f in truth_log]), "chunk_id": cid, "chunk_switch": sw,
+                   "induce_active": np.zeros(len(cid), dtype=bool)})
     ioa = io.audit()
     g3 = world.audit_summary()
     meta = {
+        "record_version": 1, "steps": [{"target": target, "instruction": task, "t_start": 0.0, "t_end": float(world.data.time),
+                                         "success": state["success_t"] is not None, "t_success": state["success_t"]}],
+        "inference": [{"wall_s": e["latency_s"]} for e in rt.log_inf],   # 集計の互換: シミュレーションの時刻の上の推論の時間
         "seed": int(seed), "target": target, "instruction": task, "success": state["success_t"] is not None,
         "t_success": state["success_t"], "time_limit_s": time_limit_s, "t_end": float(world.data.time),
         "layout": {"kind": layout.kind, "start": layout.start, "prefilled": sorted(layout.prefilled)},

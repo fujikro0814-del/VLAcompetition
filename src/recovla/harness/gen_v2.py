@@ -18,7 +18,7 @@ from recovla.harness.world import WorldRig
 
 class SensedDrivenRig(DrivenRig):
     def __init__(self, cfg: dict = None):
-        cfg = cfg or config.load("sensor_v1", "runtime_v2")
+        cfg = cfg or config.load_v2()
         super().__init__(render=False, cfg=cfg)
         self.suite = SensorSuite(self.model, cfg)
         self._sf = None

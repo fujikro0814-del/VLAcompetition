@@ -291,8 +291,8 @@ def cmd_check_gen(a) -> None:
     """完了条件の試験の生成（描画あり、作り直しあり）。学習と同時に回さない（GPU の描画）。"""
     from recovla.expert import generate as G
     n = 2 if a.smoke else a.n
-    run = GEN / f"f_check{'_smoke' if a.smoke else ''}_{time.strftime('%Y%m%d-%H%M%S')}"
-    G.generate(check_specs(n), run, workers=a.workers, render=True)
+    run = GEN / f"f_check{'_v2' if a.rig == 'v2' else ''}{'_smoke' if a.smoke else ''}_{time.strftime('%Y%m%d-%H%M%S')}"
+    G.generate(check_specs(n), run, workers=a.workers, render=True, rig_kind=a.rig)
     print(f"[f] generated {run}", flush=True)
 
 
@@ -517,11 +517,11 @@ def cmd_gen_data(a) -> None:
                 rec_specs.append(G.EpisodeSpec(c["seed"], c["color"], lk, kind))
                 twin_specs.append(G.EpisodeSpec(c["seed"], c["color"], lk, "n"))
     specs = normal + rec_specs + twin_specs
-    run = GEN / f"F_data{'_smoke' if a.smoke else ''}_{time.strftime('%Y%m%d-%H%M%S')}"
+    run = GEN / f"F_data{'_v2' if a.rig == 'v2' else ''}{'_smoke' if a.smoke else ''}_{time.strftime('%Y%m%d-%H%M%S')}"
     if a.smoke:                                            # 通しの確認: 各群から少しだけ
         specs = normal[:6] + rec_specs[::30] + twin_specs[::30]
     t0 = time.perf_counter()
-    results = G.generate(specs, run, workers=a.workers, render=True)
+    results = G.generate(specs, run, workers=a.workers, render=True, rig_kind=a.rig)   # v2: 段階 2（harness/gen_v2.py）
     gen_wall = time.perf_counter() - t0
     by = {(r["kind"], r["layout_seed"], r["color"]): r for r in results}
 
@@ -777,12 +777,14 @@ def main(argv=None) -> int:
         s.add_argument("--workers", type=int, default=1)
         s.add_argument("--n", type=int, default=60)
         s.add_argument("--smoke", action="store_true")
+        s.add_argument("--rig", default="v1", choices=("v1", "v2"), help="v2: 目標書 v2 の口とセンサの模型で記録する（段階 2）")
         if name == "check-eval":
             s.add_argument("--table-only", action="store_true", help="完了条件 1 の表だけを作り直す（描画しない）")
     sub.add_parser("plan")
     s = sub.add_parser("gen-data")
     s.add_argument("--workers", type=int, default=8)
     s.add_argument("--smoke", action="store_true", help="各群から少しだけ（通しの確認）")
+    s.add_argument("--rig", default="v1", choices=("v1", "v2"), help="v2: 目標書 v2 の口とセンサの模型で記録する（段階 2）")
     s = sub.add_parser("review")
     s.add_argument("--smoke", action="store_true", help="data_smoke.json の回から作る")
     sub.add_parser("convert-cue")

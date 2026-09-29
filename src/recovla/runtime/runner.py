@@ -177,6 +177,9 @@ class PolicyRuntime:
         elif box.get("dev_m", 0.0) > float(c.get("box_dev_m", 1e9)) or box.get("dev_yaw_deg", 0.0) > float(c.get("box_dev_deg", 1e9)):
             self.stop_reason = "box_moved"
         self.ready = self.stop_reason is None
+        if tab.get("corrected") and hasattr(self.policy, "set_cue_pose"):
+            R, t = self.perception.camera_pose("overhead", self.io.now(), 0.08)
+            self.policy.set_cue_pose(R, t)
 
     def _check_target(self, t: float) -> None:
         if self.t_task0 is None:

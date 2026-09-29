@@ -17,7 +17,7 @@ import numpy as np
 
 from recovla.common import config
 
-CFG = config.load("sensor_v1", "runtime_v2")
+CFG = config.load_v2()
 os.environ["HF_HOME"] = str(config.path(CFG["paths"]["models_home"]))
 os.environ["HF_HUB_OFFLINE"] = "1"
 OUT = config.path(CFG["paths"]["outputs"]) / "v2eval"
@@ -125,7 +125,9 @@ def cmd_run(a) -> None:
         ind = I.Inducer(a.induce, seed, lay, tgt, world) if a.induce else None
         w0 = time.perf_counter()
         meta, arrays, rlog = run_policy_trial(world, suite, make_runtime, lay, tgt, seed, inducer=ind, cfg=CFG)
-        meta.update({"trial": i, "experiment": a.experiment, "condition": a.condition, "model": a.model, "ablate": a.ablate,
+        meta.update({"trial": i, "experiment": a.experiment, "condition": a.condition, "model": {"name": a.model}, "ablate": a.ablate,
+                     "runtime": {"mode": a.mode, "exec_interval": int(rt_cfg["exec_interval"]), "delay_steps": "sampled",
+                                 "safety_filter": not a.no_safety},
                      "mode": a.mode, "limiter": not a.no_limiter, "safety": not a.no_safety, "wall_s": round(time.perf_counter() - w0, 2)})
         np.savez(out / f"trial_{i:04d}.npz", **arrays)
         (out / f"trial_{i:04d}.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1, default=_json_default), encoding="utf-8")

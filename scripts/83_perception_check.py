@@ -192,25 +192,26 @@ def cmd_thresholds(a) -> None:
             "phantom": (A["phantom"] / np.maximum(A["out"], 1)).round(4).tolist(),
             "err_med_p95_m": err}
     C_ = res["cameras"]
-    hi15 = H_GRID.index(0.015)
-    m_ok = [mi for mi in range(nM) if all(C_[c]["robot_left"][mi][hi15] <= 0.005 for c in C_)]
-    mi = m_ok[0] if m_ok else nM - 1
-    res["chosen_self_margin_m"] = M_GRID[mi]
+    # 決め方（0112 で直し、0113 の 1 で了承）: 知覚の出力（検出 − 取り違え）の、俯瞰と手首の悪い方が最もよい (M, H)。同点なら小さい方
+    best = None
+    for mi in range(nM):
+        for hi in range(nH):
+            sc = min(C_[c]["detect"][mi][hi] - C_[c]["phantom"][mi][hi] for c in C_)
+            if best is None or sc > best[0] + 1e-12:
+                best = (sc, mi, hi)
+    _, mi, hi = best
+    res["chosen_self_margin_m"], res["chosen_table_h"], res["chosen_score"] = M_GRID[mi], H_GRID[hi], round(best[0], 4)
     res["cube_removed_at_chosen"] = {c: C_[c]["cube_removed"][mi] for c in C_}
-    h_ok = [hi for hi in range(nH) if all(C_[c]["detect"][mi][hi] >= 0.99 and C_[c]["phantom"][mi][hi] <= 0.005 for c in C_)]
-    if h_ok:
-        res["chosen_table_h"], res["h_rule_met"] = H_GRID[h_ok[0]], True
-    else:
-        score = [min(C_[c]["detect"][mi][hi] - C_[c]["phantom"][mi][hi] for c in C_) for hi in range(nH)]
-        res["chosen_table_h"], res["h_rule_met"] = H_GRID[int(np.argmax(score))], False
+    res["robot_left_at_chosen"] = {c: C_[c]["robot_left"][mi][hi] for c in C_}
+    res["rule"] = "知覚の出力（検出 − 取り違え）の、俯瞰と手首の悪い方が最もよい (M, H)。同点なら小さい方（0112・0113 の 1）"
     res["written"] = time.strftime("%Y-%m-%d %H:%M:%S")
     OUT.mkdir(parents=True, exist_ok=True)
     txt = json.dumps(res, ensure_ascii=False, indent=1)
     (OUT / f"thresholds_{a.tag}.json").write_text(txt, encoding="utf-8")
     if a.tag != "smoke":
         (config.ROOT / "docs" / "results" / f"perception_thresholds_{a.tag}.json").write_text(txt + "\n", encoding="utf-8")
-    print(json.dumps({k: res[k] for k in ("frames", "chosen_self_margin_m", "cube_removed_at_chosen", "chosen_table_h",
-                                          "h_rule_met")}, ensure_ascii=False))
+    print(json.dumps({k: res[k] for k in ("frames", "chosen_self_margin_m", "chosen_table_h", "chosen_score",
+                                          "cube_removed_at_chosen", "robot_left_at_chosen")}, ensure_ascii=False))
 
 
 def cmd_accuracy(a) -> None:
@@ -228,9 +229,38 @@ def cmd_accuracy(a) -> None:
     rig = DrivenRig(render=False)
     suite = SensorSuite(rig.model, CFG)
     thr = Cq.Thresholds.from_dict(CFG["planner"]["color_detect"])
-    pp = Params(self_margin_m=float(a.margin), table_h=float(a.table_h))
+    pp = Params(self_margin_m=float(a.margin), table_h=float(a.table_h), top_band=float(a.top_band))
     cube_bodies = [rig.model.body(f"cube_{c}").id for c in COLORS]
     rows, boxes, walls, checks = [], [], [], []
+    prox = {"updates": 0, "near": 0, "near_false": 0}             # 0113 の 2: 障害物がロボットの形と 5 mm 以内に来る更新
+    from recovla.harness import setup as HS2
+    from recovla.runtime.safety import PerceptionSafetyFilter
+    import mujoco as mj
+    bel = PerceptionSafetyFilter(HS2.nominal_setup(CFG), CFG["safety_filter"], 0.0)
+    bm, bd = bel.m, bel.d
+    robot_all = [g for g in range(bm.ngeom) if bm.geom_contype[g] and bm.body(bm.geom_bodyid[g]).name.startswith(("link", "hand", "left_", "right_"))]
+    ft = np.zeros(6)
+
+    def near_robot(wm, target, q, width, true_pos):
+        bel.start_trial(target)
+        bel.set_world(wm)
+        bd.qpos[bel.arm_qadr] = q
+        bd.qpos[bel.finger_qadr] = 0.5 * width
+        mj.mj_kinematics(bm, bd)
+        near = False
+        near_false = False
+        for og, key in bel.obstacles:
+            dmin = min(mj.mj_geomDistance(bm, bd, int(rg), int(og), 0.05, ft) for rg in robot_all)
+            if dmin < 0.005:
+                near = True
+                if key != "wall":                                   # 真の立方体は離れているのに、知覚の立方体が近い
+                    tp = true_pos[COLORS.index(key)]
+                    mc = bel.cube_mocap[sorted(wm.cubes).index(key)]
+                    bd.mocap_pos[mc] = tp
+                    mj.mj_kinematics(bm, bd)
+                    dt_ = min(mj.mj_geomDistance(bm, bd, int(rg), int(og), 0.05, ft) for rg in robot_all)
+                    near_false |= dt_ >= 0.005
+        return near, near_false
     base, n = (int(x) for x in a.seeds.split(":"))
     for s in range(base, base + n):
         lay = scene.sample_layout(s)
@@ -270,6 +300,10 @@ def cmd_accuracy(a) -> None:
             t0 = time.perf_counter()
             wm = per.update(sf.cameras, sf.gripper, sf.t, tipp)
             wall = time.perf_counter() - t0
+            nr, nf = near_robot(wm, sp.color, d.qpos[rig.arm_qadr].copy(), sf.gripper.width, d.xpos[cube_bodies].copy())
+            prox["updates"] += 1
+            prox["near"] += int(nr)
+            prox["near_false"] += int(nf)
             for ci, c in enumerate(COLORS):
                 e = wm.cubes.get(c)
                 tp = d.xpos[cube_bodies[ci]]
@@ -279,6 +313,7 @@ def cmd_accuracy(a) -> None:
                     continue
                 rows.append({"seed": s, "t": sf.t, "color": c, "status": e.status, "source": e.source,
                              "err3": float(np.linalg.norm(e.pos - tp)), "errxy": float(np.linalg.norm(e.pos[:2] - tp[:2])),
+                             "errvec": (e.pos - tp).tolist(),
                              "in_box": e.in_box, "true_in_box": tin, "wall": wall,
                              "on_table": bool(tp[2] < 0.03 and not tin)})
 
@@ -292,10 +327,16 @@ def cmd_accuracy(a) -> None:
         return float(np.percentile(x, p)) if len(x) else None
     obst = [x["err3"] for x in rows if x.get("on_table") and x["status"] in ("seen", "held")]
     walls_t = [x["wall"] for x in rows]
-    res = {"seeds": a.seeds, "params": {"self_margin_m": pp.self_margin_m, "table_h": pp.table_h}, "n_updates": len(rows) // 3,
+    res = {"seeds": a.seeds, "params": {"self_margin_m": pp.self_margin_m, "table_h": pp.table_h, "top_band": pp.top_band},
+           "n_updates": len(rows) // 3,
            "obstacle_err3_m": {"n": len(obst), "median": q(obst, 50), "p95": q(obst, 95), "max": max(obst) if obst else None},
            "by_status": {st_: {"n": len(v), "median_err3": q(v, 50), "p95_err3": q(v, 95)} for st_ in ("seen", "held", "in_hand", "lost")
                          for v in [[x["err3"] for x in rows if x["status"] == st_ and "err3" in x]]},
+           "by_source": {src: {"n": len(v), "median_err3": q([x["err3"] for x in v], 50), "p95_err3": q([x["err3"] for x in v], 95),
+                               "median_errxy": q([x["errxy"] for x in v], 50),
+                               "mean_errvec": np.mean([x["errvec"] for x in v], axis=0).round(4).tolist() if v else None}
+                         for src in ("overhead", "wrist")
+                         for v in [[x for x in rows if x.get("source") == src and x["status"] == "seen" and x.get("on_table")]]},
            "not_found_frac": float(np.mean([x["status"] == "none" for x in rows])) if rows else None,
            "in_box_agreement": float(np.mean([x["in_box"] == x["true_in_box"] for x in rows if "in_box" in x and x["status"] != "in_hand"])),
            "box": {"n": len(boxes), "ok": sum(b["ok"] for b in boxes), "err_m": [b["err_m"] for b in boxes],
@@ -303,6 +344,9 @@ def cmd_accuracy(a) -> None:
            "table_check": {"dz_m": [c["dz_m"] for c in checks], "angle_deg": [c["angle_deg"] for c in checks]},
            "update_wall_s": {"median": q(walls_t, 50), "p99": q(walls_t, 99), "max": max(walls_t) if walls_t else None},
            "written": time.strftime("%Y-%m-%d %H:%M:%S")}
+    res["proximity"] = {**prox, "frac": prox["near"] / max(prox["updates"], 1),
+                        "frac_false": prox["near_false"] / max(prox["updates"], 1),
+                        "rule": "0113 の 2: 障害物（目標以外の机上の立方体・箱の壁）がロボット（手・指・腕）と 5 mm 以内に来る更新の割合が 1% を超えたら対処"}
     res["margin_rule"] = "安全フィルタの余裕 = 机上の立方体（見えている・隠れて保持中）の中心の位置の誤差（3 次元）の p95"
     res["latency_rule"] = "知覚の遅れ = update の計算時間の p99 を 10 ms 単位で切り上げ"
     res["chosen_extra_margin_m"] = None if res["obstacle_err3_m"]["p95"] is None else round(res["obstacle_err3_m"]["p95"], 4)
@@ -312,9 +356,53 @@ def cmd_accuracy(a) -> None:
     (OUT / f"accuracy_{a.tag}.json").write_text(txt, encoding="utf-8")
     if a.tag != "smoke":
         (config.ROOT / "docs" / "results" / f"perception_accuracy_{a.tag}.json").write_text(txt + "\n", encoding="utf-8")
-    print(json.dumps({k: res[k] for k in ("n_updates", "obstacle_err3_m", "by_status", "not_found_frac", "in_box_agreement",
+    print(json.dumps({k: res[k] for k in ("n_updates", "obstacle_err3_m", "by_status", "by_source", "proximity", "not_found_frac", "in_box_agreement",
                                           "box", "update_wall_s", "chosen_extra_margin_m", "chosen_perception_latency_s")},
                      ensure_ascii=False))
+
+
+def cmd_derive(a) -> None:
+    """0113 の 1・2 の決まりを、測った結果に当てはめて configs/runtime_v2_derived.yaml を書く（知覚を変えたら測り直して、これを回す）。
+      M・H: thresholds_<tag>.json の選んだ値（知覚の出力で決める。0112・0113 の 1）
+      M の条件（0113 の 2）: accuracy の proximity.frac が 1% を超えたら、(i) 色の付かない点が多いまとまりを外す
+        （この知覚のまとまりは目標の色の点だけで作るので、目標の色が半分未満のまとまりはない＝当てはまらない）、
+        (ii) それでも超えるなら M = 1 cm
+      安全フィルタの余裕 = 机上の立方体の位置の誤差の p95、知覚の遅れ = 計算時間の p99 を 10 ms で切り上げ、
+      起動時の閾値 = 学習用のシードで見た最大の 2 倍（テーブル面の高さ・傾き、箱の位置・向き）"""
+    import yaml
+    th = json.loads((OUT / f"thresholds_{a.thresholds}.json").read_text(encoding="utf-8"))
+    acc = {m: json.loads((OUT / f"accuracy_{tag}.json").read_text(encoding="utf-8")) for m, tag in
+           ((0.0, a.acc0), (0.01, a.acc1))}
+    M, H = float(th["chosen_self_margin_m"]), float(th["chosen_table_h"])
+    notes = [f"thresholds_{a.thresholds}: M={M}, H={H}"]
+    if M not in acc:
+        raise SystemExit(f"M={M} の accuracy がない")
+    if acc[M]["proximity"]["frac"] > 0.01:
+        notes.append(f"proximity {acc[M]['proximity']['frac']:.4f} > 1%: 色の付かないまとまりの除外は当てはまらない（まとまりは色の点だけ）→ M = 1 cm")
+        M = 0.01
+        if acc[M]["proximity"]["frac"] > 0.01:
+            notes.append(f"M = 1 cm でも {acc[M]['proximity']['frac']:.4f} > 1%（報告する）")
+    A = acc[M]
+    tc = A["table_check"]["dz_m"] + th["table_check"]["dz_m"]
+    ta = A["table_check"]["angle_deg"] + th["table_check"]["angle_deg"]
+    out = {"runtime_v2": {
+        "perception": {"self_margin_m": M, "table_h": H, "top_band": float(A["params"].get("top_band", 0.006))},
+        "safety_extra_margin_m": round(float(A["obstacle_err3_m"]["p95"]), 4),
+        "perception_latency_s": math.ceil(float(A["update_wall_s"]["p99"]) * 100) / 100,
+        "checks": {"table_dz_m": round(2 * max(abs(x) for x in tc), 4), "table_angle_deg": round(2 * max(ta), 3),
+                   "box_dev_m": round(2 * max(e for e in A["box"]["err_m"] if e is not None), 4),
+                   "box_dev_deg": round(2 * max(y for y in A["box"]["yaw_deg"] if y is not None), 3)}},
+        "derived_from": {"thresholds": f"thresholds_{a.thresholds}.json", "accuracy_M0": f"accuracy_{a.acc0}.json",
+                         "accuracy_M1cm": f"accuracy_{a.acc1}.json", "notes": notes,
+                         "compare_M0_vs_M1cm": {str(m): {"err_median": acc[m]["obstacle_err3_m"]["median"],
+                                                         "err_p95": acc[m]["obstacle_err3_m"]["p95"],
+                                                         "proximity_frac": acc[m]["proximity"]["frac"]} for m in acc},
+                         "written": time.strftime("%Y-%m-%d %H:%M:%S")}}
+    path = config.ROOT / "configs" / "runtime_v2_derived.yaml"
+    head = ("# 自動で書いた値（scripts/83_perception_check.py derive）。手で直さない。0113 の 1・2 の決まりを、学習用のシードで測った\n"
+            "# 結果に当てはめたもの。configs/runtime_v2.yaml の上に重ねて読む（config.load(\"sensor_v1\", \"runtime_v2\", \"runtime_v2_derived\")）\n")
+    path.write_text(head + yaml.safe_dump(out, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    print(path.read_text(encoding="utf-8"))
 
 
 def main(argv=None) -> int:
@@ -327,9 +415,14 @@ def main(argv=None) -> int:
     p.add_argument("--seeds", default="59200:20")
     p.add_argument("--margin", required=True, type=float)
     p.add_argument("--table-h", required=True, type=float)
+    p.add_argument("--top-band", default=0.006, type=float)
     p.add_argument("--tag", default="v1")
+    p = sub.add_parser("derive")
+    p.add_argument("--thresholds", required=True)
+    p.add_argument("--acc0", required=True, help="M = 0 の accuracy の tag")
+    p.add_argument("--acc1", required=True, help="M = 1 cm の accuracy の tag")
     a = ap.parse_args(argv)
-    {"thresholds": cmd_thresholds, "accuracy": cmd_accuracy}[a.cmd](a)
+    {"thresholds": cmd_thresholds, "accuracy": cmd_accuracy, "derive": cmd_derive}[a.cmd](a)
     return 0
 
 

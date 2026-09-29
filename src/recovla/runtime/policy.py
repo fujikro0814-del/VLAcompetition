@@ -75,6 +75,12 @@ class SensorPolicy:
         self.reset_cue()
         self.input_check = None
 
+    def set_cue_pose(self, R, t) -> None:
+        """俯瞰の信じている外部パラメータが直ったとき（知覚の起動時のテーブル面での補正、0113 の 3 の 2）、手がかりの投影も直す。"""
+        if self.cue is not None:
+            c = self.cue.calib
+            self.cue.calib = C.Calibration(np.asarray(t, float), np.asarray(R, float), c.f, c.width, c.height)
+
     def reset_cue(self) -> None:
         if self.cue is not None:
             self.cue.reset()

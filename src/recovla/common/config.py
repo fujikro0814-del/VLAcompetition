@@ -45,3 +45,12 @@ def path(rel) -> pathlib.Path:
     """<ROOT> からの相対パス（設定の paths.* など）を絶対パスにする。"""
     p = pathlib.Path(rel)
     return p if p.is_absolute() else ROOT / p
+
+
+V2_LAYERS = ("sensor_v1", "runtime_v2", "runtime_v2_derived", "runtime_v2_judge")
+
+
+def load_v2() -> dict:
+    """目標書 v2 の設定: センサと作動の模型（sensor_v1）、実行系の手段（runtime_v2）、自動で決めた値（runtime_v2_derived・
+    runtime_v2_judge。まだ作っていなければ飛ばす）を順に重ねる。"""
+    return load(*[n for n in V2_LAYERS if (CONFIG_DIR / f"{n}.yaml").is_file()])
