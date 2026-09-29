@@ -5,26 +5,26 @@ runtime_v2:
     self_margin_m: 0.0
     table_h: 0.01
     top_band: 0.006
-  safety_extra_margin_m: 0.0242
-  perception_latency_s: 0.12
+  safety_extra_margin_m: 0.0225
+  perception_latency_s: 0.16
   checks:
     table_dz_m: 0.0467
     table_angle_deg: 2.489
     box_dev_m: 0.0625
-    box_dev_deg: 1.9
+    box_dev_deg: 1.938
 derived_from:
-  thresholds: thresholds_v2.json
-  accuracy_M0: accuracy_v2_M0.json
-  accuracy_M1cm: accuracy_v2_M1.json
+  thresholds: thresholds_v3.json
+  accuracy_M0: accuracy_v3_M0.json
+  accuracy_M1cm: accuracy_v3_M1.json
   notes:
-  - 'thresholds_v2: M=0.0, H=0.01'
+  - 'thresholds_v3: M=0.0, H=0.01'
   compare_M0_vs_M1cm:
     '0.0':
-      err_median: 0.011241508762613182
-      err_p95: 0.024197853669565287
-      proximity_frac: 0.009366925064599484
+      err_median: 0.011032474992052453
+      err_p95: 0.022505788307134535
+      proximity_frac: 0.008074935400516795
     '0.01':
-      err_median: 0.011814023540873363
-      err_p95: 0.02389773340116354
-      proximity_frac: 0.00516795865633075
-  written: '2026-09-29 15:04:04'
+      err_median: 0.011462663924801041
+      err_p95: 0.022997828515737152
+      proximity_frac: 0.0035529715762273903
+  written: '2026-09-29 15:51:47'

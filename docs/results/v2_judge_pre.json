@@ -1,0 +1,7130 @@
+{
+ "seeds": "196040:40",
+ "all_cases": 280,
+ "pos_all": 120,
+ "neg_all": 160,
+ "selected": 200,
+ "agree": 196,
+ "agreement": 0.98,
+ "by_kind": {
+  "run_positive": [
+   29,
+   30
+  ],
+  "placed_inside": [
+   67,
+   70
+  ],
+  "run_held_over_box": [
+   29,
+   29
+  ],
+  "placed_beside": [
+   26,
+   26
+  ],
+  "placed_on_cube": [
+   24,
+   24
+  ],
+  "placed_rim": [
+   21,
+   21
+  ]
+ },
+ "judge_params": {
+  "box_min_pixels": 69,
+  "wrist_min_pixels": 52,
+  "wrist_min_fraction": 0.8,
+  "height_tol_m": 0.01,
+  "gripper_open_m": 0.075,
+  "retreat_tol_m": 0.05,
+  "still_speed": 0.01,
+  "hold_s": 1.0
+ },
+ "selected_ids": [
+  0,
+  1,
+  2,
+  7,
+  8,
+  15,
+  16,
+  22,
+  23,
+  28,
+  29,
+  30,
+  37,
+  43,
+  44,
+  49,
+  50,
+  51,
+  56,
+  57,
+  58,
+  63,
+  64,
+  65,
+  70,
+  71,
+  72,
+  77,
+  78,
+  79,
+  84,
+  85,
+  86,
+  92,
+  98,
+  99,
+  100,
+  106,
+  112,
+  113,
+  114,
+  119,
+  120,
+  121,
+  126,
+  127,
+  128,
+  133,
+  134,
+  140,
+  141,
+  142,
+  147,
+  148,
+  149,
+  155,
+  156,
+  161,
+  162,
+  163,
+  168,
+  175,
+  176,
+  177,
+  182,
+  183,
+  189,
+  190,
+  191,
+  196,
+  197,
+  198,
+  203,
+  204,
+  205,
+  210,
+  211,
+  212,
+  218,
+  219,
+  224,
+  225,
+  226,
+  231,
+  232,
+  233,
+  238,
+  239,
+  240,
+  245,
+  246,
+  247,
+  253,
+  254,
+  259,
+  260,
+  261,
+  266,
+  267,
+  275,
+  6,
+  11,
+  13,
+  18,
+  19,
+  20,
+  24,
+  26,
+  27,
+  31,
+  32,
+  33,
+  34,
+  39,
+  48,
+  55,
+  59,
+  60,
+  61,
+  62,
+  74,
+  80,
+  81,
+  82,
+  83,
+  88,
+  89,
+  94,
+  95,
+  96,
+  97,
+  101,
+  102,
+  103,
+  109,
+  110,
+  111,
+  117,
+  118,
+  124,
+  129,
+  130,
+  131,
+  132,
+  136,
+  138,
+  139,
+  143,
+  144,
+  146,
+  151,
+  152,
+  153,
+  158,
+  159,
+  160,
+  164,
+  165,
+  166,
+  167,
+  171,
+  172,
+  178,
+  179,
+  180,
+  185,
+  186,
+  188,
+  193,
+  199,
+  200,
+  206,
+  209,
+  213,
+  215,
+  220,
+  221,
+  223,
+  228,
+  229,
+  230,
+  235,
+  236,
+  237,
+  244,
+  248,
+  249,
+  250,
+  251,
+  255,
+  256,
+  257,
+  258,
+  262,
+  264,
+  265,
+  269,
+  272,
+  278,
+  279
+ ],
+ "cases": [
+  {
+   "id": 0,
+   "seed": 196040,
+   "color": "red",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 83,
+    "wrist_in_pixels": 186,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004155609556131991,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 1,
+   "seed": 196040,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 119,
+    "wrist_in_pixels": 1138,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004155609556131991,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.408985590874213,
+    0.24259285369892378,
+    0.031
+   ]
+  },
+  {
+   "id": 2,
+   "seed": 196040,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 129,
+    "wrist_in_pixels": 1301,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004155609556131991,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4291731253061314,
+    0.2696483433043629,
+    0.031
+   ]
+  },
+  {
+   "id": 3,
+   "seed": 196040,
+   "color": "red",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 131,
+    "wrist_in_pixels": 72,
+    "wrist_fraction": 0.05965202982601491,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004155609556131991,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.535,
+    0.2079007797001929,
+    0.08
+   ]
+  },
+  {
+   "id": 4,
+   "seed": 196040,
+   "color": "red",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004155609556131991,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.581712095497906,
+    0.2079007797001929,
+    0.02
+   ]
+  },
+  {
+   "id": 5,
+   "seed": 196040,
+   "color": "red",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004155609556131991,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5644659929968993,
+    -0.13525156008431094,
+    0.060855195659810575
+   ]
+  },
+  {
+   "id": 6,
+   "seed": 196040,
+   "color": "red",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 102,
+    "wrist_in_pixels": 4074,
+    "wrist_fraction": 0.3985911358966833,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.24055672524009095,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 7,
+   "seed": 196041,
+   "color": "green",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 84,
+    "wrist_in_pixels": 184,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004095850141319382,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 8,
+   "seed": 196041,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 128,
+    "wrist_in_pixels": 1247,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004095850141319382,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4351226852077008,
+    0.22833698891635656,
+    0.031
+   ]
+  },
+  {
+   "id": 9,
+   "seed": 196041,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 132,
+    "wrist_in_pixels": 1138,
+    "wrist_fraction": 0.9184826472962067,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004095850141319382,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.42456753005252834,
+    0.27932107525185895,
+    0.031
+   ]
+  },
+  {
+   "id": 10,
+   "seed": 196041,
+   "color": "green",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 1,
+    "wrist_in_pixels": 305,
+    "wrist_fraction": 0.3550640279394645,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004095850141319382,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.365,
+    0.28174037365800103,
+    0.08
+   ]
+  },
+  {
+   "id": 11,
+   "seed": 196041,
+   "color": "green",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004095850141319382,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.326484939856226,
+    0.28174037365800103,
+    0.02
+   ]
+  },
+  {
+   "id": 12,
+   "seed": 196041,
+   "color": "green",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004095850141319382,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.3844086334771035,
+    -0.13970257666277067,
+    0.060855195659810554
+   ]
+  },
+  {
+   "id": 13,
+   "seed": 196041,
+   "color": "green",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 100,
+    "wrist_in_pixels": 2839,
+    "wrist_fraction": 0.3142572503874253,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.21756181427022458,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 14,
+   "seed": 196042,
+   "color": "blue",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 124,
+    "wrist_in_pixels": 1023,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0038022205479393786,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 15,
+   "seed": 196042,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 89,
+    "wrist_in_pixels": 223,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0038022205479393786,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4830603366468823,
+    0.28039713078272943,
+    0.031
+   ]
+  },
+  {
+   "id": 16,
+   "seed": 196042,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 109,
+    "wrist_in_pixels": 632,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0038022205479393786,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.45910521110281016,
+    0.24744460204292493,
+    0.031
+   ]
+  },
+  {
+   "id": 17,
+   "seed": 196042,
+   "color": "blue",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 13,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0038022205479393786,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4558873596878154,
+    0.335,
+    0.08
+   ]
+  },
+  {
+   "id": 18,
+   "seed": 196042,
+   "color": "blue",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0038022205479393786,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4558873596878154,
+    0.3730692822793533,
+    0.02
+   ]
+  },
+  {
+   "id": 19,
+   "seed": 196042,
+   "color": "blue",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0038022205479393786,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.3953159685146192,
+    -0.08144464800324777,
+    0.06085519565981054
+   ]
+  },
+  {
+   "id": 20,
+   "seed": 196042,
+   "color": "blue",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 562,
+    "wrist_fraction": 0.08922051119225274,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.12585434728684447,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 21,
+   "seed": 196043,
+   "color": "red",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 84,
+    "wrist_in_pixels": 144,
+    "wrist_fraction": 0.8323699421965318,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004131513275794504,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 22,
+   "seed": 196043,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 131,
+    "wrist_in_pixels": 683,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004131513275794504,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4643756588842044,
+    0.20808482312501686,
+    0.031
+   ]
+  },
+  {
+   "id": 23,
+   "seed": 196043,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 130,
+    "wrist_in_pixels": 554,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004131513275794504,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4651895956323946,
+    0.25739321315166813,
+    0.031
+   ]
+  },
+  {
+   "id": 24,
+   "seed": 196043,
+   "color": "red",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 12,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004131513275794504,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5009320741458397,
+    0.335,
+    0.08
+   ]
+  },
+  {
+   "id": 25,
+   "seed": 196043,
+   "color": "red",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004131513275794504,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5009320741458397,
+    0.3825799176106486,
+    0.02
+   ]
+  },
+  {
+   "id": 26,
+   "seed": 196043,
+   "color": "red",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004131513275794504,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.34654231641057615,
+    -0.05825955025303883,
+    0.06085519565981054
+   ]
+  },
+  {
+   "id": 27,
+   "seed": 196043,
+   "color": "red",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 122,
+    "wrist_in_pixels": 4338,
+    "wrist_fraction": 0.4754493643138974,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.2442438566468703,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 28,
+   "seed": 196044,
+   "color": "green",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 84,
+    "wrist_in_pixels": 722,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0043181539972528505,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 29,
+   "seed": 196044,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 124,
+    "wrist_in_pixels": 701,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0043181539972528505,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.44226976099404747,
+    0.2072101764402976,
+    0.031
+   ]
+  },
+  {
+   "id": 30,
+   "seed": 196044,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 127,
+    "wrist_in_pixels": 810,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0043181539972528505,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4153028366392544,
+    0.22314554347475005,
+    0.031
+   ]
+  },
+  {
+   "id": 31,
+   "seed": 196044,
+   "color": "green",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 4,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0043181539972528505,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.39889542545411505,
+    0.335,
+    0.08
+   ]
+  },
+  {
+   "id": 32,
+   "seed": 196044,
+   "color": "green",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0043181539972528505,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.39889542545411505,
+    0.3831263469025685,
+    0.02
+   ]
+  },
+  {
+   "id": 33,
+   "seed": 196044,
+   "color": "green",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0043181539972528505,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4206771878708352,
+    -0.05754946238628367,
+    0.060855195659810596
+   ]
+  },
+  {
+   "id": 34,
+   "seed": 196044,
+   "color": "green",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 141,
+    "wrist_in_pixels": 51,
+    "wrist_fraction": 0.010741364785172704,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.18831920527387672,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 35,
+   "seed": 196045,
+   "color": "blue",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 116,
+    "wrist_in_pixels": 1129,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0031563861811824976,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 36,
+   "seed": 196045,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 85,
+    "wrist_in_pixels": 36,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0031563861811824976,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.49455937680840645,
+    0.29431671879738414,
+    0.031
+   ]
+  },
+  {
+   "id": 37,
+   "seed": 196045,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 147,
+    "wrist_in_pixels": 1111,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0031563861811824976,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.43494674979917197,
+    0.2625102022329676,
+    0.031
+   ]
+  },
+  {
+   "id": 38,
+   "seed": 196045,
+   "color": "blue",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 25,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0031563861811824976,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.40903245314292946,
+    0.335,
+    0.08
+   ]
+  },
+  {
+   "id": 39,
+   "seed": 196045,
+   "color": "blue",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0031563861811824976,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.40903245314292946,
+    0.37476858629121834,
+    0.02
+   ]
+  },
+  {
+   "id": 40,
+   "seed": 196045,
+   "color": "blue",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0031563861811824976,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.45088499947361627,
+    -0.05881974827767064,
+    0.06085519565981058
+   ]
+  },
+  {
+   "id": 41,
+   "seed": 196045,
+   "color": "blue",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 57,
+    "wrist_in_pixels": 9367,
+    "wrist_fraction": 1.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.1509917469903486,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 42,
+   "seed": 196046,
+   "color": "red",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 83,
+    "wrist_in_pixels": 181,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004161129591212849,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 43,
+   "seed": 196046,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 127,
+    "wrist_in_pixels": 990,
+    "wrist_fraction": 0.9969788519637462,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004161129591212849,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.46150642850306806,
+    0.23248107886187358,
+    0.031
+   ]
+  },
+  {
+   "id": 44,
+   "seed": 196046,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 119,
+    "wrist_in_pixels": 778,
+    "wrist_fraction": 0.9974358974358974,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004161129591212849,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.46862854413513577,
+    0.23821301239171822,
+    0.031
+   ]
+  },
+  {
+   "id": 45,
+   "seed": 196046,
+   "color": "red",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 1,
+    "wrist_in_pixels": 1218,
+    "wrist_fraction": 0.5543923532089212,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004161129591212849,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.365,
+    0.20640421412196697,
+    0.08
+   ]
+  },
+  {
+   "id": 46,
+   "seed": 196046,
+   "color": "red",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004161129591212849,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.31248486006512244,
+    0.20640421412196697,
+    0.02
+   ]
+  },
+  {
+   "id": 47,
+   "seed": 196046,
+   "color": "red",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004161129591212849,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4855252633353267,
+    -0.03792068149468528,
+    0.060855195659810554
+   ]
+  },
+  {
+   "id": 48,
+   "seed": 196046,
+   "color": "red",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 109,
+    "wrist_in_pixels": 4986,
+    "wrist_fraction": 0.49479011610598395,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.24210310904798726,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 49,
+   "seed": 196047,
+   "color": "green",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 120,
+    "wrist_in_pixels": 758,
+    "wrist_fraction": 0.9221411192214112,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003267485575281447,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 50,
+   "seed": 196047,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 136,
+    "wrist_in_pixels": 784,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003267485575281447,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4541086847530785,
+    0.23951900223548694,
+    0.031
+   ]
+  },
+  {
+   "id": 51,
+   "seed": 196047,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 156,
+    "wrist_in_pixels": 1139,
+    "wrist_fraction": 0.9912967798085291,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003267485575281447,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4396804409781405,
+    0.28551365710623955,
+    0.031
+   ]
+  },
+  {
+   "id": 52,
+   "seed": 196047,
+   "color": "green",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 12,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003267485575281447,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4060638241911434,
+    0.335,
+    0.08
+   ]
+  },
+  {
+   "id": 53,
+   "seed": 196047,
+   "color": "green",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003267485575281447,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4060638241911434,
+    0.38038113848081323,
+    0.02
+   ]
+  },
+  {
+   "id": 54,
+   "seed": 196047,
+   "color": "green",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003267485575281447,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.45670603069759563,
+    -0.0298439657054807,
+    0.06085519565981054
+   ]
+  },
+  {
+   "id": 55,
+   "seed": 196047,
+   "color": "green",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 3872,
+    "wrist_fraction": 0.6412719443524346,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.11493837929315091,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 56,
+   "seed": 196048,
+   "color": "blue",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 123,
+    "wrist_in_pixels": 909,
+    "wrist_fraction": 0.9256619144602851,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0038356130814264115,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 57,
+   "seed": 196048,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 117,
+    "wrist_in_pixels": 777,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0038356130814264115,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4208008305015991,
+    0.21576365302940417,
+    0.031
+   ]
+  },
+  {
+   "id": 58,
+   "seed": 196048,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 94,
+    "wrist_in_pixels": 637,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0038356130814264115,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4806121118973227,
+    0.21586277504829338,
+    0.031
+   ]
+  },
+  {
+   "id": 59,
+   "seed": 196048,
+   "color": "blue",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 139,
+    "wrist_in_pixels": 38,
+    "wrist_fraction": 0.03773584905660377,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0038356130814264115,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.535,
+    0.2393974151936438,
+    0.08
+   ]
+  },
+  {
+   "id": 60,
+   "seed": 196048,
+   "color": "blue",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0038356130814264115,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5852928764795465,
+    0.2393974151936438,
+    0.02
+   ]
+  },
+  {
+   "id": 61,
+   "seed": 196048,
+   "color": "blue",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0038356130814264115,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5094893780497873,
+    0.048705304055930515,
+    0.06085519565981057
+   ]
+  },
+  {
+   "id": 62,
+   "seed": 196048,
+   "color": "blue",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 57,
+    "wrist_in_pixels": 3781,
+    "wrist_fraction": 0.7076548755380873,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.19665348314279504,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 63,
+   "seed": 196049,
+   "color": "red",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 85,
+    "wrist_in_pixels": 170,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0041307585391949396,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 64,
+   "seed": 196049,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 82,
+    "wrist_in_pixels": 822,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0041307585391949396,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4944038500639611,
+    0.24751191127436611,
+    0.031
+   ]
+  },
+  {
+   "id": 65,
+   "seed": 196049,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 114,
+    "wrist_in_pixels": 831,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0041307585391949396,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4061172627673149,
+    0.2907496996978854,
+    0.031
+   ]
+  },
+  {
+   "id": 66,
+   "seed": 196049,
+   "color": "red",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 66,
+    "wrist_in_pixels": 599,
+    "wrist_fraction": 0.6318565400843882,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0041307585391949396,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.437233919011988,
+    0.16499999999999998,
+    0.08
+   ]
+  },
+  {
+   "id": 67,
+   "seed": 196049,
+   "color": "red",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0041307585391949396,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.437233919011988,
+    0.1275795690399406,
+    0.02
+   ]
+  },
+  {
+   "id": 68,
+   "seed": 196049,
+   "color": "red",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0041307585391949396,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5250574404514916,
+    0.02644852268490583,
+    0.060855195659810554
+   ]
+  },
+  {
+   "id": 69,
+   "seed": 196049,
+   "color": "red",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 120,
+    "wrist_in_pixels": 397,
+    "wrist_fraction": 0.07062800213485144,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.228626925881866,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 70,
+   "seed": 196050,
+   "color": "green",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 124,
+    "wrist_in_pixels": 1047,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003788795413181889,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 71,
+   "seed": 196050,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 115,
+    "wrist_in_pixels": 940,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003788795413181889,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4335953117167824,
+    0.21113346274517933,
+    0.031
+   ]
+  },
+  {
+   "id": 72,
+   "seed": 196050,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 126,
+    "wrist_in_pixels": 1178,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003788795413181889,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.41849028195806626,
+    0.26312458561705027,
+    0.031
+   ]
+  },
+  {
+   "id": 73,
+   "seed": 196050,
+   "color": "green",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 41,
+    "wrist_in_pixels": 405,
+    "wrist_fraction": 0.2653997378768021,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003788795413181889,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4252659461333858,
+    0.16499999999999998,
+    0.08
+   ]
+  },
+  {
+   "id": 74,
+   "seed": 196050,
+   "color": "green",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003788795413181889,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4252659461333858,
+    0.11041030686001174,
+    0.02
+   ]
+  },
+  {
+   "id": 75,
+   "seed": 196050,
+   "color": "green",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003788795413181889,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5336429572036291,
+    -0.1927705829945176,
+    0.06085519565981054
+   ]
+  },
+  {
+   "id": 76,
+   "seed": 196050,
+   "color": "green",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 2597,
+    "wrist_fraction": 0.3149405772495755,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.14069541189453635,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 77,
+   "seed": 196051,
+   "color": "blue",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 116,
+    "wrist_in_pixels": 818,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003250777411525175,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 78,
+   "seed": 196051,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 123,
+    "wrist_in_pixels": 676,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003250777411525175,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4607123464355822,
+    0.28229750293361905,
+    0.031
+   ]
+  },
+  {
+   "id": 79,
+   "seed": 196051,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 84,
+    "wrist_in_pixels": 955,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003250777411525175,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.48651515949852414,
+    0.2378359924522253,
+    0.031
+   ]
+  },
+  {
+   "id": 80,
+   "seed": 196051,
+   "color": "blue",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 139,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003250777411525175,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.535,
+    0.26777890760889117,
+    0.08
+   ]
+  },
+  {
+   "id": 81,
+   "seed": 196051,
+   "color": "blue",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003250777411525175,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5787281429873459,
+    0.26777890760889117,
+    0.02
+   ]
+  },
+  {
+   "id": 82,
+   "seed": 196051,
+   "color": "blue",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003250777411525175,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4024148987751048,
+    -0.15068271913131362,
+    0.060855195659810554
+   ]
+  },
+  {
+   "id": 83,
+   "seed": 196051,
+   "color": "blue",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 10,
+    "wrist_in_pixels": 3949,
+    "wrist_fraction": 0.7866533864541833,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.13941046596816206,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 84,
+   "seed": 196052,
+   "color": "red",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 93,
+    "wrist_in_pixels": 216,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004108075978618556,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 85,
+   "seed": 196052,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 91,
+    "wrist_in_pixels": 534,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004108075978618556,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4925586714707409,
+    0.2627226010381762,
+    0.031
+   ]
+  },
+  {
+   "id": 86,
+   "seed": 196052,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 129,
+    "wrist_in_pixels": 1047,
+    "wrist_fraction": 0.9570383912248629,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004108075978618556,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.40737124708730293,
+    0.24222917462830165,
+    0.031
+   ]
+  },
+  {
+   "id": 87,
+   "seed": 196052,
+   "color": "red",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 176,
+    "wrist_in_pixels": 168,
+    "wrist_fraction": 0.13312202852614896,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004108075978618556,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.535,
+    0.24682060945148404,
+    0.08
+   ]
+  },
+  {
+   "id": 88,
+   "seed": 196052,
+   "color": "red",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004108075978618556,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5821388873759127,
+    0.24682060945148404,
+    0.02
+   ]
+  },
+  {
+   "id": 89,
+   "seed": 196052,
+   "color": "red",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004108075978618556,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.39832919894017477,
+    -0.1881582137198269,
+    0.06085519565981052
+   ]
+  },
+  {
+   "id": 90,
+   "seed": 196052,
+   "color": "red",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 62,
+    "wrist_in_pixels": 1440,
+    "wrist_fraction": 0.16728624535315986,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.1988172754099628,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 91,
+   "seed": 196053,
+   "color": "green",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 84,
+    "wrist_in_pixels": 1059,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004347102846456282,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 92,
+   "seed": 196053,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 116,
+    "wrist_in_pixels": 1148,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004347102846456282,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.46058524390571676,
+    0.20901704815638378,
+    0.031
+   ]
+  },
+  {
+   "id": 93,
+   "seed": 196053,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 127,
+    "wrist_in_pixels": 1083,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004347102846456282,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.44508870214133717,
+    0.2165159706346089,
+    0.031
+   ]
+  },
+  {
+   "id": 94,
+   "seed": 196053,
+   "color": "green",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 9,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004347102846456282,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4031577068752131,
+    0.335,
+    0.08
+   ]
+  },
+  {
+   "id": 95,
+   "seed": 196053,
+   "color": "green",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004347102846456282,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4031577068752131,
+    0.38602406986392807,
+    0.02
+   ]
+  },
+  {
+   "id": 96,
+   "seed": 196053,
+   "color": "green",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004347102846456282,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5000221914604055,
+    -0.052389330842969345,
+    0.06085519565981051
+   ]
+  },
+  {
+   "id": 97,
+   "seed": 196053,
+   "color": "green",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 73,
+    "wrist_in_pixels": 750,
+    "wrist_fraction": 0.08034279592929834,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.17959510801343564,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 98,
+   "seed": 196054,
+   "color": "blue",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 117,
+    "wrist_in_pixels": 742,
+    "wrist_fraction": 0.8568129330254042,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0032341149668343823,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 99,
+   "seed": 196054,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 111,
+    "wrist_in_pixels": 615,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0032341149668343823,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4801973545971118,
+    0.2586780026699434,
+    0.031
+   ]
+  },
+  {
+   "id": 100,
+   "seed": 196054,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 79,
+    "wrist_in_pixels": 75,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0032341149668343823,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4912323200676725,
+    0.2859322044971335,
+    0.031
+   ]
+  },
+  {
+   "id": 101,
+   "seed": 196054,
+   "color": "blue",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 1469,
+    "wrist_fraction": 0.9747843397478434,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0032341149668343823,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.365,
+    0.2378213187356331,
+    0.08
+   ]
+  },
+  {
+   "id": 102,
+   "seed": 196054,
+   "color": "blue",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0032341149668343823,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.32636317214838045,
+    0.2378213187356331,
+    0.02
+   ]
+  },
+  {
+   "id": 103,
+   "seed": 196054,
+   "color": "blue",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0032341149668343823,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.34510760546834834,
+    -0.06950982765458447,
+    0.06085519565981052
+   ]
+  },
+  {
+   "id": 104,
+   "seed": 196054,
+   "color": "blue",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 1998,
+    "wrist_fraction": 0.35902964959568734,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.1316810069915817,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 105,
+   "seed": 196055,
+   "color": "red",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 117,
+    "wrist_in_pixels": 960,
+    "wrist_fraction": 0.8191126279863481,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0032126129201223695,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 106,
+   "seed": 196055,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 93,
+    "wrist_in_pixels": 183,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0032126129201223695,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.48773835833757956,
+    0.2720807869613616,
+    0.031
+   ]
+  },
+  {
+   "id": 107,
+   "seed": 196055,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 85,
+    "wrist_in_pixels": 1093,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0032126129201223695,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.49043135007648503,
+    0.21314702001005792,
+    0.031
+   ]
+  },
+  {
+   "id": 108,
+   "seed": 196055,
+   "color": "red",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 133,
+    "wrist_in_pixels": 207,
+    "wrist_fraction": 0.21743697478991597,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0032126129201223695,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.535,
+    0.26157183499010356,
+    0.08
+   ]
+  },
+  {
+   "id": 109,
+   "seed": 196055,
+   "color": "red",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0032126129201223695,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5788002644962387,
+    0.26157183499010356,
+    0.02
+   ]
+  },
+  {
+   "id": 110,
+   "seed": 196055,
+   "color": "red",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0032126129201223695,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.40853890525171943,
+    -0.05364472391378225,
+    0.060855195659810596
+   ]
+  },
+  {
+   "id": 111,
+   "seed": 196055,
+   "color": "red",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 49,
+    "wrist_in_pixels": 9963,
+    "wrist_fraction": 1.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.15333109264347394,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 112,
+   "seed": 196056,
+   "color": "green",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 109,
+    "wrist_in_pixels": 1043,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003321731640075529,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 113,
+   "seed": 196056,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 106,
+    "wrist_in_pixels": 1225,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003321731640075529,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4385150058002274,
+    0.2923379265801105,
+    0.031
+   ]
+  },
+  {
+   "id": 114,
+   "seed": 196056,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 111,
+    "wrist_in_pixels": 827,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003321731640075529,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.41467584646720657,
+    0.20567163389718723,
+    0.031
+   ]
+  },
+  {
+   "id": 115,
+   "seed": 196056,
+   "color": "green",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 130,
+    "wrist_in_pixels": 34,
+    "wrist_fraction": 0.036519871106337275,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003321731640075529,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.535,
+    0.20603842970530709,
+    0.08
+   ]
+  },
+  {
+   "id": 116,
+   "seed": 196056,
+   "color": "green",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003321731640075529,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5754867927978808,
+    0.20603842970530709,
+    0.02
+   ]
+  },
+  {
+   "id": 117,
+   "seed": 196056,
+   "color": "green",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003321731640075529,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5372132108100669,
+    -0.003868290082216818,
+    0.060855195659810554
+   ]
+  },
+  {
+   "id": 118,
+   "seed": 196056,
+   "color": "green",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 9,
+    "wrist_in_pixels": 6103,
+    "wrist_fraction": 0.9226001511715798,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.13578260629473674,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 119,
+   "seed": 196057,
+   "color": "blue",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 81,
+    "wrist_in_pixels": 166,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004124816153911992,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 120,
+   "seed": 196057,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 143,
+    "wrist_in_pixels": 768,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004124816153911992,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.450351567597489,
+    0.2597221397498255,
+    0.031
+   ]
+  },
+  {
+   "id": 121,
+   "seed": 196057,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 142,
+    "wrist_in_pixels": 936,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004124816153911992,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.43874147965671895,
+    0.2611678127304881,
+    0.031
+   ]
+  },
+  {
+   "id": 122,
+   "seed": 196057,
+   "color": "blue",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 1,
+    "wrist_in_pixels": 348,
+    "wrist_fraction": 0.7963386727688787,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004124816153911992,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.365,
+    0.2815541952617306,
+    0.08
+   ]
+  },
+  {
+   "id": 123,
+   "seed": 196057,
+   "color": "blue",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004124816153911992,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.31887312689872577,
+    0.2815541952617306,
+    0.02
+   ]
+  },
+  {
+   "id": 124,
+   "seed": 196057,
+   "color": "blue",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004124816153911992,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.43264574091681807,
+    -0.14868090010133672,
+    0.060855195659810575
+   ]
+  },
+  {
+   "id": 125,
+   "seed": 196057,
+   "color": "blue",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 119,
+    "wrist_in_pixels": 4028,
+    "wrist_fraction": 0.6103030303030303,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.24665979601070237,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 126,
+   "seed": 196058,
+   "color": "red",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 91,
+    "wrist_in_pixels": 1121,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004342399173293818,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 127,
+   "seed": 196058,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 94,
+    "wrist_in_pixels": 1141,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004342399173293818,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.48854088856651245,
+    0.22685842844156018,
+    0.031
+   ]
+  },
+  {
+   "id": 128,
+   "seed": 196058,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 139,
+    "wrist_in_pixels": 945,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004342399173293818,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.44550405464293413,
+    0.2604299835995275,
+    0.031
+   ]
+  },
+  {
+   "id": 129,
+   "seed": 196058,
+   "color": "red",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 7,
+    "wrist_in_pixels": 11,
+    "wrist_fraction": 1.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004342399173293818,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.46541752029781003,
+    0.335,
+    0.08
+   ]
+  },
+  {
+   "id": 130,
+   "seed": 196058,
+   "color": "red",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004342399173293818,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.46541752029781003,
+    0.3887539630481283,
+    0.02
+   ]
+  },
+  {
+   "id": 131,
+   "seed": 196058,
+   "color": "red",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004342399173293818,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5211001714489079,
+    -0.13927654984113905,
+    0.06085519565981057
+   ]
+  },
+  {
+   "id": 132,
+   "seed": 196058,
+   "color": "red",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 121,
+    "wrist_in_pixels": 6203,
+    "wrist_fraction": 0.6450707154742097,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.20737412473284061,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 133,
+   "seed": 196059,
+   "color": "green",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 82,
+    "wrist_in_pixels": 173,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004165650583405131,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 134,
+   "seed": 196059,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 101,
+    "wrist_in_pixels": 931,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004165650583405131,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.48152709774906544,
+    0.24777399058409244,
+    0.031
+   ]
+  },
+  {
+   "id": 135,
+   "seed": 196059,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 111,
+    "wrist_in_pixels": 1137,
+    "wrist_fraction": 1.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004165650583405131,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4603434463968559,
+    0.2155921938277814,
+    0.031
+   ]
+  },
+  {
+   "id": 136,
+   "seed": 196059,
+   "color": "green",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 69,
+    "wrist_in_pixels": 447,
+    "wrist_fraction": 0.31258741258741257,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004165650583405131,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4871166781120657,
+    0.16499999999999998,
+    0.08
+   ]
+  },
+  {
+   "id": 137,
+   "seed": 196059,
+   "color": "green",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004165650583405131,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4871166781120657,
+    0.12406874820407873,
+    0.02
+   ]
+  },
+  {
+   "id": 138,
+   "seed": 196059,
+   "color": "green",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004165650583405131,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5050821501765871,
+    -0.09911655262891077,
+    0.060855195659810554
+   ]
+  },
+  {
+   "id": 139,
+   "seed": 196059,
+   "color": "green",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 40,
+    "wrist_in_pixels": 937,
+    "wrist_fraction": 0.0952719877986782,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.17859997496238786,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 140,
+   "seed": 196060,
+   "color": "blue",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 123,
+    "wrist_in_pixels": 1020,
+    "wrist_fraction": 0.9107142857142857,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003849857199303166,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 141,
+   "seed": 196060,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 117,
+    "wrist_in_pixels": 1294,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003849857199303166,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4268337673955954,
+    0.24510457096788413,
+    0.031
+   ]
+  },
+  {
+   "id": 142,
+   "seed": 196060,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 84,
+    "wrist_in_pixels": 664,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003849857199303166,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.49366697937012155,
+    0.25903585593707706,
+    0.031
+   ]
+  },
+  {
+   "id": 143,
+   "seed": 196060,
+   "color": "blue",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 18,
+    "wrist_in_pixels": 12,
+    "wrist_fraction": 0.006266318537859008,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003849857199303166,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.39383786636982904,
+    0.16499999999999998,
+    0.08
+   ]
+  },
+  {
+   "id": 144,
+   "seed": 196060,
+   "color": "blue",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003849857199303166,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.39383786636982904,
+    0.11513472700075636,
+    0.02
+   ]
+  },
+  {
+   "id": 145,
+   "seed": 196060,
+   "color": "blue",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003849857199303166,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.3966048685376808,
+    -0.20546008957372244,
+    0.06085519565981055
+   ]
+  },
+  {
+   "id": 146,
+   "seed": 196060,
+   "color": "blue",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 47,
+    "wrist_in_pixels": 10392,
+    "wrist_fraction": 1.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.20055912162502326,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 147,
+   "seed": 196061,
+   "color": "red",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 84,
+    "wrist_in_pixels": 177,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004157641172377433,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 148,
+   "seed": 196061,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 147,
+    "wrist_in_pixels": 645,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004157641172377433,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4598306702858971,
+    0.2294876502939163,
+    0.031
+   ]
+  },
+  {
+   "id": 149,
+   "seed": 196061,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 101,
+    "wrist_in_pixels": 488,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004157641172377433,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4808713340928132,
+    0.25696951595347733,
+    0.031
+   ]
+  },
+  {
+   "id": 150,
+   "seed": 196061,
+   "color": "red",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 19,
+    "wrist_in_pixels": 19,
+    "wrist_fraction": 0.9047619047619048,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004157641172377433,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4825327268920496,
+    0.335,
+    0.08
+   ]
+  },
+  {
+   "id": 151,
+   "seed": 196061,
+   "color": "red",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004157641172377433,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4825327268920496,
+    0.37170766227380886,
+    0.02
+   ]
+  },
+  {
+   "id": 152,
+   "seed": 196061,
+   "color": "red",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004157641172377433,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5652190821698728,
+    -0.15332546080191495,
+    0.06085519565981051
+   ]
+  },
+  {
+   "id": 153,
+   "seed": 196061,
+   "color": "red",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 96,
+    "wrist_in_pixels": 105,
+    "wrist_fraction": 0.02001906577693041,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.21975293454378905,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 154,
+   "seed": 196062,
+   "color": "green",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 83,
+    "wrist_in_pixels": 179,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004111368199598529,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 155,
+   "seed": 196062,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 125,
+    "wrist_in_pixels": 1245,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004111368199598529,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4373776124500035,
+    0.2177228671843164,
+    0.031
+   ]
+  },
+  {
+   "id": 156,
+   "seed": 196062,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 93,
+    "wrist_in_pixels": 376,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004111368199598529,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4871161777304483,
+    0.2691572734985313,
+    0.031
+   ]
+  },
+  {
+   "id": 157,
+   "seed": 196062,
+   "color": "green",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 143,
+    "wrist_in_pixels": 117,
+    "wrist_fraction": 0.1142578125,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004111368199598529,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.535,
+    0.1972179946264367,
+    0.08
+   ]
+  },
+  {
+   "id": 158,
+   "seed": 196062,
+   "color": "green",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004111368199598529,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5748926537535117,
+    0.1972179946264367,
+    0.02
+   ]
+  },
+  {
+   "id": 159,
+   "seed": 196062,
+   "color": "green",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004111368199598529,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.49829480976224755,
+    -0.023468986213575682,
+    0.06085519565981054
+   ]
+  },
+  {
+   "id": 160,
+   "seed": 196062,
+   "color": "green",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 135,
+    "wrist_in_pixels": 3714,
+    "wrist_fraction": 0.3845118542292163,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.23080849615982368,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 161,
+   "seed": 196063,
+   "color": "blue",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 81,
+    "wrist_in_pixels": 166,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0041474703320487204,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 162,
+   "seed": 196063,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 118,
+    "wrist_in_pixels": 1114,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0041474703320487204,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.40944249673792893,
+    0.24305724102632686,
+    0.031
+   ]
+  },
+  {
+   "id": 163,
+   "seed": 196063,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 80,
+    "wrist_in_pixels": 110,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0041474703320487204,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.49226515070841964,
+    0.29141184244443097,
+    0.031
+   ]
+  },
+  {
+   "id": 164,
+   "seed": 196063,
+   "color": "blue",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 145,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0041474703320487204,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.535,
+    0.29447344041514917,
+    0.08
+   ]
+  },
+  {
+   "id": 165,
+   "seed": 196063,
+   "color": "blue",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0041474703320487204,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5823049767790223,
+    0.29447344041514917,
+    0.02
+   ]
+  },
+  {
+   "id": 166,
+   "seed": 196063,
+   "color": "blue",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0041474703320487204,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.43594590268562333,
+    -0.04990830478268157,
+    0.06085519565981053
+   ]
+  },
+  {
+   "id": 167,
+   "seed": 196063,
+   "color": "blue",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 89,
+    "wrist_in_pixels": 1783,
+    "wrist_fraction": 0.1816607233825777,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.2251155581679667,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 168,
+   "seed": 196064,
+   "color": "red",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 129,
+    "wrist_in_pixels": 1016,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0038148178095258225,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 169,
+   "seed": 196064,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 144,
+    "wrist_in_pixels": 1015,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0038148178095258225,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.41054767619829213,
+    0.2764058137750083,
+    0.031
+   ]
+  },
+  {
+   "id": 170,
+   "seed": 196064,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 122,
+    "wrist_in_pixels": 534,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0038148178095258225,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4737123152422567,
+    0.25457284287810733,
+    0.031
+   ]
+  },
+  {
+   "id": 171,
+   "seed": 196064,
+   "color": "red",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 41,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0038148178095258225,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.49638260225484493,
+    0.335,
+    0.08
+   ]
+  },
+  {
+   "id": 172,
+   "seed": 196064,
+   "color": "red",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0038148178095258225,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.49638260225484493,
+    0.3845977418465906,
+    0.02
+   ]
+  },
+  {
+   "id": 173,
+   "seed": 196064,
+   "color": "red",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0038148178095258225,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.33866154370581875,
+    -0.1390978133947569,
+    0.06085519565981054
+   ]
+  },
+  {
+   "id": 174,
+   "seed": 196064,
+   "color": "red",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 94,
+    "wrist_fraction": 0.019090170593013808,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.17534826402929585,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 175,
+   "seed": 196065,
+   "color": "green",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 83,
+    "wrist_in_pixels": 889,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004349228216445093,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 176,
+   "seed": 196065,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 125,
+    "wrist_in_pixels": 972,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004349228216445093,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.43820585341611534,
+    0.2217499818451409,
+    0.031
+   ]
+  },
+  {
+   "id": 177,
+   "seed": 196065,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 93,
+    "wrist_in_pixels": 214,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004349228216445093,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4830151675444129,
+    0.2847230457461107,
+    0.031
+   ]
+  },
+  {
+   "id": 178,
+   "seed": 196065,
+   "color": "green",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 1,
+    "wrist_in_pixels": 1424,
+    "wrist_fraction": 0.9134060295060936,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004349228216445093,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.365,
+    0.24012719231801438,
+    0.08
+   ]
+  },
+  {
+   "id": 179,
+   "seed": 196065,
+   "color": "green",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004349228216445093,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.3182054388633304,
+    0.24012719231801438,
+    0.02
+   ]
+  },
+  {
+   "id": 180,
+   "seed": 196065,
+   "color": "green",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004349228216445093,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.3942249695906066,
+    -0.07739226407122299,
+    0.060855195659810526
+   ]
+  },
+  {
+   "id": 181,
+   "seed": 196065,
+   "color": "green",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 53,
+    "wrist_in_pixels": 142,
+    "wrist_fraction": 0.021058875871273915,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.18022175276285296,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 182,
+   "seed": 196066,
+   "color": "blue",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 116,
+    "wrist_in_pixels": 625,
+    "wrist_fraction": 0.5585344057193923,
+    "depth_ok": true,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003116482744275097,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 183,
+   "seed": 196066,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 113,
+    "wrist_in_pixels": 833,
+    "wrist_fraction": 0.6407692307692308,
+    "depth_ok": true,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003116482744275097,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4152805151001945,
+    0.25541824628673493,
+    0.031
+   ]
+  },
+  {
+   "id": 184,
+   "seed": 196066,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 119,
+    "wrist_in_pixels": 587,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003116482744275097,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4632389370583079,
+    0.28047163645991807,
+    0.031
+   ]
+  },
+  {
+   "id": 185,
+   "seed": 196066,
+   "color": "blue",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 19,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003116482744275097,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.42972785178650014,
+    0.335,
+    0.08
+   ]
+  },
+  {
+   "id": 186,
+   "seed": 196066,
+   "color": "blue",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003116482744275097,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.42972785178650014,
+    0.3753882247893803,
+    0.02
+   ]
+  },
+  {
+   "id": 187,
+   "seed": 196066,
+   "color": "blue",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003116482744275097,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5635348310057949,
+    -0.09426422869652214,
+    0.060855195659810554
+   ]
+  },
+  {
+   "id": 188,
+   "seed": 196066,
+   "color": "blue",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 2758,
+    "wrist_fraction": 0.2802275960170697,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.09563620380475878,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 189,
+   "seed": 196067,
+   "color": "red",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 84,
+    "wrist_in_pixels": 1069,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004367965297697504,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 190,
+   "seed": 196067,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 123,
+    "wrist_in_pixels": 1118,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004367965297697504,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4295530790475109,
+    0.20933552738720634,
+    0.031
+   ]
+  },
+  {
+   "id": 191,
+   "seed": 196067,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 139,
+    "wrist_in_pixels": 1004,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004367965297697504,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4462325144582843,
+    0.28609301593867376,
+    0.031
+   ]
+  },
+  {
+   "id": 192,
+   "seed": 196067,
+   "color": "red",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 150,
+    "wrist_in_pixels": 127,
+    "wrist_fraction": 0.10119521912350597,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004367965297697504,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.535,
+    0.24756293513184618,
+    0.08
+   ]
+  },
+  {
+   "id": 193,
+   "seed": 196067,
+   "color": "red",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004367965297697504,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5793670723280715,
+    0.24756293513184618,
+    0.02
+   ]
+  },
+  {
+   "id": 194,
+   "seed": 196067,
+   "color": "red",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004367965297697504,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5073640672206678,
+    -0.20008232422115202,
+    0.06085519565981057
+   ]
+  },
+  {
+   "id": 195,
+   "seed": 196067,
+   "color": "red",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 81,
+    "wrist_in_pixels": 973,
+    "wrist_fraction": 0.10369817755515294,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.18742189289332423,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 196,
+   "seed": 196068,
+   "color": "green",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 84,
+    "wrist_in_pixels": 1062,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004301566549193446,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 197,
+   "seed": 196068,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 109,
+    "wrist_in_pixels": 1158,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004301566549193446,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4708583406003847,
+    0.220270833450388,
+    0.031
+   ]
+  },
+  {
+   "id": 198,
+   "seed": 196068,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 92,
+    "wrist_in_pixels": 334,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004301566549193446,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4821565256931199,
+    0.2718174744486329,
+    0.031
+   ]
+  },
+  {
+   "id": 199,
+   "seed": 196068,
+   "color": "green",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 172,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004301566549193446,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.535,
+    0.26994067485551926,
+    0.08
+   ]
+  },
+  {
+   "id": 200,
+   "seed": 196068,
+   "color": "green",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004301566549193446,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5858868555586294,
+    0.26994067485551926,
+    0.02
+   ]
+  },
+  {
+   "id": 201,
+   "seed": 196068,
+   "color": "green",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004301566549193446,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.3348877765511516,
+    0.029704764888421414,
+    0.06085519565981054
+   ]
+  },
+  {
+   "id": 202,
+   "seed": 196068,
+   "color": "green",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 63,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.17776978991219988,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 203,
+   "seed": 196069,
+   "color": "blue",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 80,
+    "wrist_in_pixels": 1061,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004288340249832302,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 204,
+   "seed": 196069,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 125,
+    "wrist_in_pixels": 781,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004288340249832302,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.45457757769695717,
+    0.2902724581515901,
+    0.031
+   ]
+  },
+  {
+   "id": 205,
+   "seed": 196069,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 75,
+    "wrist_in_pixels": 828,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004288340249832302,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.49076119511707555,
+    0.241255980347151,
+    0.031
+   ]
+  },
+  {
+   "id": 206,
+   "seed": 196069,
+   "color": "blue",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 29,
+    "wrist_in_pixels": 35,
+    "wrist_fraction": 1.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004288340249832302,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4746841186213007,
+    0.335,
+    0.08
+   ]
+  },
+  {
+   "id": 207,
+   "seed": 196069,
+   "color": "blue",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004288340249832302,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4746841186213007,
+    0.38420040527193144,
+    0.02
+   ]
+  },
+  {
+   "id": 208,
+   "seed": 196069,
+   "color": "blue",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004288340249832302,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5247608717076766,
+    0.017614771500813087,
+    0.06085519565981054
+   ]
+  },
+  {
+   "id": 209,
+   "seed": 196069,
+   "color": "blue",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 118,
+    "wrist_in_pixels": 4288,
+    "wrist_fraction": 0.4797493846498098,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.20091820787709874,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 210,
+   "seed": 196070,
+   "color": "red",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 91,
+    "wrist_in_pixels": 811,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0044044996932978125,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 211,
+   "seed": 196070,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 106,
+    "wrist_in_pixels": 164,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0044044996932978125,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4840283896346592,
+    0.2745269272529453,
+    0.031
+   ]
+  },
+  {
+   "id": 212,
+   "seed": 196070,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 128,
+    "wrist_in_pixels": 830,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0044044996932978125,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4765364610205555,
+    0.24208274369837762,
+    0.031
+   ]
+  },
+  {
+   "id": 213,
+   "seed": 196070,
+   "color": "red",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 81,
+    "wrist_in_pixels": 312,
+    "wrist_fraction": 0.22723962126729788,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0044044996932978125,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5025844299572817,
+    0.16499999999999998,
+    0.08
+   ]
+  },
+  {
+   "id": 214,
+   "seed": 196070,
+   "color": "red",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0044044996932978125,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5025844299572817,
+    0.12470673932072779,
+    0.02
+   ]
+  },
+  {
+   "id": 215,
+   "seed": 196070,
+   "color": "red",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0044044996932978125,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5604145433535112,
+    -0.12100249834484725,
+    0.060855195659810554
+   ]
+  },
+  {
+   "id": 216,
+   "seed": 196070,
+   "color": "red",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 75,
+    "wrist_in_pixels": 31,
+    "wrist_fraction": 0.005146936742487133,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.18137773266320947,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 217,
+   "seed": 196071,
+   "color": "green",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 120,
+    "wrist_in_pixels": 940,
+    "wrist_fraction": 0.8647654093836247,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0029529189591042736,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 218,
+   "seed": 196071,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 134,
+    "wrist_in_pixels": 774,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0029529189591042736,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.45748458814157306,
+    0.25669074968666616,
+    0.031
+   ]
+  },
+  {
+   "id": 219,
+   "seed": 196071,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 156,
+    "wrist_in_pixels": 734,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0029529189591042736,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.45027292166852206,
+    0.250036505861529,
+    0.031
+   ]
+  },
+  {
+   "id": 220,
+   "seed": 196071,
+   "color": "green",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 1093,
+    "wrist_fraction": 0.5187470336971998,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0029529189591042736,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.365,
+    0.21000403772586218,
+    0.08
+   ]
+  },
+  {
+   "id": 221,
+   "seed": 196071,
+   "color": "green",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0029529189591042736,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.3108928347757664,
+    0.21000403772586218,
+    0.02
+   ]
+  },
+  {
+   "id": 222,
+   "seed": 196071,
+   "color": "green",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0029529189591042736,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5669863396186778,
+    -0.02241616952896583,
+    0.06085519565981051
+   ]
+  },
+  {
+   "id": 223,
+   "seed": 196071,
+   "color": "green",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 59,
+    "wrist_in_pixels": 7969,
+    "wrist_fraction": 0.933247452863333,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.1454352372253706,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 224,
+   "seed": 196072,
+   "color": "blue",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 82,
+    "wrist_in_pixels": 169,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004127351912825222,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 225,
+   "seed": 196072,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 95,
+    "wrist_in_pixels": 756,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004127351912825222,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4815825933251385,
+    0.2143190849623676,
+    0.031
+   ]
+  },
+  {
+   "id": 226,
+   "seed": 196072,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 87,
+    "wrist_in_pixels": 1013,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004127351912825222,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.48709530930397194,
+    0.2364743519557207,
+    0.031
+   ]
+  },
+  {
+   "id": 227,
+   "seed": 196072,
+   "color": "blue",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 26,
+    "wrist_in_pixels": 829,
+    "wrist_fraction": 0.8001930501930502,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004127351912825222,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.41296035686203886,
+    0.16499999999999998,
+    0.08
+   ]
+  },
+  {
+   "id": 228,
+   "seed": 196072,
+   "color": "blue",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004127351912825222,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.41296035686203886,
+    0.11395697445157468,
+    0.02
+   ]
+  },
+  {
+   "id": 229,
+   "seed": 196072,
+   "color": "blue",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004127351912825222,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4731249600051588,
+    5.1251864880816305e-05,
+    0.06085519565981053
+   ]
+  },
+  {
+   "id": 230,
+   "seed": 196072,
+   "color": "blue",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 110,
+    "wrist_in_pixels": 210,
+    "wrist_fraction": 0.04995242626070409,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.24255293259392227,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 231,
+   "seed": 196073,
+   "color": "red",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 86,
+    "wrist_in_pixels": 137,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004143317584884535,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 232,
+   "seed": 196073,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 118,
+    "wrist_in_pixels": 787,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004143317584884535,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4256079902561566,
+    0.2182955073104123,
+    0.031
+   ]
+  },
+  {
+   "id": 233,
+   "seed": 196073,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 115,
+    "wrist_in_pixels": 789,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004143317584884535,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4794991204054488,
+    0.2318526831316547,
+    0.031
+   ]
+  },
+  {
+   "id": 234,
+   "seed": 196073,
+   "color": "red",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 162,
+    "wrist_in_pixels": 201,
+    "wrist_fraction": 0.20364741641337386,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004143317584884535,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.535,
+    0.24714931115695857,
+    0.08
+   ]
+  },
+  {
+   "id": 235,
+   "seed": 196073,
+   "color": "red",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004143317584884535,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5736646900849981,
+    0.24714931115695857,
+    0.02
+   ]
+  },
+  {
+   "id": 236,
+   "seed": 196073,
+   "color": "red",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004143317584884535,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.3747109463428321,
+    -0.2005580483805869,
+    0.06085519565981057
+   ]
+  },
+  {
+   "id": 237,
+   "seed": 196073,
+   "color": "red",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 43,
+    "wrist_in_pixels": 1,
+    "wrist_fraction": 0.00016289297931259162,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.2274040619639391,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 238,
+   "seed": 196074,
+   "color": "green",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 120,
+    "wrist_in_pixels": 869,
+    "wrist_fraction": 0.9775028121484814,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003171895138114803,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 239,
+   "seed": 196074,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 78,
+    "wrist_in_pixels": 298,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003171895138114803,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.49288534990535837,
+    0.2698602916992205,
+    0.031
+   ]
+  },
+  {
+   "id": 240,
+   "seed": 196074,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 147,
+    "wrist_in_pixels": 845,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003171895138114803,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.42668027193355434,
+    0.2344607830284239,
+    0.031
+   ]
+  },
+  {
+   "id": 241,
+   "seed": 196074,
+   "color": "green",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 39,
+    "wrist_in_pixels": 874,
+    "wrist_fraction": 0.7768888888888889,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003171895138114803,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.412199176486616,
+    0.16499999999999998,
+    0.08
+   ]
+  },
+  {
+   "id": 242,
+   "seed": 196074,
+   "color": "green",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003171895138114803,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.412199176486616,
+    0.12823855403023346,
+    0.02
+   ]
+  },
+  {
+   "id": 243,
+   "seed": 196074,
+   "color": "green",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003171895138114803,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5217896140742527,
+    0.023527076162729282,
+    0.06085519565981052
+   ]
+  },
+  {
+   "id": 244,
+   "seed": 196074,
+   "color": "green",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 2230,
+    "wrist_fraction": 0.37485291645654734,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.09784846200235911,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 245,
+   "seed": 196075,
+   "color": "blue",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 83,
+    "wrist_in_pixels": 1083,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004364621899370352,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 246,
+   "seed": 196075,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 124,
+    "wrist_in_pixels": 993,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004364621899370352,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4666591918734767,
+    0.2382097651002831,
+    0.031
+   ]
+  },
+  {
+   "id": 247,
+   "seed": 196075,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 139,
+    "wrist_in_pixels": 886,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004364621899370352,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4575666393553667,
+    0.2225481422269001,
+    0.031
+   ]
+  },
+  {
+   "id": 248,
+   "seed": 196075,
+   "color": "blue",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 80,
+    "wrist_in_pixels": 387,
+    "wrist_fraction": 0.26875,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004364621899370352,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4945632992666874,
+    0.16499999999999998,
+    0.08
+   ]
+  },
+  {
+   "id": 249,
+   "seed": 196075,
+   "color": "blue",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004364621899370352,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4945632992666874,
+    0.1262734174985097,
+    0.02
+   ]
+  },
+  {
+   "id": 250,
+   "seed": 196075,
+   "color": "blue",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004364621899370352,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.48663585106317087,
+    0.0007349008027118351,
+    0.06085519565981051
+   ]
+  },
+  {
+   "id": 251,
+   "seed": 196075,
+   "color": "blue",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 51,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.18155360876689008,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 252,
+   "seed": 196076,
+   "color": "red",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 85,
+    "wrist_in_pixels": 830,
+    "wrist_fraction": 1.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0043526211729340665,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 253,
+   "seed": 196076,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 151,
+    "wrist_in_pixels": 1333,
+    "wrist_fraction": 1.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0043526211729340665,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.42931259000466365,
+    0.29337133011949057,
+    0.031
+   ]
+  },
+  {
+   "id": 254,
+   "seed": 196076,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 125,
+    "wrist_in_pixels": 870,
+    "wrist_fraction": 1.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0043526211729340665,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.43066499780784323,
+    0.20777123596546135,
+    0.031
+   ]
+  },
+  {
+   "id": 255,
+   "seed": 196076,
+   "color": "red",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 146,
+    "wrist_in_pixels": 4,
+    "wrist_fraction": 0.004077471967380225,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0043526211729340665,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.535,
+    0.20744667154895668,
+    0.08
+   ]
+  },
+  {
+   "id": 256,
+   "seed": 196076,
+   "color": "red",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0043526211729340665,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.576004117892653,
+    0.20744667154895668,
+    0.02
+   ]
+  },
+  {
+   "id": 257,
+   "seed": 196076,
+   "color": "red",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0043526211729340665,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4369645340244321,
+    -0.03304529563563463,
+    0.060855195659810526
+   ]
+  },
+  {
+   "id": 258,
+   "seed": 196076,
+   "color": "red",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 85,
+    "wrist_in_pixels": 63,
+    "wrist_fraction": 0.010036641707822208,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.18770399429391135,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 259,
+   "seed": 196077,
+   "color": "green",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 84,
+    "wrist_in_pixels": 1073,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004361285258323232,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 260,
+   "seed": 196077,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 108,
+    "wrist_in_pixels": 437,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004361285258323232,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.47208949466681277,
+    0.2789585349418523,
+    0.031
+   ]
+  },
+  {
+   "id": 261,
+   "seed": 196077,
+   "color": "green",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 129,
+    "wrist_in_pixels": 423,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004361285258323232,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.474341722865894,
+    0.2752759358953103,
+    0.031
+   ]
+  },
+  {
+   "id": 262,
+   "seed": 196077,
+   "color": "green",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 29,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004361285258323232,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4268668407432623,
+    0.335,
+    0.08
+   ]
+  },
+  {
+   "id": 263,
+   "seed": 196077,
+   "color": "green",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004361285258323232,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.4268668407432623,
+    0.38964711412270897,
+    0.02
+   ]
+  },
+  {
+   "id": 264,
+   "seed": 196077,
+   "color": "green",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.004361285258323232,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.3991296063949714,
+    -0.11070323034219508,
+    0.060855195659810526
+   ]
+  },
+  {
+   "id": 265,
+   "seed": 196077,
+   "color": "green",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 51,
+    "wrist_in_pixels": 692,
+    "wrist_fraction": 0.07364052357135256,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.18017626264279443,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 266,
+   "seed": 196078,
+   "color": "blue",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 117,
+    "wrist_in_pixels": 822,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003237877361445794,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 267,
+   "seed": 196078,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 111,
+    "wrist_in_pixels": 745,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003237877361445794,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4728675862681852,
+    0.23014233862204767,
+    0.031
+   ]
+  },
+  {
+   "id": 268,
+   "seed": 196078,
+   "color": "blue",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 138,
+    "wrist_in_pixels": 682,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003237877361445794,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4472002918322996,
+    0.2055495369859215,
+    0.031
+   ]
+  },
+  {
+   "id": 269,
+   "seed": 196078,
+   "color": "blue",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 38,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003237877361445794,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.503632188372622,
+    0.335,
+    0.08
+   ]
+  },
+  {
+   "id": 270,
+   "seed": 196078,
+   "color": "blue",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003237877361445794,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.503632188372622,
+    0.37414804406048674,
+    0.02
+   ]
+  },
+  {
+   "id": 271,
+   "seed": 196078,
+   "color": "blue",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.003237877361445794,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.504963511361963,
+    -0.17786381542860613,
+    0.06085519565981058
+   ]
+  },
+  {
+   "id": 272,
+   "seed": 196078,
+   "color": "blue",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 40,
+    "wrist_in_pixels": 5031,
+    "wrist_fraction": 1.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.14675950239623956,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  },
+  {
+   "id": 273,
+   "seed": 196079,
+   "color": "red",
+   "kind": "run_positive",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 118,
+    "wrist_in_pixels": 872,
+    "wrist_fraction": 0.9055036344755971,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0030912311230042186,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   }
+  },
+  {
+   "id": 274,
+   "seed": 196079,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 133,
+    "wrist_in_pixels": 705,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0030912311230042186,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4612717089996979,
+    0.25813554395394817,
+    0.031
+   ]
+  },
+  {
+   "id": 275,
+   "seed": 196079,
+   "color": "red",
+   "kind": "placed_inside",
+   "truth": true,
+   "judge": true,
+   "conditions": {
+    "box_pixels": 131,
+    "wrist_in_pixels": 688,
+    "wrist_fraction": 1.0,
+    "depth_ok": true,
+    "in_box": true,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0030912311230042186,
+    "at_retreat": true,
+    "still": true,
+    "ok": true,
+    "held_s": 1.0
+   },
+   "pos": [
+    0.4700828307781011,
+    0.2573307150281411,
+    0.031
+   ]
+  },
+  {
+   "id": 276,
+   "seed": 196079,
+   "color": "red",
+   "kind": "placed_rim",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 51,
+    "wrist_in_pixels": 339,
+    "wrist_fraction": 0.3376494023904382,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0030912311230042186,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.42290807641481437,
+    0.16499999999999998,
+    0.08
+   ]
+  },
+  {
+   "id": 277,
+   "seed": 196079,
+   "color": "red",
+   "kind": "placed_beside",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0030912311230042186,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.42290807641481437,
+    0.12422923991385376,
+    0.02
+   ]
+  },
+  {
+   "id": 278,
+   "seed": 196079,
+   "color": "red",
+   "kind": "placed_on_cube",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 0,
+    "wrist_fraction": 0.0,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": true,
+    "retreat_dist_m": 0.0030912311230042186,
+    "at_retreat": true,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   },
+   "pos": [
+    0.5008970231887232,
+    -0.0024270294748928575,
+    0.06085519565981055
+   ]
+  },
+  {
+   "id": 279,
+   "seed": 196079,
+   "color": "red",
+   "kind": "run_held_over_box",
+   "truth": false,
+   "judge": false,
+   "conditions": {
+    "box_pixels": 0,
+    "wrist_in_pixels": 5161,
+    "wrist_fraction": 0.6691300401918838,
+    "depth_ok": false,
+    "in_box": false,
+    "gripper_open": false,
+    "retreat_dist_m": 0.12042101083812491,
+    "at_retreat": false,
+    "still": true,
+    "ok": false,
+    "held_s": 0.0
+   }
+  }
+ ],
+ "written": "2026-09-29 16:48:56"
+}
