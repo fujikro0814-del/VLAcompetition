@@ -144,6 +144,18 @@ def cue_tracker():
     return PC.TargetCue(PC.overhead_calibration(scene.build_model("3cube")), PC.Thresholds.from_config())
 
 
+def episode_tracker(meta: dict, default):
+    """目標書 v2 の生成（harness/gen_v2.py）のエピソードは、信じている較正（cue_calibration）を記録している。そのときは、
+    実行系と同じく、その較正とテーブル面で手がかりを計算する（段階 2: 同じセンサの模型で作り直す）。閾値は同じ。"""
+    cc = meta.get("cue_calibration")
+    if cc is None or default is None:
+        return default
+    from recovla.runtime import cue as C
+    calib = C.Calibration(np.array(cc["pos"], float), np.array(cc["rot"], float), float(cc["f"]), int(cc["width"]),
+                          int(cc["height"]))
+    return C.TargetCue(calib, default.thr, float(cc["plane_z"]), cc["fallback"])
+
+
 def cue_record(tracker, mode: str = "xyv") -> dict:
     """conversion.json の target_cue。評価の入口（vla_observation）はこれを見て同じ手がかりを足す。
     names が方策の入力に入る手がかりの次元（xy のときは旗を外し、旗は sources の cue_flag0_frames にだけ残す）。"""
@@ -230,14 +242,15 @@ def convert(episodes: list, out: pathlib.Path, name: str, manifest: dict = None,
             meta, data = load_raw(path)
             arr = episode_arrays(meta, data)
             flag0 = 0
-            if tracker is not None:
-                tracker.reset()
+            etr = episode_tracker(meta, tracker)
+            if etr is not None:
+                etr.reset()
             for k, i in enumerate(arr["raw_index"]):
                 raw = {view: read_raw_image(path / view / f"{i:06d}.png") for view in spec.CAMERAS}
                 images = spec.policy_images(raw)
                 state = arr["state"][k]
-                if tracker is not None:
-                    c = tracker.update(raw["overhead"], meta["target"])
+                if etr is not None:
+                    c = etr.update(raw["overhead"], meta["target"])
                     flag0 += int(c[2] < 0.5)
                     state = vla_state.with_cue(state, c, keep_flag=mode == "xyv")
                 ds.add_frame({
@@ -360,8 +373,9 @@ def verify(out: pathlib.Path, export_dir, check_image=None) -> bool:
         meta, data = load_raw(pathlib.Path(src["raw_path"]))
         arr = episode_arrays(meta, data)
         if tracker is not None:            # 手がかりを生の俯瞰画像から計算し直して、期待する 18 次元を作る
-            tracker.reset()
-            cues = np.array([tracker.update(read_raw_image(pathlib.Path(src["raw_path"]) / "overhead" / f"{int(i):06d}.png"),
+            etr = episode_tracker(meta, tracker)
+            etr.reset()
+            cues = np.array([etr.update(read_raw_image(pathlib.Path(src["raw_path"]) / "overhead" / f"{int(i):06d}.png"),
                                             meta["target"]) for i in arr["raw_index"]])
             arr["state"] = vla_state.with_cue(arr["state"], cues, keep_flag=mode == "xyv")
             check(int((cues[:, 2] < 0.5).sum()) == src.get("cue_flag0_frames", int((cues[:, 2] < 0.5).sum())),

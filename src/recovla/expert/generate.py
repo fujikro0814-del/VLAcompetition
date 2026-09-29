@@ -103,6 +103,8 @@ def run_attempt(rig, spec: EpisodeSpec, retry: int, run_dir=None, render: bool =
         first_frame = not frames_log
         f, imgs = E.capture_frame(rig, spec.color, state["expert"].clocks.target_rest_s, pp,
                                   render and not first_frame)
+        if hasattr(rig, "postprocess_frame"):          # 目標書 v2 の生成（harness/gen_v2.py）: 状態をセンサの値に置き換える
+            f = rig.postprocess_frame(f)
         if render and first_frame:
             # 組の最初のこま: 描画は同じ状態でもまれに 1 階調ずれる（GPU。Step D で確認）ので、状態（qpos）が
             # ビット一致する直前の配置の画像があれば、それを使う（組の各本の最初の観測を画素単位で揃える）
@@ -252,6 +254,8 @@ def run_attempt(rig, spec: EpisodeSpec, retry: int, run_dir=None, render: bool =
                 "rendered": bool(render),
                 "frame0_image_shared_with_pair": bool(state.get("frame0_shared", False)),
             }
+            if hasattr(rig, "episode_meta"):               # 目標書 v2 の生成: センサの模型の版・信じている較正（手がかり用）
+                meta.update(rig.episode_meta())
             summary["path"] = str(writer.finalize(meta, start.to_arrays(), every))
         else:
             writer.discard()
@@ -283,8 +287,12 @@ def run_spec(rig, spec: EpisodeSpec, run_dir=None, render: bool = True, max_retr
 _RIG = None
 
 
-def _init_worker(render: bool) -> None:
+def _init_worker(render: bool, rig_kind: str = "v1") -> None:
     global _RIG
+    if rig_kind == "v2":                              # 目標書 v2（0106）: 実機と同じ指令の口・センサの模型で記録する
+        from recovla.harness.gen_v2 import SensedDrivenRig
+        _RIG = SensedDrivenRig()
+        return
     from recovla.sim.rig import SimRig
     _RIG = SimRig(render=render)
 
@@ -304,7 +312,7 @@ def _work(job):
 
 
 def generate(specs: list, run_dir, workers: int = 1, render: bool = True, max_retry: int = None,
-             log_name: str = "generation.jsonl") -> list:
+             log_name: str = "generation.jsonl", rig_kind: str = "v1") -> list:
     """指定の列を生成し、generation.jsonl を指定の順に書く。run_dir は新しく作る（あれば拒否）。"""
     run_dir = pathlib.Path(run_dir)
     run_dir.mkdir(parents=True, exist_ok=False)
@@ -312,7 +320,7 @@ def generate(specs: list, run_dir, workers: int = 1, render: bool = True, max_re
     (run_dir / "run.json").write_text(json.dumps({
         "created": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
         "workers": workers, "render": render, "n_specs": len(specs), "code_version": version,
-        "config_expert": _CFG["expert"], "config_scene": _CFG["scene"],
+        "config_expert": _CFG["expert"], "config_scene": _CFG["scene"], "rig_kind": rig_kind,
     }, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     groups = {}
     for s in specs:                                   # 同じ配置（組）を 1 つの仕事にまとめる。順は最初に現れた順
@@ -323,11 +331,11 @@ def generate(specs: list, run_dir, workers: int = 1, render: bool = True, max_re
     log = open(run_dir / log_name, "w", encoding="utf-8")
     try:
         if workers <= 1:
-            _init_worker(render)
+            _init_worker(render, rig_kind)
             it = map(_work, jobs)
             pool = None
         else:
-            pool = multiprocessing.get_context("spawn").Pool(workers, initializer=_init_worker, initargs=(render,))
+            pool = multiprocessing.get_context("spawn").Pool(workers, initializer=_init_worker, initargs=(render, rig_kind))
             it = pool.imap(_work, jobs)
         for rs in it:
             for r in rs:

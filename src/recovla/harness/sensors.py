@@ -172,6 +172,15 @@ class SensorSuite:
         return dataclasses.replace(base_setup, cameras=cams, table_z=base_setup.table_z + dz,
                                    table_normal=frozen_array(n_tab))
 
+    def prime(self, data) -> None:
+        """試行の始め（時刻 0）の前からカメラは流れていて、場面は止まっている。時刻 0 の状態のこまを 1 つ、時刻 0 で届いた
+        ものとして置く（撮った時刻は遅延の分だけ前）。これがないと、最初のこまが届くまで実行系が 30〜100 ms 待つ。"""
+        lat = self.sc["latency_ms"]
+        for s in self.streams.values():
+            L = float(self.lat_rng.uniform(*lat)) / 1000.0
+            s.seq += 1
+            s.captures.append((s.seq, float(data.time) - L, float(data.time), data.qpos.copy()))
+
     def _true_extrinsic(self, name: str, data) -> Pose:
         cid = self.cam_ids[name]
         if self.sc["cameras"][name]["mount"] == "world":
