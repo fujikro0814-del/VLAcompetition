@@ -178,14 +178,25 @@ class SelfRenderer:
         return z
 
 
+_SELF_RENDERERS = {}
+
+
+def shared_self_renderer(model_path: str) -> SelfRenderer:
+    """プロセスで 1 つだけ作って使い回す。mujoco 3.2.3 の Renderer は、解放のとき別の Renderer の GL 文脈を壊す（sim/render.py
+    の close_renderer の注記）。試行ごとに作って捨てると、捨てた時点で評価器の描画（別の Renderer）が壊れ、以後の全こまが空になる。"""
+    if model_path not in _SELF_RENDERERS:
+        _SELF_RENDERERS[model_path] = SelfRenderer(model_path)
+    return _SELF_RENDERERS[model_path]
+
+
 # ------------------------------------------------------------------------------ perception
 class Perception:
     def __init__(self, setup, params: Params = None, color_thr: C.Thresholds = None):
         self.setup = setup
         self.p = params or Params()
         self.thr = color_thr
-        self.selfr = SelfRenderer(setup.robot_xml)
-        self.rays = {n: pixel_rays(c.depth) for n, c in setup.cameras.items()}
+        self.selfr = shared_self_renderer(setup.robot_xml)
+        self.rays ={n: pixel_rays(c.depth) for n, c in setup.cameras.items()}
         self.hist_t, self.hist_q = [], []
         self.planes = {}                       # {カメラ: (法線, 点)}（固定のカメラだけ、起動時に当てはめて保つ）
         self.corrections = {}                  # {カメラ: (回転, 中心, 平行移動)}（テーブル面での外部パラメータの補正）
