@@ -1,8 +1,8 @@
 {
   "check": "data_v2",
-  "written": "2026-09-29 20:34:52",
-  "run": "outputs/gen/F_data_v2_20260929-181843",
-  "generation_wall_s": 5123.2,
+  "written": "2026-09-29 23:09:21",
+  "run": "outputs/gen/F_data_v2_20260929-205251",
+  "generation_wall_s": 5152.5,
   "workers": 6,
   "rig": "v2",
   "cue_convert_args": [
@@ -12,7 +12,7 @@
     "--cue-without-flag"
   ],
   "code_version": {
-    "git_commit": "37fd23f8809ee9fe3df88cbb3bc2bec89fa97a24",
+    "git_commit": "15a02dbf6424666e3c6d2398fa572c52c042fa27",
     "git_dirty": false,
     "code_sha256": "1c6fdd2d60dc912b6f4f63b947fb2fa0efdb78a133b6229431b75688cc03b72f",
     "files_sha256": {
@@ -1300,29 +1300,29 @@
   ],
   "datasets": {
     "R1": {
-      "manifest": "outputs\\manifests\\R1v2_20260929-181843.json",
-      "dataset": "outputs\\datasets\\R1v2_20260929-181843",
+      "manifest": "outputs\\manifests\\R1v2_20260929-205251.json",
+      "dataset": "outputs\\datasets\\R1v2_20260929-205251",
       "episodes": 330,
-      "frames": 50996,
+      "frames": 50999,
       "convert_exit": 0,
       "verify_exit": 0,
       "verify_pass": true,
-      "convert_wall_s": 1521.6,
-      "log": "outputs\\f\\convert_R1v2_20260929-181843.log"
+      "convert_wall_s": 1499.4,
+      "log": "outputs\\f\\convert_R1v2_20260929-205251.log"
     },
     "N1": {
-      "manifest": "outputs\\manifests\\N1v2_20260929-181843.json",
-      "dataset": "outputs\\datasets\\N1v2_20260929-181843",
+      "manifest": "outputs\\manifests\\N1v2_20260929-205251.json",
+      "dataset": "outputs\\datasets\\N1v2_20260929-205251",
       "episodes": 330,
       "frames": 52436,
       "convert_exit": 0,
       "verify_exit": 0,
       "verify_pass": true,
-      "convert_wall_s": 1524.2,
-      "log": "outputs\\f\\convert_N1v2_20260929-181843.log"
+      "convert_wall_s": 1537.5,
+      "log": "outputs\\f\\convert_N1v2_20260929-205251.log"
     }
   },
-  "frame_diff_ratio_R1_N1": 0.027462048973987338,
+  "frame_diff_ratio_R1_N1": 0.027404836371958195,
   "same_layouts_and_targets": true,
   "normal_part_identical": true,
   "dropped_stop_rule": "復帰の種類ごとの捨てた割合が 10% を超えたら止めて諮る（決裁 0042）",

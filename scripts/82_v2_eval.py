@@ -27,6 +27,12 @@ CKPT = {
     "R2": "outputs/train/train_R2_20260927-145256_20260927-145256/checkpoints/010000/pretrained_model",
     "R1plus": "outputs/train/train_R1plus_20260927-160208_20260927-160208/checkpoints/010000/pretrained_model",
 }
+V2_TRAIN = {"R1v2": "train_R1v2_20260929-230928_20260929-230928", "N1v2": "train_N1v2_20260930-060552_20260930-060552"}
+for _m, _d in V2_TRAIN.items():
+    for _s in (20000, 30000):
+        CKPT[f"{_m}_{_s}"] = f"outputs/train/{_d}/checkpoints/{_s:06d}/pretrained_model"
+CKPT["R1v2"] = CKPT["R1v2_20000"]       # 保存点の選択の結果（docs/results/ckpt_decision_v2_*.json）: どちらも 2 万手
+CKPT["N1v2"] = CKPT["N1v2_20000"]
 
 
 def trial_list(spec: str) -> list:
@@ -290,6 +296,24 @@ def cmd_e6(a) -> None:
     print(json.dumps({k: v for k, v in res.items() if k != "rows"}, ensure_ascii=False))
 
 
+def cmd_decide_ckpt(a) -> None:
+    """段階 2 の保存点の選択（0117 で了承）。検証用の種の同じ配置で 2 万手と 3 万手を比べ、成功数の多い方、同数なら 3 万手
+    （旧版の 41_results.py decide-ckpt と同じ決まり）。"""
+    out = {}
+    for step in (20000, 30000):
+        d = OUT / a.experiment / f"{a.model}_{step}"
+        rs = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(d.glob("trial_*.json"))]
+        out[step] = {"n": len(rs), "successes": sum(bool(r["success"]) for r in rs), "seeds": sorted({r["seed"] for r in rs})}
+    chosen = 20000 if out[20000]["successes"] > out[30000]["successes"] else 30000
+    res = {"model": a.model, "rule": "成功数の多い方、同数なら 30000 手（旧版と同じ決まり）", "candidates": out,
+           "same_seeds": out[20000]["seeds"] == out[30000]["seeds"], "chosen_step": chosen,
+           "checkpoint": CKPT[f"{a.model}_{chosen}"], "written": time.strftime("%Y-%m-%d %H:%M:%S")}
+    dst = config.ROOT / "docs" / "results"
+    dst.mkdir(parents=True, exist_ok=True)
+    (dst / f"ckpt_decision_v2_{a.model}.json").write_text(json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(json.dumps(res, ensure_ascii=False, indent=1))
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -318,8 +342,11 @@ def main(argv=None) -> int:
     p.add_argument("--model", default="R2", choices=sorted(CKPT))
     p.add_argument("--trials", required=True, help="<種の先頭>:<配置の数>")
     p.add_argument("--cue-mode", default="both", choices=("both", "cue_only"))
+    p = sub.add_parser("decide-ckpt")
+    p.add_argument("--experiment", default="V2SEL")
+    p.add_argument("--model", required=True, choices=sorted(V2_TRAIN))
     a = ap.parse_args(argv)
-    {"run": cmd_run, "task": cmd_task, "e6": cmd_e6}[a.cmd](a)
+    {"run": cmd_run, "task": cmd_task, "e6": cmd_e6, "decide-ckpt": cmd_decide_ckpt}[a.cmd](a)
     return 0
 
 
