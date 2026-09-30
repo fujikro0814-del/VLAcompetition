@@ -119,7 +119,10 @@ def cmd_run(a) -> None:
         sf = None
         if not a.no_safety:
             sf = PerceptionSafetyFilter(setup, CFG["safety_filter"], float(rtv["safety_extra_margin_m"] or 0.0))
-        return PolicyRuntime(io, setup, pol, perception=per, safety=sf, checks=rtv["checks"],
+        gate = dict(rtv.get("gripper_gate") or {})
+        if a.grip_gate:
+            gate["enabled"] = True
+        return PolicyRuntime(io, setup, pol, perception=per, safety=sf, checks=rtv["checks"], gripper_gate=gate,
                              tip_offset=float(CFG["sim"]["fingertip_offset"]), mode=a.mode, s=int(rt_cfg["exec_interval"]), d_init=int(rt_cfg["delay_steps"]),
                              rtc_horizon=int(rt_cfg["rtc_guidance_horizon"]),
                              motion=Motion(setup, limiter_enabled=not a.no_limiter, margin=float(act["limiter_margin"]),
@@ -133,7 +136,8 @@ def cmd_run(a) -> None:
         meta, arrays, rlog = run_policy_trial(world, suite, make_runtime, lay, tgt, seed, inducer=ind, cfg=CFG)
         meta.update({"trial": i, "experiment": a.experiment, "condition": a.condition, "model": {"name": a.model}, "ablate": a.ablate,
                      "runtime": {"mode": a.mode, "exec_interval": int(rt_cfg["exec_interval"]), "delay_steps": "sampled",
-                                 "safety_filter": not a.no_safety},
+                                 "safety_filter": not a.no_safety,
+                                 "gripper_gate": bool(a.grip_gate or (CFG["runtime_v2"].get("gripper_gate") or {}).get("enabled"))},
                      "mode": a.mode, "limiter": not a.no_limiter, "safety": not a.no_safety, "wall_s": round(time.perf_counter() - w0, 2)})
         np.savez(out / f"trial_{i:04d}.npz", **arrays)
         (out / f"trial_{i:04d}.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1, default=_json_default), encoding="utf-8")
@@ -189,7 +193,7 @@ def cmd_task(a) -> None:
                                   setup.table_z + 0.5 * setup.cube_size, setup.cue_fallback_xy)
         per = Perception(setup, Params.from_config(rtv["perception"]), thr)
         sf = None if a.no_safety else PerceptionSafetyFilter(setup, CFG["safety_filter"], float(rtv["safety_extra_margin_m"]))
-        prt = PolicyRuntime(io, setup, pol, perception=per, safety=sf, checks=rtv["checks"],
+        prt = PolicyRuntime(io, setup, pol, perception=per, safety=sf, checks=rtv["checks"], gripper_gate=rtv.get("gripper_gate"),
                             tip_offset=float(CFG["sim"]["fingertip_offset"]), mode="naive", s=int(rt_cfg["exec_interval"]),
                             d_init=int(rt_cfg["delay_steps"]), motion=Motion(setup, margin=float(act["limiter_margin"])))
         judge = JudgeV2(setup, per, thr, rtv["judge"])
@@ -329,6 +333,7 @@ def main(argv=None) -> int:
     p.add_argument("--diag-ik", default="commanded", choices=("commanded", "measured"), help="診断だけ")
     p.add_argument("--diag-no-gravcomp", action="store_true", help="診断だけ")
     p.add_argument("--ablate", default=None, help="診断だけ: " + ",".join(ABLATIONS))
+    p.add_argument("--grip-gate", action="store_true", help="グリッパのためらいの幅と最短の保持時間を入れる（0121 の B3）")
     p = sub.add_parser("task")
     p.add_argument("--experiment", required=True)
     p.add_argument("--condition", required=True)

@@ -24,6 +24,13 @@ runtime_v2:
     box_dev_m: 0.061            # 見た最大 30.3 mm
     box_dev_deg: 1.9            # 見た最大 0.95°
     target_missing_s: 1.0       # サブタスクの始めから目標の色が見つからない時間
+  # グリッパの指令のためらいの幅と最短の保持時間（0121 の B3）。方策の出力の 7 番目が close 超で閉、open 未満で開、
+  # 切り替えてから min_hold_s の間は切り替えない。採るかは 0121 の ■ 3 の決まり（検証用の種で確かめる）
+  gripper_gate:
+    enabled: false
+    close: 0.3
+    open: -0.3
+    min_hold_s: 0.5
   # 完了判定（0107 の 6、runtime/judge.py）。画素の閾値は旧版（planner.presence、学習用の帯で決めた値）から始め、
   # v2 のセンサの画像で学習用のシードから決め直す（scripts/85 の fit。決め直すまでは旧版の値）
   judge:

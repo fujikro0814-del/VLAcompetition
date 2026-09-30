@@ -40,7 +40,7 @@ def disable_rtc_for(policy) -> None:
 class PolicyRuntime:
     def __init__(self, io, setup, policy, mode: str = "naive", s: int = 10, d_init: int = 4, rtc_horizon: int = 40,
                  motion: Motion = None, limiter_enabled: bool = True, margin: float = 0.99,
-                 perception=None, safety=None, checks: dict = None, tip_offset: float = 0.1034):
+                 perception=None, safety=None, checks: dict = None, tip_offset: float = 0.1034, gripper_gate: dict = None):
         if mode not in ("sync", "naive", "rtc"):
             raise ValueError(mode)
         self.io, self.setup, self.policy = io, setup, policy
@@ -53,6 +53,8 @@ class PolicyRuntime:
         self.safety = safety               # recovla.runtime.safety.PerceptionSafetyFilter（None ならフィルタなし）
         self.checks = dict(checks or {})   # 知覚の失敗の止まり方の閾値（configs の runtime_v2.checks）
         self.tip_offset = float(tip_offset)
+        self.gripper_gate = gripper_gate if gripper_gate and gripper_gate.get("enabled") else None
+        self.t_grip_switch = -1e9
 
     # -------------------------------------------------------------------- trial
     def start(self, task: str, seed: int) -> None:
@@ -74,6 +76,7 @@ class PolicyRuntime:
         self.n_tick = 0
         self.k = -1
         self.closed = False
+        self.t_grip_switch = -1e9
         self.i = 0                          # 推論の通し番号（雑音の列）
         self.d_est = self.d_init
         self.log_inf, self.log_act = [], []
@@ -275,9 +278,19 @@ class PolicyRuntime:
 
     def _apply(self, a) -> None:
         self.motion.set_velocity(a[:3] / ACTION_DT)
-        want = bool(a[6] > 0.0)
+        g = self.gripper_gate
+        if g is None:
+            want = bool(a[6] > 0.0)
+        else:
+            want = self.closed
+            if self.io.now() - self.t_grip_switch >= float(g["min_hold_s"]) - 1e-9:
+                if not self.closed and a[6] > float(g["close"]):
+                    want = True
+                elif self.closed and a[6] < float(g["open"]):
+                    want = False
         if want != self.closed:
             self.closed = want
+            self.t_grip_switch = self.io.now()
             su = self.setup
             if want:
                 eps = 0.005
@@ -289,4 +302,6 @@ class PolicyRuntime:
         return {"inference": self.log_inf, "actions": [
             {"k": k, "t": t, "chunk": c, "held": h, "a": a.tolist()} for k, t, c, h, a in self.log_act],
             "perception": self.log_per, "startup": getattr(self, "startup", None), "stop_reason": self.stop_reason,
-            "safety": None if self.safety is None else self.safety.summary()}
+            "safety": None if self.safety is None else self.safety.summary(),
+            "motion": {**self.motion.lag_stats, "cart_clipped": self.motion.n_cart_clipped,
+                       "joint_clipped": self.motion.limiter.n_clipped}}

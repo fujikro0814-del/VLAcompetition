@@ -57,6 +57,7 @@ class Motion:
         self._fk_data = mujoco.MjData(self.model)
         self._x_hist = []
         self.n_cart_clipped = 0
+        self.lag_stats = {"n": 0, "sum": 0.0, "max": 0.0, "over_5mrad": 0, "over_20mrad": 0, "leash": 0}
 
     # ------------------------------------------------------------------ kinematics
     def _load_state(self, q, dq=None, width=None) -> None:
@@ -135,6 +136,14 @@ class Motion:
             self._x_hist.append(self._fk_hand(q))
             del self._x_hist[:-4]
             out.append(q)
+        lag = float(np.max(np.abs(q_ik - out[-1])))           # 記録だけ（0121 の B2）: 制限層の出力が IK の答えから遅れた量
+        st = self.lag_stats
+        st["n"] += 1
+        st["sum"] += lag
+        st["max"] = max(st["max"], lag)
+        st["over_5mrad"] += int(lag > 0.005)
+        st["over_20mrad"] += int(lag > 0.02)
+        st["leash"] += int(np.any(np.abs(self.data.ctrl[self.arm_act] - joints.q) > leash))
         self.controller.q_des = out[-1].copy()                     # IK の次の出発点は制限層の出力
         return out
 

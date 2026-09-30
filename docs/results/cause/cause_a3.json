@@ -1,0 +1,124 @@
+{
+ "episodes": [
+  {
+   "episode": 33,
+   "raw": "n_20011_red_r0",
+   "frames": 178,
+   "max_abs_image": 0.0,
+   "max_abs_state": 0.0,
+   "max_abs_cue": 0.0,
+   "task_dataset": "put the red cube in the box",
+   "task_runtime_template": "put the red cube in the box"
+  },
+  {
+   "episode": 35,
+   "raw": "n_20011_blue_r0",
+   "frames": 149,
+   "max_abs_image": 0.0,
+   "max_abs_state": 0.0,
+   "max_abs_cue": 0.0,
+   "task_dataset": "put the blue cube in the box",
+   "task_runtime_template": "put the blue cube in the box"
+  },
+  {
+   "episode": 44,
+   "raw": "n_20014_blue_r0",
+   "frames": 146,
+   "max_abs_image": 0.0,
+   "max_abs_state": 0.0,
+   "max_abs_cue": 0.0,
+   "task_dataset": "put the blue cube in the box",
+   "task_runtime_template": "put the blue cube in the box"
+  },
+  {
+   "episode": 68,
+   "raw": "n_20022_blue_r0",
+   "frames": 151,
+   "max_abs_image": 0.0,
+   "max_abs_state": 0.0,
+   "max_abs_cue": 0.0,
+   "task_dataset": "put the blue cube in the box",
+   "task_runtime_template": "put the blue cube in the box"
+  },
+  {
+   "episode": 70,
+   "raw": "n_20023_green_r0",
+   "frames": 139,
+   "max_abs_image": 0.0,
+   "max_abs_state": 0.0,
+   "max_abs_cue": 0.0,
+   "task_dataset": "put the green cube in the box",
+   "task_runtime_template": "put the green cube in the box"
+  },
+  {
+   "episode": 91,
+   "raw": "n_20030_green_r0",
+   "frames": 153,
+   "max_abs_image": 0.0,
+   "max_abs_state": 0.0,
+   "max_abs_cue": 0.0,
+   "task_dataset": "put the green cube in the box",
+   "task_runtime_template": "put the green cube in the box"
+  },
+  {
+   "episode": 109,
+   "raw": "n_20036_green_r0",
+   "frames": 162,
+   "max_abs_image": 0.0,
+   "max_abs_state": 0.0,
+   "max_abs_cue": 0.0,
+   "task_dataset": "put the green cube in the box",
+   "task_runtime_template": "put the green cube in the box"
+  },
+  {
+   "episode": 254,
+   "raw": "A_30014_blue_r0",
+   "frames": 171,
+   "max_abs_image": 0.0,
+   "max_abs_state": 0.0,
+   "max_abs_cue": 0.0,
+   "task_dataset": "put the blue cube in the box",
+   "task_runtime_template": "put the blue cube in the box"
+  },
+  {
+   "episode": 303,
+   "raw": "B_31045_blue_r1",
+   "frames": 130,
+   "max_abs_image": 0.0,
+   "max_abs_state": 0.0,
+   "max_abs_cue": 0.0,
+   "task_dataset": "put the blue cube in the box",
+   "task_runtime_template": "put the blue cube in the box"
+  },
+  {
+   "episode": 317,
+   "raw": "C_32007_green_r0",
+   "frames": 132,
+   "max_abs_image": 0.0,
+   "max_abs_state": 0.0,
+   "max_abs_cue": 0.0,
+   "task_dataset": "put the green cube in the box",
+   "task_runtime_template": "put the green cube in the box"
+  }
+ ],
+ "thresholds_training": {
+  "min_value": 20,
+  "min_margin": 70,
+  "min_pixels": 1
+ },
+ "thresholds_runtime": {
+  "min_value": 20,
+  "min_margin": 70,
+  "min_pixels": 1
+ },
+ "worst": {
+  "image": 0.0,
+  "state": 0.0,
+  "cue": 0.0
+ },
+ "pass": {
+  "image": true,
+  "state": true,
+  "cue": true
+ }
+}
