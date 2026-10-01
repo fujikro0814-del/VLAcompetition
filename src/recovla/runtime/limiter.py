@@ -32,6 +32,7 @@ class JointLimiter:
         self.q = self.v = self.a = None
         self.n_clipped = 0                                   # 切り詰めた刻みの数（段階 2 の (a) の判定）
         self.max_clip = 0.0                                  # 切り詰めた量の最大 [rad/s]
+        self.n_pos_clipped = 0
 
     def reset(self, q) -> None:
         self.q = np.array(q, dtype=float)
@@ -44,11 +45,16 @@ class JointLimiter:
         if not self.enabled:
             return v_des
         if self.q_min is not None:
-            # 可動域の端の手前で止まれる速さに抑える（加速度の上限の半分で止まる距離。端で位置を切り詰めると加速度が上限を
-            # 大きく超え、減速の候補がその値を引き継いで発散した＝0121 の G3 の調べ、検証用の種 199713）
-            hi = np.sqrt(self.max_acc * np.maximum(self.q_max - self.q, 0.0))
-            lo = -np.sqrt(self.max_acc * np.maximum(self.q - self.q_min, 0.0))
-            v_des = np.clip(v_des, lo, hi)
+            # 可動域の端の手前で止まれる速さに抑える。端で位置を切り詰めると加速度・躍度が上限を超え、減速の候補がその値を
+            # 引き継いで発散した（0121 の G3 の調べ、検証用の種 199713）。止まるまでの距離は、加速度の上限の半分 a で減速し、
+            # 減速に入るまでの躍度の立ち上がり（a / 躍度の上限）の分を足す: v²/(2a) + v·a/j ≤ 残り（2 mrad の余白を引く）
+            a, j = 0.5 * self.max_acc, self.max_jerk
+            b = a * a / j
+
+            def cap(room):
+                r = np.maximum(room - 0.002, 0.0)
+                return -b + np.sqrt(b * b + 2.0 * a * r)
+            v_des = np.clip(v_des, -cap(self.q - self.q_min), cap(self.q_max - self.q))
         v = limit_rate(self.max_vel, self.max_acc, self.max_jerk, v_des, self.v, self.a)
         d = float(np.max(np.abs(v - v_des)))
         if d > 1e-9:
@@ -85,7 +91,10 @@ class JointLimiter:
         v = np.asarray(v, float)
         q = self.q + v * DT
         if self.q_min is not None:
-            q = np.clip(q, self.q_min, self.q_max)
+            qc = np.clip(q, self.q_min, self.q_max)
+            if np.any(qc != q):
+                self.n_pos_clipped += 1                     # 記録だけ: 可動域の端で位置を切り詰めた刻み
+            q = qc
             v = (q - self.q) / DT
         self.a = np.clip((v - self.v) / DT, -self.max_acc, self.max_acc) if self.enabled else (v - self.v) / DT
         self.v = v

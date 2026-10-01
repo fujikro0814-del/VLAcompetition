@@ -169,16 +169,20 @@ class Motion:
         mujoco.mj_kinematics(self.model, d)
         return d.xpos[self.hand_id].copy()
 
-    def _cart_ok(self, x_new) -> bool:
+    def _cart_ratio(self, x_new) -> float:
+        """手先の速度・加速度・躍度の、余裕を掛けた上限に対する比の最大（1 以下なら上限の中）。"""
         h = self._x_hist
         if len(h) < 3:
-            return True
+            return 0.0
         dt, mg = L.DT, self.cart_margin
         v = (x_new - h[-1]) / dt
         a = (x_new - 2 * h[-1] + h[-2]) / dt ** 2
         j = (x_new - 3 * h[-1] + 3 * h[-2] - h[-3]) / dt ** 3
-        return (np.linalg.norm(v) <= self.CART[0] * mg and np.linalg.norm(a) <= self.CART[1] * mg
-                and np.linalg.norm(j) <= self.CART[2] * mg)
+        return max(np.linalg.norm(v) / (self.CART[0] * mg), np.linalg.norm(a) / (self.CART[1] * mg),
+                   np.linalg.norm(j) / (self.CART[2] * mg))
+
+    def _cart_ok(self, x_new) -> bool:
+        return self._cart_ratio(x_new) <= 1.0
 
     def _cartesian_limit(self, v_cand) -> np.ndarray:
         """候補が手先の上限を超えるなら、「加速度を躍度の上限いっぱいで落とす速さ」と候補の間を二分法で探す（どちらの端も関節の
@@ -194,8 +198,10 @@ class Motion:
             # 手先の上限を満たすいちばん強い減速を探す（0121 の G3 の調べ。s = 0 は関節の躍度 0＝加速度を保つ）
             v_hold = lim.shrink(v_brake, 0.0)
             if not self._cart_ok(self._fk_hand(lim.position_of(v_hold))):
+                # どの減速でも満たせない: 減速の強さを振って、上限に対する比がいちばん小さい候補を使う
                 self.n_cart_unresolved += 1
-                return v_hold
+                cands = [lim.shrink(v_brake, s) for s in np.linspace(0.0, 1.0, 11)]
+                return min(cands, key=lambda v: self._cart_ratio(self._fk_hand(lim.position_of(v))))
             lo, hi = 0.0, 1.0
             for _ in range(12):
                 mid = 0.5 * (lo + hi)

@@ -306,5 +306,5 @@ class PolicyRuntime:
             "safety": None if self.safety is None else self.safety.summary(),
             "motion": {**self.motion.lag_stats, "cart_clipped": self.motion.n_cart_clipped,
                        "xcmd_leashed": self.motion.n_xcmd_leashed, "xcmd_leash_m": self.motion.xcmd_leash_m,
-                       "cart_unresolved": self.motion.n_cart_unresolved,
+                       "cart_unresolved": self.motion.n_cart_unresolved, "pos_clipped": self.motion.limiter.n_pos_clipped,
                        "joint_clipped": self.motion.limiter.n_clipped}}
