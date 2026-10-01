@@ -26,6 +26,9 @@ def main(argv=None) -> int:
     exps = sorted(d.name for d in V2.iterdir() if d.is_dir()) if a.all else a.experiments
     rows = []
     for e in exps:
+        if not (V2 / e).is_dir():
+            print(f"（{e} はまだない）")
+            continue
         for d in sorted(p for p in (V2 / e).iterdir() if p.is_dir()):
             if not any(d.glob("trial_*.json")) and not any(d.glob("run_*.json")):
                 continue
