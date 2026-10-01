@@ -1,0 +1,125 @@
+{
+ "policy": {
+  "V2CAUSE/R1v2_nat": {
+   "trials": 30,
+   "stages": {
+    "F1_never_closed_near_target": 9,
+    "F2_closed_but_never_lifted": 13,
+    "success": 8
+   },
+   "B3": {
+    "toggles_median": 26.5,
+    "trials_with_roundtrip_1s_near_target": 14,
+    "frac_trials_with_roundtrip_near": 0.4666666666666667
+   },
+   "B4": {
+    "closes_near_target": 79,
+    "lifted_within_3s_rate": 0.17721518987341772,
+    "close_to_closed_s_median": 0.4999999999997229,
+    "lift_minus_closed_s_median": 0.0,
+    "frac_lift_before_closed": 0.0379746835443038,
+    "closes_per_trial": 2.6333333333333333
+   },
+   "B5": {
+    "mean_latency_success_s": 0.31678318985284204,
+    "mean_latency_failure_s": 0.313839745294361
+   },
+   "D2": {
+    "n": 30,
+    "cue_err_median_mm": 13.605731134092965,
+    "cue_err_p95_mm": 29.920054387723685,
+    "success_rate_err_lt_2cm": 0.19047619047619047,
+    "success_rate_err_ge_2cm": 0.4444444444444444,
+    "n_err_ge_2cm": 9
+   },
+   "D3": {
+    "safety_active_frac_median": 0.025366666666671527,
+    "safety_active_frac_p90": 0.12944000000002487
+   },
+   "E1": {
+    "failures": 22,
+    "timeouts": 22,
+    "stalled_last_10s": 0
+   }
+  },
+  "V2CAUSE/R1v2_nat_gate": {
+   "trials": 30,
+   "stages": {
+    "F1_never_closed_near_target": 10,
+    "F2_closed_but_never_lifted": 11,
+    "success": 7,
+    "F5_over_box_but_outside_at_end": 2
+   },
+   "B3": {
+    "toggles_median": 31.5,
+    "trials_with_roundtrip_1s_near_target": 13,
+    "frac_trials_with_roundtrip_near": 0.43333333333333335
+   },
+   "B4": {
+    "closes_near_target": 140,
+    "lifted_within_3s_rate": 0.05714285714285714,
+    "close_to_closed_s_median": 0.4499999999997506,
+    "lift_minus_closed_s_median": 0.0,
+    "frac_lift_before_closed": 0.0,
+    "closes_per_trial": 4.666666666666667
+   },
+   "B5": {
+    "mean_latency_success_s": 0.31583593280147954,
+    "mean_latency_failure_s": 0.3140439840211613
+   },
+   "D2": {
+    "n": 30,
+    "cue_err_median_mm": 13.605731134092965,
+    "cue_err_p95_mm": 29.920054387723685,
+    "success_rate_err_lt_2cm": 0.19047619047619047,
+    "success_rate_err_ge_2cm": 0.3333333333333333,
+    "n_err_ge_2cm": 9
+   },
+   "D3": {
+    "safety_active_frac_median": 0.02876487579433987,
+    "safety_active_frac_p90": 0.1083333333333543
+   },
+   "E1": {
+    "failures": 23,
+    "timeouts": 23,
+    "stalled_last_10s": 1
+   }
+  }
+ },
+ "expert": {
+  "v1": {
+   "episodes": 420,
+   "E1_duration_median_s": 13.99,
+   "E1_duration_p95_s": 15.7,
+   "E1_duration_max_s": 17.92,
+   "B3": {
+    "toggles_median": 2.0,
+    "frac_with_roundtrip_near": 0.0
+   },
+   "B4": {
+    "closes_near_target": 420,
+    "lifted_within_3s_rate": 1.0,
+    "close_to_closed_s_median": 0.09999999999998899,
+    "lift_minus_closed_s_median": 0.9999999999998903,
+    "frac_lift_before_closed": 0.0
+   }
+  },
+  "v2": {
+   "episodes": 420,
+   "E1_duration_median_s": 15.9,
+   "E1_duration_p95_s": 17.622,
+   "E1_duration_max_s": 19.04,
+   "B3": {
+    "toggles_median": 2.0,
+    "frac_with_roundtrip_near": 0.0
+   },
+   "B4": {
+    "closes_near_target": 420,
+    "lifted_within_3s_rate": 1.0,
+    "close_to_closed_s_median": 0.0,
+    "lift_minus_closed_s_median": 1.2499999999998628,
+    "frac_lift_before_closed": 0.0
+   }
+  }
+ }
+}

@@ -1,0 +1,20 @@
+{
+ "model": "R1v2",
+ "checkpoint": "C:\\PAI\\recovery_vla\\outputs\\train\\train_R1v2_20260929-230928_20260929-230928\\checkpoints\\020000\\pretrained_model",
+ "episodes": "C1_heldout_v2",
+ "rows_per_chunk": 10,
+ "all": {
+  "frames": 3106,
+  "nrmse_median": 0.132280910350446,
+  "end_err_mm_median": 4.988056861072381,
+  "end_err_mm_p90": 29.220353429118486,
+  "grip_agree_mean": 0.9943335479716676
+ },
+ "pre_close_1s": {
+  "frames": 220,
+  "nrmse_median": 0.02145097604255156,
+  "end_err_mm_median": 1.796020036537722,
+  "end_err_mm_p90": 3.5158703683939807,
+  "grip_agree_mean": 0.9581818181818182
+ }
+}

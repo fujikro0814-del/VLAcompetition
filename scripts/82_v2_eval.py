@@ -50,7 +50,7 @@ def _json_default(o):
     return str(o)
 
 
-ABLATIONS = ("nocolor", "wrist60", "nolatency", "nocalib", "noholes")
+ABLATIONS = ("nocolor", "wrist60", "nolatency", "nocalib", "noholes", "fixedinf", "freeze", "fastgrip", "strongforce")
 
 
 def ablate(cfg: dict, names) -> dict:
@@ -71,6 +71,16 @@ def ablate(cfg: dict, names) -> dict:
             s["calibration"]["table"] = {"z_sigma": 0.0, "tilt_sigma_deg": 0.0}
         elif n == "noholes":
             s["depth_noise"]["hole_area"] = 0.0
+        elif n == "fixedinf":                     # 推論時間のばらつきを外す（latency_v1 の中央値に固定）
+            from recovla.harness.robot_io import LATENCY
+            q = LATENCY["kinds"]["policy"]["quantiles_s"]
+            c["runtime_v2"].setdefault("diag_fixed_latency", {})["policy"] = float(np.interp(0.5, np.linspace(0, 1, len(q)), q))
+        elif n == "freeze":                       # 世界の停止に相当: 推論と知覚の計算の時間を 0 にする
+            c["runtime_v2"].setdefault("diag_fixed_latency", {}).update({"policy": 0.0, "perception": 0.0})
+        elif n == "fastgrip":                     # グリッパの速さを公称の上限に（0.08 → 0.1 m/s。ハンドの模型はこれを超える指令を拒む）
+            c["actuation"]["gripper_speed"] = 0.1
+        elif n == "strongforce":                  # 把持力を公称の上限 70 N に
+            c["actuation"]["grasp_force"] = 70.0
         else:
             raise SystemExit(f"--ablate {n}: one of {ABLATIONS}")
     return c
@@ -126,7 +136,8 @@ def cmd_run(a) -> None:
                              tip_offset=float(CFG["sim"]["fingertip_offset"]), mode=a.mode, s=int(rt_cfg["exec_interval"]), d_init=int(rt_cfg["delay_steps"]),
                              rtc_horizon=int(rt_cfg["rtc_guidance_horizon"]),
                              motion=Motion(setup, limiter_enabled=not a.no_limiter, margin=float(act["limiter_margin"]),
-                                           ik_on=a.diag_ik))
+                                           ik_on=a.diag_ik, xcmd_leash_m=a.xcmd_leash or rtv.get("xcmd_leash_m"),
+                                           cart_margin=a.cart_margin or rtv.get("cart_margin")))
 
     rows = []
     t0 = time.perf_counter()
@@ -137,7 +148,9 @@ def cmd_run(a) -> None:
         meta.update({"trial": i, "experiment": a.experiment, "condition": a.condition, "model": {"name": a.model}, "ablate": a.ablate,
                      "runtime": {"mode": a.mode, "exec_interval": int(rt_cfg["exec_interval"]), "delay_steps": "sampled",
                                  "safety_filter": not a.no_safety,
-                                 "gripper_gate": bool(a.grip_gate or (CFG["runtime_v2"].get("gripper_gate") or {}).get("enabled"))},
+                                 "gripper_gate": bool(a.grip_gate or (CFG["runtime_v2"].get("gripper_gate") or {}).get("enabled")),
+                                 "xcmd_leash_m": a.xcmd_leash or CFG["runtime_v2"].get("xcmd_leash_m"),
+                                 "cart_margin": a.cart_margin or CFG["runtime_v2"].get("cart_margin")},
                      "mode": a.mode, "limiter": not a.no_limiter, "safety": not a.no_safety, "wall_s": round(time.perf_counter() - w0, 2)})
         np.savez(out / f"trial_{i:04d}.npz", **arrays)
         (out / f"trial_{i:04d}.json").write_text(json.dumps(meta, ensure_ascii=False, indent=1, default=_json_default), encoding="utf-8")
@@ -195,7 +208,9 @@ def cmd_task(a) -> None:
         sf = None if a.no_safety else PerceptionSafetyFilter(setup, CFG["safety_filter"], float(rtv["safety_extra_margin_m"]))
         prt = PolicyRuntime(io, setup, pol, perception=per, safety=sf, checks=rtv["checks"], gripper_gate=rtv.get("gripper_gate"),
                             tip_offset=float(CFG["sim"]["fingertip_offset"]), mode="naive", s=int(rt_cfg["exec_interval"]),
-                            d_init=int(rt_cfg["delay_steps"]), motion=Motion(setup, margin=float(act["limiter_margin"])))
+                            d_init=int(rt_cfg["delay_steps"]), motion=Motion(setup, margin=float(act["limiter_margin"]),
+                                                                             xcmd_leash_m=rtv.get("xcmd_leash_m"),
+                                                                             cart_margin=rtv.get("cart_margin")))
         judge = JudgeV2(setup, per, thr, rtv["judge"])
         e = CFG["expert"]
         mp = {"gain": float(e["gain_per_s"]), "xy_max": float(e["speed_ref"]["xy"]), "z_max": float(e["speed_ref"]["z"]),
@@ -334,6 +349,8 @@ def main(argv=None) -> int:
     p.add_argument("--diag-no-gravcomp", action="store_true", help="診断だけ")
     p.add_argument("--ablate", default=None, help="診断だけ: " + ",".join(ABLATIONS))
     p.add_argument("--grip-gate", action="store_true", help="グリッパのためらいの幅と最短の保持時間を入れる（0121 の B3）")
+    p.add_argument("--xcmd-leash", type=float, default=None, help="参照位置の綱 [m]（0121 の B1）。省略時は設定の値")
+    p.add_argument("--cart-margin", type=float, default=None, help="手先の上限の余裕（既定 0.95）。省略時は設定の値")
     p = sub.add_parser("task")
     p.add_argument("--experiment", required=True)
     p.add_argument("--condition", required=True)

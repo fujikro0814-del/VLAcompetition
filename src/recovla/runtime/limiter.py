@@ -43,6 +43,12 @@ class JointLimiter:
         v_des = np.asarray(v_des, float)
         if not self.enabled:
             return v_des
+        if self.q_min is not None:
+            # 可動域の端の手前で止まれる速さに抑える（加速度の上限の半分で止まる距離。端で位置を切り詰めると加速度が上限を
+            # 大きく超え、減速の候補がその値を引き継いで発散した＝0121 の G3 の調べ、検証用の種 199713）
+            hi = np.sqrt(self.max_acc * np.maximum(self.q_max - self.q, 0.0))
+            lo = -np.sqrt(self.max_acc * np.maximum(self.q - self.q_min, 0.0))
+            v_des = np.clip(v_des, lo, hi)
         v = limit_rate(self.max_vel, self.max_acc, self.max_jerk, v_des, self.v, self.a)
         d = float(np.max(np.abs(v - v_des)))
         if d > 1e-9:
@@ -53,12 +59,17 @@ class JointLimiter:
     def shrink(self, v_cand, s: float) -> np.ndarray:
         """躍度の項だけを s 倍に縮めた速さ（加速度は前の値と候補の間、躍度は候補の s 倍なので関節の上限は保たれる）。"""
         v0 = self.v + self.a * DT
-        return v0 + s * (np.asarray(v_cand) - v0)
+        return self._bounded(v0 + s * (np.asarray(v_cand) - v0))
 
     def brake(self) -> np.ndarray:
         """加速度の大きさを躍度の上限いっぱいで 0 へ近づける速さ（関節の上限を保ったまま、いちばん早く加速度を落とす）。"""
         da = np.clip(-self.a, -self.max_jerk * DT, self.max_jerk * DT)
-        return self.v + (self.a + da) * DT
+        return self._bounded(self.v + (self.a + da) * DT)
+
+    def _bounded(self, v) -> np.ndarray:
+        """加速度と速度を上限の中に収める（前の加速度が上限を超えていても、それを引き継がない）。"""
+        a = np.clip((np.asarray(v, float) - self.v) / DT, -self.max_acc, self.max_acc)
+        return np.clip(self.v + a * DT, -self.max_vel, self.max_vel)
 
     def between(self, v_from, v_to, s: float) -> np.ndarray:
         return np.asarray(v_from) + s * (np.asarray(v_to) - np.asarray(v_from))
@@ -76,7 +87,7 @@ class JointLimiter:
         if self.q_min is not None:
             q = np.clip(q, self.q_min, self.q_max)
             v = (q - self.q) / DT
-        self.a = (v - self.v) / DT
+        self.a = np.clip((v - self.v) / DT, -self.max_acc, self.max_acc) if self.enabled else (v - self.v) / DT
         self.v = v
         self.q = q
         return q.copy()

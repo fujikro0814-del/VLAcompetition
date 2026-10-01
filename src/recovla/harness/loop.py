@@ -61,7 +61,9 @@ def run_policy_trial(world, suite, make_runtime, layout, target: str, seed: int,
     setup = suite.start_trial(seed, world.data, nominal_setup(cfg))
     suite.prime(world.data)                                     # カメラは始める前から流れている（場面は止まっている）
     rtv = cfg.get("runtime_v2", {})
-    io = SimRobotIO(world, suite, seed, fixed_latency={"perception": float(rtv.get("perception_latency_s", 0.0))})
+    fixed = {"perception": float(rtv.get("perception_latency_s", 0.0))}
+    fixed.update(rtv.get("diag_fixed_latency") or {})                  # 診断だけ（82 の --ablate fixedinf・freeze）
+    io = SimRobotIO(world, suite, seed, fixed_latency=fixed)
     rt = make_runtime(io, setup)
     task = instruction(target, cfg)
     rt.start(task, seed)

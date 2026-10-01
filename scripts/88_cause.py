@@ -305,7 +305,8 @@ def cmd_a4(a) -> None:
         holder = {}
 
         def make(io, setup):
-            rt = ReplayRuntime(io, setup, _NoPolicy(), mode="naive", motion=Motion(setup, margin=float(act["limiter_margin"])))
+            rt = ReplayRuntime(io, setup, _NoPolicy(), mode="naive",
+                               motion=Motion(setup, margin=float(act["limiter_margin"]), xcmd_leash_m=a.leash))
             rt.actions = arr["action"]
             holder["rt"] = rt
             return rt
@@ -325,7 +326,7 @@ def cmd_a4(a) -> None:
               f"max {r['ee_max_m'] * 1000:.1f} mm xcmd_rms {r['xcmd_rms_m'] * 1000:.1f} mm", flush=True)
     suite.close()
     RES.mkdir(parents=True, exist_ok=True)
-    (RES / f"cause_a4_{a.shard}of{a.shards}.json").write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
+    (RES / f"cause_a4{a.tag}_{a.shard}of{a.shards}.json").write_text(json.dumps(rows, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
 def _dist(x) -> dict:
@@ -526,6 +527,220 @@ def cmd_b(a) -> None:
     (RES / f"cause_b_{a.tag}.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
 
 
+HELDOUT_SEEDS = range(59950, 59970)      # 台帳: 0121 の C1（学習用）
+
+
+def cmd_gen_heldout(a) -> None:
+    """C1 用: 学習に使っていない通常のエピソード（空の箱、色は種の番号で均等）を v1・v2 の生成で作る。"""
+    from recovla.expert import generate as G
+    specs = [G.EpisodeSpec(s, COLORS[s % 3], "empty", "n") for s in HELDOUT_SEEDS]
+    run = OUT / "gen" / f"C1_heldout_{a.rig}"
+    res = G.generate(specs, run, workers=a.workers, render=True, rig_kind=a.rig)
+    print(a.rig, "ok", sum(bool(r.get("success")) for r in res), "/", len(res))
+
+
+def _ckpt(name: str) -> pathlib.Path:
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("v2e", config.ROOT / "scripts" / "82_v2_eval.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return config.path(m.CKPT[name])
+
+
+def cmd_c1(a) -> None:
+    """C1: 開ループの予測誤差。学習に使っていないエピソードの各こま（10 Hz）で、変換と同じ経路の観測（A3 で実行系と一致を
+    確かめた）から塊を予測し、実行する最初の 10 行を記録の行動と比べる。雑音の乱数はこまの番号で固定。"""
+    import torch
+    from safetensors.torch import load_file
+
+    from recovla.data import convert as CV
+    from recovla.data import vla_observation, vla_state
+    from recovla.harness import setup as HS
+    from recovla.runtime.motion import Motion
+    from recovla.runtime.policy import SensorPolicy
+    from recovla.harness.sensors import SensorSuite
+    from recovla.harness.world import WorldRig
+    from recovla.sim import scene
+    R = 10
+    ck = _ckpt(a.model)
+    cfg2 = config.load_v2()
+    world = WorldRig(render=False, cfg=cfg2)
+    suite = SensorSuite(world.model, cfg2)
+    world.reset(scene.sample_layout(59950, "empty", start="home"))
+    setup = suite.start_trial(59950, world.data, HS.nominal_setup(cfg2))     # 方策の読み込みに要るだけ（手がかりは変換の経路で作る）
+    pol = SensorPolicy(ck, setup, Motion(setup).hand_pose)
+    from recovla.runtime.runner import disable_rtc_for
+    disable_rtc_for(pol)
+    nrm = next(ck.glob("policy_preprocessor*normalizer*.safetensors"))
+    st = load_file(str(nrm))
+    std = st["action.std"].double().numpy()[:3]
+    rec = pol.conversion["target_cue"]
+    tracker = CV.cue_tracker(rec.get("thresholds_source", "training"))
+    keep = "cue_visible" in rec["names"]
+    rows = []
+    run = OUT / "gen" / a.episodes
+    for p in sorted(run.iterdir()):
+        if not (p / "meta.json").is_file():
+            continue
+        meta, data = CV.load_raw(p)
+        if not meta.get("success"):
+            continue
+        arr = CV.episode_arrays(meta, data)
+        etr = CV.episode_tracker(meta, tracker)
+        etr.reset()
+        act = arr["action"]
+        closes = np.where(act[:, 6] > 0)[0]
+        k_close = int(closes[0]) if closes.size else None
+        for k, i in enumerate(arr["raw_index"]):
+            raw = {v: CV.read_raw_image(p / v / f"{i:06d}.png") for v in ("overhead", "wrist")}
+            c = etr.update(raw["overhead"], meta["target"])
+            state = vla_state.with_cue(arr["state"][k], c, keep_flag=keep)
+            obs = {**vla_observation.observation_images(raw), "observation.state": state, "task": meta["instruction"]}
+            pred = pol.infer(obs, torch.Generator().manual_seed(1000 + k))
+            n = min(R, len(act) - k)
+            tr = act[k:k + n]
+            pr = pred[:n]
+            rows.append({"ep": p.name, "k": k, "n": n,
+                         "nrmse": float(np.sqrt(np.mean(((pr[:, :3] - tr[:, :3]) / std) ** 2))),
+                         "end_err_mm": float(np.linalg.norm(pr[:, :3].sum(0) - tr[:, :3].sum(0)) * 1e3),
+                         "grip_agree": float(np.mean(np.sign(pr[:, 6]) == np.sign(tr[:, 6]))),
+                         "pre_close": k_close is not None and k_close - 10 <= k <= k_close})
+        print(f"[c1] {a.model} {p.name} frames {len(arr['raw_index'])}", flush=True)
+
+    def summ(rs):
+        return {"frames": len(rs), "nrmse_median": float(np.median([r["nrmse"] for r in rs])),
+                "end_err_mm_median": float(np.median([r["end_err_mm"] for r in rs])),
+                "end_err_mm_p90": float(np.percentile([r["end_err_mm"] for r in rs], 90)),
+                "grip_agree_mean": float(np.mean([r["grip_agree"] for r in rs]))}
+    out = {"model": a.model, "checkpoint": str(ck), "episodes": a.episodes, "rows_per_chunk": R,
+           "all": summ(rows), "pre_close_1s": summ([r for r in rows if r["pre_close"]])}
+    print(json.dumps(out, ensure_ascii=False))
+    (RES / f"cause_c1_{a.model}_{a.episodes}.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def cmd_c2(a) -> None:
+    """C2: 走行の状態と学習データのいちばん近いこまとの距離。走行の記録（npz）に関節角はなく、指は真値（学習データは測った
+    開き幅の半分）なので、手先の位置・向きの偏差の 6 次元（学習データの標準偏差で割る）で比べる。基準として学習に使っていないエキスパートのエピソード（C1 と同じ）も測る。
+    段階は目標の立方体と指先の距離（> 15 cm・5〜15 cm・< 5 cm）で分ける。"""
+    import pyarrow.parquet as pq
+
+    from recovla.data import vla_state
+    root = OUT / "datasets" / A2_DATASETS["R1v2"]
+    S = []
+    for f in sorted((root / "data").rglob("*.parquet")):
+        S.append(np.asarray(pq.read_table(f, columns=["observation.state"]).to_pydict()["observation.state"], np.float32)[:, :6])
+    S = np.concatenate(S)
+    sd = S.std(axis=0) + 1e-6
+    Sn = S / sd
+
+    def nn(X):
+        Xn = (X / sd).astype(np.float32)
+        out = np.empty(len(Xn), np.float32)
+        s2 = (Sn ** 2).sum(1)
+        for i in range(0, len(Xn), 2048):
+            x = Xn[i:i + 2048]
+            d2 = (x ** 2).sum(1)[:, None] - 2 * x @ Sn.T + s2[None]
+            out[i:i + 2048] = np.sqrt(np.maximum(d2.min(1), 0))
+        return out
+
+    def states(ee_pos, ee_quat, fingers):
+        q = np.where(ee_quat[:, :1] < 0, -ee_quat, ee_quat)
+        return np.concatenate([ee_pos, vla_state.orientation_deviation(q)], axis=1)
+
+    def bands(dist_t, d):
+        return {"far_gt15cm": float(np.median(d[dist_t > 0.15])) if np.any(dist_t > 0.15) else None,
+                "mid_5_15cm": float(np.median(d[(dist_t > 0.05) & (dist_t <= 0.15)])) if np.any((dist_t > 0.05) & (dist_t <= 0.15)) else None,
+                "near_lt5cm": float(np.median(d[dist_t <= 0.05])) if np.any(dist_t <= 0.05) else None,
+                "p95_all": float(np.percentile(d, 95))}
+    out = {}
+    from recovla.data import convert as CV
+    ex_d, ex_t = [], []
+    for p in sorted((OUT / "gen" / "C1_heldout_v2").iterdir()):
+        if not (p / "meta.json").is_file():
+            continue
+        meta, data = CV.load_raw(p)
+        ti = COLORS.index(meta["target"])
+        X = states(data["ee_pos"], data["ee_quat"], data["fingers"])
+        ex_d.append(nn(X))
+        ex_t.append(np.linalg.norm(data["fingertip"] - data["cube_pos"][:, ti], axis=1))
+    out["expert_heldout_v2"] = bands(np.concatenate(ex_t), np.concatenate(ex_d))
+    for top in a.dirs:
+        ds, ts, ok = [], [], []
+        for f in sorted((OUT / "v2eval" / top).glob("trial_*.json")):
+            m = json.loads(f.read_text(encoding="utf-8"))
+            z = np.load(f.with_suffix(".npz"))
+            ti = COLORS.index(m["target"])
+            X = states(z["ee_pos"], z["ee_quat"], z["fingers"])
+            ds.append(nn(X))
+            ts.append(np.linalg.norm(z["fingertip"] - z["cube_pos"][:, ti], axis=1))
+            ok.append(np.full(len(X), bool(m["success"])))
+        d, t, s = np.concatenate(ds), np.concatenate(ts), np.concatenate(ok)
+        out[top] = {"all": bands(t, d), "success_trials": bands(t[s], d[s]), "failure_trials": bands(t[~s], d[~s])}
+    print(json.dumps(out, ensure_ascii=False, indent=1))
+    (RES / "cause_c2.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
+def cmd_c2s(a) -> None:
+    """C2（方策に実際に渡した状態）: runtime の記録の inference[*].state（17 次元）と学習データのいちばん近いこまとの距離。
+    学習データの標準偏差で割る。次元のまとまり（手先・向き・指・関節・手がかり）ごとに、学習データの範囲（p0.5〜p99.5）の外に
+    出たこまの割合も出す。基準は学習に使っていないエキスパートのエピソード（C1 と同じ、変換の経路で作った状態）。"""
+    import pyarrow.parquet as pq
+
+    from recovla.data import convert as CV
+    from recovla.data import vla_state
+    root = OUT / "datasets" / A2_DATASETS["R1v2"]
+    S = np.concatenate([np.asarray(pq.read_table(f, columns=["observation.state"]).to_pydict()["observation.state"], np.float32)
+                        for f in sorted((root / "data").rglob("*.parquet"))])
+    sd = S.std(axis=0) + 1e-6
+    lo, hi = np.percentile(S, 0.5, axis=0), np.percentile(S, 99.5, axis=0)
+    groups = {"pos": slice(0, 3), "rot": slice(3, 6), "fingers": slice(6, 8), "joints": slice(8, 15), "cue": slice(15, 17)}
+    Sn = S / sd
+    s2 = (Sn ** 2).sum(1)
+
+    def nn(X):
+        Xn = (X / sd).astype(np.float32)
+        out = np.empty(len(Xn), np.float32)
+        for i in range(0, len(Xn), 2048):
+            x = Xn[i:i + 2048]
+            out[i:i + 2048] = np.sqrt(np.maximum(((x ** 2).sum(1)[:, None] - 2 * x @ Sn.T + s2[None]).min(1), 0))
+        return out
+
+    def report(X, ok=None):
+        d = nn(X)
+        r = {"frames": int(len(X)), "nn_median": float(np.median(d)), "nn_p90": float(np.percentile(d, 90)),
+             "outside_by_group": {g: float(np.mean(np.any((X[:, sl] < lo[sl]) | (X[:, sl] > hi[sl]), axis=1))) for g, sl in groups.items()},
+             "mean_shift_sd_by_dim": [round(float(v), 2) for v in (X.mean(0) - S.mean(0)) / sd]}
+        if ok is not None:
+            r["nn_median_success"] = float(np.median(d[ok])) if ok.any() else None
+            r["nn_median_failure"] = float(np.median(d[~ok])) if (~ok).any() else None
+        return r
+    out = {}
+    tracker = CV.cue_tracker("runtime_v2")
+    X = []
+    for p in sorted((OUT / "gen" / "C1_heldout_v2").iterdir()):
+        if not (p / "meta.json").is_file():
+            continue
+        meta, data = CV.load_raw(p)
+        arr = CV.episode_arrays(meta, data)
+        etr = CV.episode_tracker(meta, tracker)
+        etr.reset()
+        for k, i in enumerate(arr["raw_index"]):
+            c = etr.update(CV.read_raw_image(p / "overhead" / f"{i:06d}.png"), meta["target"])
+            X.append(vla_state.with_cue(arr["state"][k], c, keep_flag=False))
+    out["expert_heldout_v2"] = report(np.array(X, np.float32))
+    for top in a.dirs:
+        X, ok = [], []
+        for f in sorted((OUT / "v2eval" / top).glob("runtime_*.json")):
+            m = json.loads((f.parent / f.name.replace("runtime_", "trial_")).read_text(encoding="utf-8"))
+            for e in json.loads(f.read_text(encoding="utf-8"))["runtime"]["inference"]:
+                if e.get("state") is not None:
+                    X.append(e["state"])
+                    ok.append(bool(m["success"]))
+        out[top] = report(np.array(X, np.float32), np.array(ok))
+    print(json.dumps(out, ensure_ascii=False, indent=1))
+    (RES / "cause_c2s.json").write_text(json.dumps(out, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -535,11 +750,24 @@ def main(argv=None) -> int:
     p.add_argument("--n", type=int, default=20)
     p.add_argument("--shard", type=int, default=0)
     p.add_argument("--shards", type=int, default=1)
+    p.add_argument("--leash", type=float, default=None)
+    p.add_argument("--tag", default="")
+    p = sub.add_parser("gen-heldout")
+    p.add_argument("--rig", required=True, choices=("v1", "v2"))
+    p.add_argument("--workers", type=int, default=4)
+    p = sub.add_parser("c1")
+    p.add_argument("--model", required=True)
+    p.add_argument("--episodes", required=True, help="outputs/gen の下の生成の名前")
+    p = sub.add_parser("c2")
+    p.add_argument("--dirs", nargs="+", default=["V2CAUSE/R1v2_nat"])
+    p = sub.add_parser("c2s")
+    p.add_argument("--dirs", nargs="+", default=["V2CAUSE/R1v2_nat_s"])
     p = sub.add_parser("b")
     p.add_argument("--dirs", nargs="+", default=["V2SEL/R1v2_20000", "V2SEL/N1v2_20000", "V2S1/F_nat"])
     p.add_argument("--tag", default="pre")
     a = ap.parse_args(argv)
-    {"a1": cmd_a1, "a2": cmd_a2, "a3": cmd_a3, "a4": cmd_a4, "b1": cmd_b1, "b": cmd_b}[a.cmd](a)
+    {"a1": cmd_a1, "a2": cmd_a2, "a3": cmd_a3, "a4": cmd_a4, "b1": cmd_b1, "b": cmd_b,
+     "gen-heldout": cmd_gen_heldout, "c1": cmd_c1, "c2": cmd_c2, "c2s": cmd_c2s}[a.cmd](a)
     return 0
 
 

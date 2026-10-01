@@ -21,7 +21,9 @@ class DrivenRig(WorldRig):
         super().__init__(render=render, cfg=cfg)
         act = self.cfg["actuation"]
         self.setup_info = H.nominal_setup(self.cfg)
-        self.motion = Motion(self.setup_info, limiter_enabled=limiter_enabled, margin=float(act["limiter_margin"]))
+        self.motion = Motion(self.setup_info, limiter_enabled=limiter_enabled, margin=float(act["limiter_margin"]),
+                             xcmd_leash_m=(self.cfg.get("runtime_v2") or {}).get("xcmd_leash_m"),
+                             cart_margin=(self.cfg.get("runtime_v2") or {}).get("cart_margin"))
         self.grasp_args = (float(act["grasp_force"]), float(act["grasp_eps"]))
         self.gripper_speed = float(act["gripper_speed"])
         self.closed = False

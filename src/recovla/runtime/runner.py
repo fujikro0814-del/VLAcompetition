@@ -265,6 +265,7 @@ class PolicyRuntime:
             out = pol.infer(obs, noise_generator(self.seed, i), rtc)
             holder["raw"] = pol.last_raw.copy()
             holder["cue"] = None if pol.last_cue is None else np.asarray(pol.last_cue).copy()
+            holder["state"] = np.asarray(obs["observation.state"], float).copy()       # 記録だけ（0121 の C2）
             return out
 
         fut = self.io.compute("policy_rtc" if self.mode == "rtc" else "policy", work)
@@ -274,7 +275,7 @@ class PolicyRuntime:
         self.log_inf.append({"i": i, "k_obs": k, "t_obs": t, "t_ready": fut.t_ready, "latency_s": fut.latency,
                              "wall_s": fut.wall_s, "rtc_delay": None if rtc is None else rtc["inference_delay"],
                              "img_t": {n: c.t_capture for n, c in sensor.cameras.items()},
-                             "cue": holder.get("cue")})
+                             "cue": holder.get("cue"), "state": holder.get("state")})
 
     def _apply(self, a) -> None:
         self.motion.set_velocity(a[:3] / ACTION_DT)
@@ -304,4 +305,6 @@ class PolicyRuntime:
             "perception": self.log_per, "startup": getattr(self, "startup", None), "stop_reason": self.stop_reason,
             "safety": None if self.safety is None else self.safety.summary(),
             "motion": {**self.motion.lag_stats, "cart_clipped": self.motion.n_cart_clipped,
+                       "xcmd_leashed": self.motion.n_xcmd_leashed, "xcmd_leash_m": self.motion.xcmd_leash_m,
+                       "cart_unresolved": self.motion.n_cart_unresolved,
                        "joint_clipped": self.motion.limiter.n_clipped}}

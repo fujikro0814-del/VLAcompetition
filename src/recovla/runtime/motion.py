@@ -30,8 +30,13 @@ CART_MARGIN = 0.95
 
 
 class Motion:
-    def __init__(self, setup, limiter_enabled: bool = True, margin: float = 0.99, ik_on: str = "commanded"):
+    def __init__(self, setup, limiter_enabled: bool = True, margin: float = 0.99, ik_on: str = "commanded",
+                 xcmd_leash_m: float = None, cart_margin: float = None):
         self.setup = setup
+        self.cart_margin = CART_MARGIN if not cart_margin else float(cart_margin)
+        # 参照位置の綱（0121 の B1）: x_cmd を指令の姿勢の手先から xcmd_leash_m の中に留める。None なら留めない
+        self.xcmd_leash_m = None if not xcmd_leash_m else float(xcmd_leash_m)
+        self.n_xcmd_leashed = 0
         self.ik_on = ik_on                         # "measured" は診断だけ（旧版と同じく測った関節角で IK を解く）
         self.model = robot_model.load(setup.robot_xml)
         self.data = mujoco.MjData(self.model)
@@ -57,6 +62,7 @@ class Motion:
         self._fk_data = mujoco.MjData(self.model)
         self._x_hist = []
         self.n_cart_clipped = 0
+        self.n_cart_unresolved = 0
         self.lag_stats = {"n": 0, "sum": 0.0, "max": 0.0, "over_5mrad": 0, "over_20mrad": 0, "leash": 0}
 
     # ------------------------------------------------------------------ kinematics
@@ -122,6 +128,13 @@ class Motion:
         IK は指令の姿勢の上で解く（実機の関節の位置の制御は 1 kHz で指令をよく追うので、関節の位置の指令の経路では普通の
         作り）。測った関節角で解くと、制限層の加速度の上限の遅れがサーボの遅れと重なって振動した（学習用のシード 59012、
         待機位置から始める配置）。測った関節角は、指令が先へ行き過ぎないための綱（leash、流用元と同じ 0.10 rad）にだけ使う。"""
+        if self.xcmd_leash_m is not None:
+            x_c = self._fk_hand(self.limiter.q)
+            d = self.integrator.x_cmd - x_c
+            n = float(np.linalg.norm(d))
+            if n > self.xcmd_leash_m:
+                self.integrator.x_cmd = x_c + d * (self.xcmd_leash_m / n)
+                self.n_xcmd_leashed += 1
         self._load_state(self.limiter.q if self.ik_on == "commanded" else joints.q)
         self.controller.update(self.integrator)                    # 追従器 → IK（q_des を data.ctrl に書く）
         leash = self.controller.q_des_leash
@@ -160,7 +173,7 @@ class Motion:
         h = self._x_hist
         if len(h) < 3:
             return True
-        dt, mg = L.DT, CART_MARGIN
+        dt, mg = L.DT, self.cart_margin
         v = (x_new - h[-1]) / dt
         a = (x_new - 2 * h[-1] + h[-2]) / dt ** 2
         j = (x_new - 3 * h[-1] + 3 * h[-2] - h[-3]) / dt ** 3
@@ -177,7 +190,20 @@ class Motion:
         v_brake = lim.brake()
         self.n_cart_clipped += 1
         if not self._cart_ok(self._fk_hand(lim.position_of(v_brake))):
-            return v_brake
+            # 減速の側でも超える（関節の躍度の上限いっぱいの減速が、姿勢によって手先の躍度の上限を超える）: 減速の躍度の項を縮め、
+            # 手先の上限を満たすいちばん強い減速を探す（0121 の G3 の調べ。s = 0 は関節の躍度 0＝加速度を保つ）
+            v_hold = lim.shrink(v_brake, 0.0)
+            if not self._cart_ok(self._fk_hand(lim.position_of(v_hold))):
+                self.n_cart_unresolved += 1
+                return v_hold
+            lo, hi = 0.0, 1.0
+            for _ in range(12):
+                mid = 0.5 * (lo + hi)
+                if self._cart_ok(self._fk_hand(lim.position_of(lim.shrink(v_brake, mid)))):
+                    lo = mid
+                else:
+                    hi = mid
+            return lim.shrink(v_brake, lo)
         lo, hi = 0.0, 1.0
         for _ in range(12):
             mid = 0.5 * (lo + hi)
