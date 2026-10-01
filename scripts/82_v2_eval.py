@@ -31,8 +31,11 @@ V2_TRAIN = {"R1v2": "train_R1v2_20260929-230928_20260929-230928", "N1v2": "train
 for _m, _d in V2_TRAIN.items():
     for _s in (20000, 30000):
         CKPT[f"{_m}_{_s}"] = f"outputs/train/{_d}/checkpoints/{_s:06d}/pretrained_model"
-CKPT["R1v2"] = CKPT["R1v2_20000"]       # 保存点の選択の結果（docs/results/ckpt_decision_v2_*.json）: どちらも 2 万手
-CKPT["N1v2"] = CKPT["N1v2_20000"]
+# 保存点の選択の結果。G3 の直しの後に新しい検証用の種（199640〜）で同じ決まりのまま選び直した（0124、
+# docs/results/ckpt_decision_v2_*_g3fix.json）: R1v2 は 2 万手（11 対 8）、N1v2 は同数（6 対 6）なので 3 万手。
+# 直す前の選択（ckpt_decision_v2_*.json、どちらも 2 万手）は G3 の違反を含んでいたので使わない
+CKPT["R1v2"] = CKPT["R1v2_20000"]
+CKPT["N1v2"] = CKPT["N1v2_30000"]
 
 
 def trial_list(spec: str) -> list:
