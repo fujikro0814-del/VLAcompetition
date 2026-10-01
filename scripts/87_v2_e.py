@@ -163,6 +163,9 @@ def cmd_report(a) -> None:
     st = STAGES[a.stage]
     base = OUT / "v2eval" / st["experiment"]
     have = [s for s in st["sets"] if (base / f"{s}_nat").is_dir()]
+    from recovla.eval import gate
+    gate.require([base / f"{s}_{p}" for s in have for p in PARTS if (base / f"{s}_{p}").is_dir()],
+                 f"最終評価の集計（{st['experiment']}）")
 
     def rows(s, part):
         d = base / f"{s}_{part}"
@@ -209,12 +212,14 @@ def cmd_safety_decide(a) -> None:
     from recovla.eval import report as R
     e50 = _e50()
     model = STAGES[a.stage]["sets"][STAGES[a.stage]["final"]][0]
-    exp = f"V2SF_{a.stage}"
+    exp = a.experiment or f"V2SF_{a.stage}"
     for cond, extra in (("on", []), ("off", ["--no-safety"])):
         d = OUT / "v2eval" / exp / cond
         if not (d / "run.json").is_file():
             subprocess.run([sys.executable, str(config.ROOT / "scripts" / "82_v2_eval.py"), "run", "--experiment", exp,
                             "--condition", cond, "--model", model, "--trials", a.trials, *extra], cwd=config.ROOT, check=True)
+    from recovla.eval import gate
+    gsum = gate.require([OUT / "v2eval" / exp / c for c in ("on", "off")], f"安全フィルタの判定（{exp}）")
     X = {(r["seed"], r["target"]): r for r in R.collect([OUT / "v2eval" / exp / "on"])}
     Y = {(r["seed"], r["target"]): r for r in R.collect([OUT / "v2eval" / exp / "off"])}
     succ = e50.paired_binary(X, Y, e50.SUCC)
@@ -222,9 +227,9 @@ def cmd_safety_decide(a) -> None:
     drop = (succ["y_rate"] - succ["x_rate"]) * 100
     res = {"stage": a.stage, "model": model, "trials": a.trials, "rule": "あり の成功が なし より 3 ポイント以上低ければ主系から外す（0107 の 5）",
            "success": succ, "contact": contact, "drop_points": drop, "keep_in_main": drop < 3.0,
-           "written": time.strftime("%Y-%m-%d %H:%M:%S")}
+           "experiment": exp, "g_audit": gsum, "written": time.strftime("%Y-%m-%d %H:%M:%S")}
     RES.mkdir(parents=True, exist_ok=True)
-    (RES / f"v2_safety_main_{a.stage}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
+    (RES / f"v2_safety_main_{a.stage}{'' if exp == f'V2SF_{a.stage}' else '_' + exp}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
     print(json.dumps(res, ensure_ascii=False, indent=1, default=float))
 
 
@@ -243,6 +248,7 @@ def main(argv=None) -> int:
     p = sub.add_parser("safety-decide")
     p.add_argument("--stage", required=True, choices=sorted(STAGES))
     p.add_argument("--trials", default="natural:199800:33")
+    p.add_argument("--experiment", default=None, help="出力の実験名（既定 V2SF_<段階>。回し直しで前の判定を上書きしない）")
     a = ap.parse_args(argv)
     {"plan": cmd_plan, "run": cmd_run, "report": cmd_report, "safety-decide": cmd_safety_decide}[a.cmd](a)
     return 0

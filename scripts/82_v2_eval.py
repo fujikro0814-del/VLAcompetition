@@ -168,6 +168,14 @@ def cmd_run(a) -> None:
                                                "wall_s": round(time.perf_counter() - t0, 1),
                                                "written": time.strftime("%Y-%m-%d %H:%M:%S")}, ensure_ascii=False, indent=1),
                                    encoding="utf-8")
+    _gate_mark(out)
+
+
+def _gate_mark(out) -> None:
+    from recovla.eval import gate
+    s = gate.mark(out)
+    print(f"[gate] {out.name}: {'G を満たす' if s['met'] else 'G を満たさない'}（G1 {s['g1_trials']} 本・G2 {s['g2_trials']} 本・"
+          f"G3 {s['g3_trials']} 本 / {s['trials']} 本）", flush=True)
 
 
 def cmd_task(a) -> None:
@@ -236,6 +244,7 @@ def cmd_task(a) -> None:
     (out / "run.json").write_text(json.dumps({"n": len(rows), "all_three": sum(r["all_three"] for r in rows),
                                                "text": a.text, "model": a.model, "trials": a.trials}, ensure_ascii=False,
                                               indent=1), encoding="utf-8")
+    _gate_mark(out)
 
 
 def cmd_e6(a) -> None:
@@ -318,7 +327,9 @@ def cmd_e6(a) -> None:
 def cmd_decide_ckpt(a) -> None:
     """段階 2 の保存点の選択（0117 で了承）。検証用の種の同じ配置で 2 万手と 3 万手を比べ、成功数の多い方、同数なら 3 万手
     （旧版の 41_results.py decide-ckpt と同じ決まり）。"""
+    from recovla.eval import gate
     out = {}
+    gsum = gate.require([OUT / a.experiment / f"{a.model}_{s}" for s in (20000, 30000)], f"保存点の選択（{a.model}）")
     for step in (20000, 30000):
         d = OUT / a.experiment / f"{a.model}_{step}"
         rs = [json.loads(p.read_text(encoding="utf-8")) for p in sorted(d.glob("trial_*.json"))]
@@ -326,10 +337,11 @@ def cmd_decide_ckpt(a) -> None:
     chosen = 20000 if out[20000]["successes"] > out[30000]["successes"] else 30000
     res = {"model": a.model, "rule": "成功数の多い方、同数なら 30000 手（旧版と同じ決まり）", "candidates": out,
            "same_seeds": out[20000]["seeds"] == out[30000]["seeds"], "chosen_step": chosen,
-           "checkpoint": CKPT[f"{a.model}_{chosen}"], "written": time.strftime("%Y-%m-%d %H:%M:%S")}
+           "checkpoint": CKPT[f"{a.model}_{chosen}"], "experiment": a.experiment, "g_audit": gsum,
+           "written": time.strftime("%Y-%m-%d %H:%M:%S")}
     dst = config.ROOT / "docs" / "results"
     dst.mkdir(parents=True, exist_ok=True)
-    (dst / f"ckpt_decision_v2_{a.model}.json").write_text(json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8")
+    (dst / f"ckpt_decision_v2_{a.model}{a.suffix}.json").write_text(json.dumps(res, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(res, ensure_ascii=False, indent=1))
 
 
@@ -367,6 +379,7 @@ def main(argv=None) -> int:
     p = sub.add_parser("decide-ckpt")
     p.add_argument("--experiment", default="V2SEL")
     p.add_argument("--model", required=True, choices=sorted(V2_TRAIN))
+    p.add_argument("--suffix", default="", help="結果のファイル名の後ろ（回し直しで前の判定を上書きしない）")
     a = ap.parse_args(argv)
     {"run": cmd_run, "task": cmd_task, "e6": cmd_e6, "decide-ckpt": cmd_decide_ckpt}[a.cmd](a)
     return 0

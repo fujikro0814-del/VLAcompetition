@@ -31,7 +31,7 @@ def test_goals_rejects_edited_copy(tmp_path, monkeypatch):
         goals.fingerprint(tmp_path)
     (tmp_path / goals.GOALS_PATH).write_bytes(real)
     assert goals.fingerprint(tmp_path)["version"] == 2
-    monkeypatch.setattr(goals, "_tags", lambda root: ["goals-v3"])     # 変更履歴に v3 の行がない
+    monkeypatch.setattr(goals, "_tags", lambda root: ["goals-v99"])    # 変更履歴に v99 の行がない
     with pytest.raises(goals.GoalsMismatch):
         goals.fingerprint(tmp_path)
 
