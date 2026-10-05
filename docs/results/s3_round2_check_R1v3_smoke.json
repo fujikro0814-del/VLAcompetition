@@ -1,0 +1,130 @@
+{
+ "model": "R1v3",
+ "runs": [
+  "outputs\\gen\\S3H_smoke_R1v3_20261006-024427"
+ ],
+ "attempts": 6,
+ "saved": 4,
+ "discards": {
+  "cube_moved": 2
+ },
+ "triggers_all": {
+  "close_off": 3,
+  "stalled": 1,
+  "random": 2
+ },
+ "triggers_saved": {
+  "stalled": 1,
+  "random": 2,
+  "close_off": 1
+ },
+ "boundary_ok": true,
+ "g3_violations_saved": 0,
+ "g3_discards": 0,
+ "state_at_handover_saved": {
+  "tip_to_cube_xy": {
+   "median": 0.012641547512513524,
+   "p10": 0.008816532533588418,
+   "p90": 0.017743458916531545
+  },
+  "hand_z_minus_grasp_z": {
+   "median": 0.023379239247176345,
+   "p10": 0.006089299790778437,
+   "p90": 0.06454260471801049
+  },
+  "lead_xy": {
+   "median": 0.0020337273693907454,
+   "p10": 0.0014666925787537501,
+   "p90": 0.00479032441080419
+  },
+  "t": {
+   "median": 6.1,
+   "p10": 5.83,
+   "p90": 6.37
+  }
+ },
+ "phase_at_handover_saved": {
+  "approach": 4
+ },
+ "rerun": [
+  {
+   "name": "H_49032_green_r0",
+   "same_handover": true,
+   "saved_again": true,
+   "n_frames": [
+    353,
+    353
+   ],
+   "truth_identical": {
+    "cube_pos": true,
+    "cube_quat": true,
+    "fingertip": true,
+    "x_des": true,
+    "step_x_des": true,
+    "step_gripper_cmd": true,
+    "gripper_closed": true,
+    "phase": true,
+    "step": true
+   },
+   "sensed_max_abs_diff": {
+    "ee_pos": 0.0003357724983087118,
+    "joints": 0.000525975364644049,
+    "fingers": 0.0001999999999999988
+   },
+   "arrays_identical": true
+  },
+  {
+   "name": "H_49033_red_r0",
+   "same_handover": true,
+   "saved_again": true,
+   "n_frames": [
+    297,
+    297
+   ],
+   "truth_identical": {
+    "cube_pos": true,
+    "cube_quat": true,
+    "fingertip": true,
+    "x_des": true,
+    "step_x_des": true,
+    "step_gripper_cmd": true,
+    "gripper_closed": true,
+    "phase": true,
+    "step": true
+   },
+   "sensed_max_abs_diff": {
+    "ee_pos": 0.0002226539565348129,
+    "joints": 0.0006526142155991212,
+    "fingers": 0.0002500000000000002
+   },
+   "arrays_identical": true
+  },
+  {
+   "name": "H_49034_blue_r0",
+   "same_handover": true,
+   "saved_again": true,
+   "n_frames": [
+    360,
+    360
+   ],
+   "truth_identical": {
+    "cube_pos": true,
+    "cube_quat": true,
+    "fingertip": true,
+    "x_des": true,
+    "step_x_des": true,
+    "step_gripper_cmd": true,
+    "gripper_closed": true,
+    "phase": true,
+    "step": true
+   },
+   "sensed_max_abs_diff": {
+    "ee_pos": 0.0002815542435071622,
+    "joints": 0.0004606919354756267,
+    "fingers": 0.0001999999999999988
+   },
+   "arrays_identical": true
+  }
+ ],
+ "written": "2026-10-06 02:50:52"
+}

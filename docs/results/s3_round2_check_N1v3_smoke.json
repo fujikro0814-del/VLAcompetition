@@ -1,0 +1,105 @@
+{
+ "model": "N1v3",
+ "runs": [
+  "outputs\\gen\\S3H_smoke_N1v3_20261006-024427"
+ ],
+ "attempts": 6,
+ "saved": 2,
+ "discards": {
+  "success_before_handover": 1,
+  "cube_moved": 3
+ },
+ "triggers_all": {
+  "None": 1,
+  "close_off": 2,
+  "stalled": 1,
+  "random": 2
+ },
+ "triggers_saved": {
+  "random": 2
+ },
+ "boundary_ok": true,
+ "g3_violations_saved": 0,
+ "g3_discards": 0,
+ "state_at_handover_saved": {
+  "tip_to_cube_xy": {
+   "median": 0.010016712776628125,
+   "p10": 0.004434359781212788,
+   "p90": 0.015599065772043463
+  },
+  "hand_z_minus_grasp_z": {
+   "median": 0.04926885172320915,
+   "p10": 0.0371275175048828,
+   "p90": 0.061410185941535494
+  },
+  "lead_xy": {
+   "median": 0.0022604525084872137,
+   "p10": 0.0020228459302164075,
+   "p90": 0.00249805908675802
+  },
+  "t": {
+   "median": 6.1,
+   "p10": 5.859999999999999,
+   "p90": 6.340000000000001
+  }
+ },
+ "phase_at_handover_saved": {
+  "approach": 1,
+  "descend": 1
+ },
+ "rerun": [
+  {
+   "name": "H_49033_red_r0",
+   "same_handover": true,
+   "saved_again": true,
+   "n_frames": [
+    299,
+    299
+   ],
+   "truth_identical": {
+    "cube_pos": true,
+    "cube_quat": true,
+    "fingertip": true,
+    "x_des": true,
+    "step_x_des": true,
+    "step_gripper_cmd": true,
+    "gripper_closed": true,
+    "phase": true,
+    "step": true
+   },
+   "sensed_max_abs_diff": {
+    "ee_pos": 0.00022323128259152392,
+    "joints": 0.0006526142155991177,
+    "fingers": 0.0002500000000000002
+   },
+   "arrays_identical": true
+  },
+  {
+   "name": "H_49035_green_r0",
+   "same_handover": true,
+   "saved_again": true,
+   "n_frames": [
+    263,
+    263
+   ],
+   "truth_identical": {
+    "cube_pos": true,
+    "cube_quat": true,
+    "fingertip": true,
+    "x_des": true,
+    "step_x_des": true,
+    "step_gripper_cmd": true,
+    "gripper_closed": true,
+    "phase": true,
+    "step": true
+   },
+   "sensed_max_abs_diff": {
+    "ee_pos": 0.00025481090231671555,
+    "joints": 0.0004989360071823989,
+    "fingers": 0.0002500000000000002
+   },
+   "arrays_identical": true
+  }
+ ],
+ "written": "2026-10-06 02:50:05"
+}
