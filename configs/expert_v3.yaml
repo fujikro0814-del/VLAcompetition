@@ -4,7 +4,7 @@
 expert:
   final_approach:
     radius_m: 0.12      # x_des から水平の狙い（把持点）まで、この距離以内なら水平の速さの上限を xy にする
-    xy: 0.08            # [m/s]（speed_scale を掛ける）。先行 ≒ 速さ × 0.2 s で約 16 mm
+    xy: 0.07            # [m/s]（speed_scale を掛ける）。0.08 では試しの先行 20.6 mm で関門（≤ 20 mm）に届かず、0.07 に下げた（0131）
     blend_m: 0.06       # radius_m から radius_m + blend_m までは、上限を基準の速さから直線でつなぐ（速さを跳ばさない）
     z_band_m: 0.05      # 把持の高さからこの高さ以内なら、z の速さの上限を z にする（近づく・下りる・閉じる段だけ）
     z: 0.045            # [m/s]（speed_scale を掛ける）
