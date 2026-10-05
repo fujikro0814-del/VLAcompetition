@@ -1,0 +1,101 @@
+{
+  "what": "fast_query の値の一致（0126 の 4）",
+  "chunk_size": 50,
+  "results": [
+    {
+      "dataset": "C:\\PAI\\recovery_vla\\outputs\\datasets\\R1v2_20260929-205251",
+      "frames": 50999,
+      "n": 1000,
+      "seed": 20261005,
+      "keys": [
+        "action",
+        "observation.images.image",
+        "observation.images.image2",
+        "observation.state"
+      ],
+      "dtype": {
+        "observation.images.image": "torch.float32",
+        "observation.images.image2": "torch.float32",
+        "observation.state": "torch.float32",
+        "action": "torch.float32"
+      },
+      "shape": {
+        "observation.images.image": [
+          1,
+          3,
+          256,
+          256
+        ],
+        "observation.images.image2": [
+          1,
+          3,
+          256,
+          256
+        ],
+        "observation.state": [
+          1,
+          17
+        ],
+        "action": [
+          50,
+          7
+        ]
+      },
+      "mismatch": 0,
+      "mismatch_first": [],
+      "max_abs_diff": 0.0,
+      "original_ms_median": 175.3562999992937,
+      "fast_ms_median": 8.266550000371353,
+      "table_build_s": 0.5691483999999036,
+      "pass": true
+    },
+    {
+      "dataset": "C:\\PAI\\recovery_vla\\outputs\\datasets\\N1v2_20260929-205251",
+      "frames": 52436,
+      "n": 1000,
+      "seed": 20261005,
+      "keys": [
+        "action",
+        "observation.images.image",
+        "observation.images.image2",
+        "observation.state"
+      ],
+      "dtype": {
+        "observation.images.image": "torch.float32",
+        "observation.images.image2": "torch.float32",
+        "observation.state": "torch.float32",
+        "action": "torch.float32"
+      },
+      "shape": {
+        "observation.images.image": [
+          1,
+          3,
+          256,
+          256
+        ],
+        "observation.images.image2": [
+          1,
+          3,
+          256,
+          256
+        ],
+        "observation.state": [
+          1,
+          17
+        ],
+        "action": [
+          50,
+          7
+        ]
+      },
+      "mismatch": 0,
+      "mismatch_first": [],
+      "max_abs_diff": 0.0,
+      "original_ms_median": 174.88150000008318,
+      "fast_ms_median": 7.256400000187568,
+      "table_build_s": 0.5450022000004537,
+      "pass": true
+    }
+  ],
+  "pass": true
+}

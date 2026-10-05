@@ -110,6 +110,7 @@ def cmd_run(a) -> None:
     world = WorldRig(render=False, cfg=CFG, gravcomp=False if a.diag_no_gravcomp else None)
     suite = SensorSuite(world.model, CFG)
     rt_cfg, act = CFG["runtime"], CFG["actuation"]
+    exec_interval = int(a.exec_interval or rt_cfg["exec_interval"])      # 段階 3 の 0 周目で選び直す（0126 の 2）
     cache = {}
 
     def make_runtime(io, setup):
@@ -136,7 +137,7 @@ def cmd_run(a) -> None:
         if a.grip_gate:
             gate["enabled"] = True
         return PolicyRuntime(io, setup, pol, perception=per, safety=sf, checks=rtv["checks"], gripper_gate=gate,
-                             tip_offset=float(CFG["sim"]["fingertip_offset"]), mode=a.mode, s=int(rt_cfg["exec_interval"]), d_init=int(rt_cfg["delay_steps"]),
+                             tip_offset=float(CFG["sim"]["fingertip_offset"]), mode=a.mode, s=exec_interval, d_init=int(rt_cfg["delay_steps"]),
                              rtc_horizon=int(rt_cfg["rtc_guidance_horizon"]),
                              motion=Motion(setup, limiter_enabled=not a.no_limiter, margin=float(act["limiter_margin"]),
                                            ik_on=a.diag_ik, xcmd_leash_m=a.xcmd_leash or rtv.get("xcmd_leash_m"),
@@ -149,7 +150,7 @@ def cmd_run(a) -> None:
         w0 = time.perf_counter()
         meta, arrays, rlog = run_policy_trial(world, suite, make_runtime, lay, tgt, seed, inducer=ind, cfg=CFG)
         meta.update({"trial": i, "experiment": a.experiment, "condition": a.condition, "model": {"name": a.model}, "ablate": a.ablate,
-                     "runtime": {"mode": a.mode, "exec_interval": int(rt_cfg["exec_interval"]), "delay_steps": "sampled",
+                     "runtime": {"mode": a.mode, "exec_interval": exec_interval, "delay_steps": "sampled",
                                  "safety_filter": not a.no_safety,
                                  "gripper_gate": bool(a.grip_gate or (CFG["runtime_v2"].get("gripper_gate") or {}).get("enabled")),
                                  "xcmd_leash_m": a.xcmd_leash or CFG["runtime_v2"].get("xcmd_leash_m"),
@@ -166,7 +167,8 @@ def cmd_run(a) -> None:
               f"wall {meta['wall_s']}", flush=True)
     suite.close()
     (out / "run.json").write_text(json.dumps({"experiment": a.experiment, "condition": a.condition, "model": a.model,
-                                               "mode": a.mode, "trials": a.trials, "induce": a.induce, "n": len(rows),
+                                               "mode": a.mode, "exec_interval": exec_interval, "safety": not a.no_safety,
+                                               "trials": a.trials, "induce": a.induce, "n": len(rows),
                                                "successes": sum(r["success"] for r in rows),
                                                "wall_s": round(time.perf_counter() - t0, 1),
                                                "written": time.strftime("%Y-%m-%d %H:%M:%S")}, ensure_ascii=False, indent=1),
@@ -357,6 +359,7 @@ def main(argv=None) -> int:
     p.add_argument("--model", required=True, choices=sorted(CKPT))
     p.add_argument("--trials", required=True)
     p.add_argument("--mode", default="naive", choices=("naive", "sync", "rtc"))
+    p.add_argument("--exec-interval", type=int, default=None, help="塊から実行する行数 s（省略時は設定の値 10）。段階 3（0126）")
     p.add_argument("--induce", default=None)
     p.add_argument("--no-limiter", action="store_true")
     p.add_argument("--no-safety", action="store_true", help="安全フィルタを切る（E5 の比べる側）")

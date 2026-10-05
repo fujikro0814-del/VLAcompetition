@@ -45,7 +45,9 @@ Config JSON (unknown keys are rejected):
                (recovla.policy.train_wrapped). Board 0038/0040
   cue_augment  {"prob": 0.5, "max_m": 0.02}: shift the target cue (x, y) of each training sample with
                probability prob by U(0, max_m) in a uniform direction (board 0054). Actions unchanged
-  With lora, first_frames_weight or cue_augment, lerobot-train runs through recovla.policy.train_wrapped, which also
+  fast_query   true: read the action chunks from a per-column table instead of whole rows (recovla.policy.train_wrapped
+               --fast-query; same values, stage 3 round 0, board 0126)
+  With lora, first_frames_weight, cue_augment or fast_query, lerobot-train runs through recovla.policy.train_wrapped, which also
   writes the in-memory policy's output on a fixed input (recovla_reference.pt) at every save.
   init_policy  path of a trained pretrained_model folder to continue from (R2・R1+ from R1, B_提案書 §10) instead of
                the smolvla_libero snapshot. The optimizer starts fresh (no --resume). After training, the normalizer
@@ -82,6 +84,7 @@ _CFG = config.load()
 LAUNCHER_VERSION = 4         # 2: log_freq, log summary, loss.csv/png, code version (2026-09-17)
                               # 3: lora, first_frames_weight, train_wrapped (2026-09-26, board 0040)
                               # 4: init_policy, lr_schedule, stats_check (2026-09-27, B_提案書 §10, board 0079)
+                              # (fast_query は値を変えないので版は上げない。2026-10-05、0126)
 DEFAULT_LOG_FREQ = int(_CFG["train"]["log_freq"])
 # lerobot logs mem_gb = torch.cuda.max_memory_allocated() / 1024**3 per logging interval, i.e. GiB of
 # allocated tensors (the CUDA caching allocator reserves somewhat more).
@@ -104,7 +107,7 @@ SCOPE_FLAGS = {"expert": ["--policy.train_expert_only=true", "--policy.freeze_vi
 MAX_BATCH_14GIB = {"expert": 62, "full": 12}                 # Step C, per-process cap 14 GiB
 REQUIRED = ("dataset", "train_scope", "batch_size", "steps")
 OPTIONAL = ("save_freq", "seed", "log_freq", "num_workers", "extra_args", "note", "allow_batch_over_14gib",
-            "lora", "first_frames_weight", "cue_augment", "init_policy", "lr_schedule")
+            "lora", "first_frames_weight", "cue_augment", "init_policy", "lr_schedule", "fast_query")
 OWNED = ("--policy.path", "--policy.push_to_hub", "--policy.repo_id", "--policy.device",
          "--policy.train_expert_only", "--policy.freeze_vision_encoder", "--dataset.root",
          "--dataset.repo_id", "--rename_map", "--output_dir", "--job_name", "--batch_size", "--steps",
@@ -157,7 +160,7 @@ def check_cue_augment(path, c) -> None:
 
 
 def wrapped(cfg) -> bool:
-    return "lora" in cfg or "first_frames_weight" in cfg or "cue_augment" in cfg
+    return "lora" in cfg or "first_frames_weight" in cfg or "cue_augment" in cfg or cfg.get("fast_query") is True
 
 
 def wrapper_prefix(cfg, python=None) -> list:
@@ -169,6 +172,8 @@ def wrapper_prefix(cfg, python=None) -> list:
     c = cfg.get("cue_augment")
     if c:
         out += [f"--cue-aug-prob={c['prob']}", f"--cue-aug-max-m={c['max_m']}"]
+    if cfg.get("fast_query") is True:
+        out.append("--fast-query")
     return out + ["--"]
 
 
@@ -212,6 +217,8 @@ def load_config(path) -> dict:
         check_first_frames_weight(path, cfg["first_frames_weight"])
     if "cue_augment" in cfg:
         check_cue_augment(path, cfg["cue_augment"])
+    if "fast_query" in cfg and not isinstance(cfg["fast_query"], bool):
+        raise LaunchError(f"{path}: fast_query must be true or false, got {cfg['fast_query']!r}")
     if "lr_schedule" in cfg:
         s = cfg["lr_schedule"]
         if (not isinstance(s, dict) or set(s) != set(LR_KEYS) or not 0 < float(s["peak"]) < 1

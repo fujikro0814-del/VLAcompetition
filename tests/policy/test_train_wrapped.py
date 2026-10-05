@@ -161,6 +161,45 @@ def test_cue_augment_touches_only_cue_dims_in_normalized_space():
     assert np.allclose(d[:, 16].numpy(), np.sin(ang) * mag / 0.1, atol=1e-6)
 
 
+def test_launcher_passes_fast_query(tmp_path):
+    cfg = config(tmp_path, fast_query=True)
+    assert tl.wrapped(cfg)
+    pre = tl.wrapper_prefix(cfg, python="py")
+    assert "--fast-query" in pre and pre[-1] == "--"
+    assert not tl.wrapped(config(tmp_path, fast_query=False))
+    with pytest.raises(tl.LaunchError, match="fast_query"):
+        config(tmp_path, fast_query=1)
+
+
+def test_fast_query_matches_lerobot_path():
+    """行動・状態の表からの読み出しが、LeRobot の元の経路と型・形・値まで同じ（0126 の 4）。画像の列は元の経路へ回す。"""
+    import types
+    import datasets
+    import torch
+    from lerobot.datasets.dataset_reader import DatasetReader
+    from lerobot.datasets.io_utils import hf_transform_to_torch
+    from recovla.policy import train_wrapped as tw
+    rng = np.random.default_rng(3)
+    n = 40
+    hf = datasets.Dataset.from_dict({"action": rng.normal(size=(n, 7)).tolist(),
+                                     "observation.state": rng.normal(size=(n, 17)).tolist(),
+                                     "index": list(range(n)), "flag": rng.integers(0, 5, n).tolist()})
+    hf.set_transform(hf_transform_to_torch)
+    meta = types.SimpleNamespace(video_keys=[], features={"action": {"dtype": "float32"},
+                                                           "observation.state": {"dtype": "float32"},
+                                                           "flag": {"dtype": "int64"}})
+    reader = types.SimpleNamespace(hf_dataset=hf, _meta=meta, _absolute_to_relative_idx=None)
+    q = {"action": [5, 6, 7, 7, 7], "observation.state": [9], "flag": [0, 39]}
+    want = DatasetReader._query_hf_dataset(reader, q)
+    got = tw.fast_query_hf_dataset(reader, q)
+    assert set(got) == set(want)
+    for k in want:
+        assert got[k].dtype == want[k].dtype and got[k].shape == want[k].shape and torch.equal(got[k], want[k])
+    reader._absolute_to_relative_idx = {i + 100: i for i in range(n)}            # エピソードを選んだときの番号の付け替え
+    q2 = {"action": [110, 111]}
+    assert torch.equal(tw.fast_query_hf_dataset(reader, q2)["action"], DatasetReader._query_hf_dataset(reader, q2)["action"])
+
+
 def test_launcher_passes_cue_augment(tmp_path):
     cfg = config(tmp_path, cue_augment={"prob": 0.5, "max_m": 0.02})
     assert tl.wrapped(cfg)

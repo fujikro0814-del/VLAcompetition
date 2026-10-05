@@ -13,6 +13,10 @@
    決まった雑音を与えた塊（predict_action_chunk、後処理の前）を保存点の pretrained_model/recovla_reference.pt に
    書く。PEFT のときは、アダプタを切った出力も書く（対照）。推論の経路で読み込んだ方策の出力がこれと一致すれば、
    保存と読み込みで LoRA の差分が失われていない（決裁 0040 の条件 2）
+4. 行動の塊の読み出しの高速化（--fast-query。段階 3 の 0 周目、0126 の 4）: LeRobot の DatasetReader._query_hf_dataset は
+   hf_dataset[key][50 個] で行全体（画像を含む）を読んで変換するので、v2 のデータで 1 試料 160 ms かかる。非動画の
+   列を、読み出しの最初に一度だけ同じ変換（torch.tensor）で表にしておき、そこから引く。値は元の経路と同じ
+   （scripts/91_fast_query_check.py で 1,000 試料を比べる）
 """
 import argparse
 import json
@@ -134,6 +138,49 @@ class WeightedEpisodeAwareSampler(EpisodeAwareSampler):
                 "drawn_first_share": (self.drawn_first / self.drawn) if self.drawn else None}
 
 
+_ORIGINAL_QUERY = None
+IMAGE_DTYPES = ("image", "video")
+
+
+def fast_query_hf_dataset(self, query_indices: dict) -> dict:
+    """DatasetReader._query_hf_dataset の置き換え（モジュールの説明の 4）。画像でない列（行動・状態など）だけを
+    表にして引く。画像の列（観測の 1 こま）は元の経路のまま。列の表は hf_dataset ごとに作り直す。"""
+    import torch
+    cache = self.__dict__.get("_recovla_columns")
+    if cache is None or cache[0] is not self.hf_dataset:
+        cache = (self.hf_dataset, {})
+        self._recovla_columns = cache
+    result, rest = {}, {}
+    for key, q_idx in query_indices.items():
+        if key in self._meta.video_keys:
+            continue
+        if self._meta.features.get(key, {}).get("dtype") in IMAGE_DTYPES:
+            rest[key] = q_idx
+            continue
+        rel = q_idx if self._absolute_to_relative_idx is None else [self._absolute_to_relative_idx[i] for i in q_idx]
+        table = cache[1].get(key)
+        if table is None:
+            table = torch.stack([torch.tensor(x) for x in self.hf_dataset.with_format(None).select_columns([key])[key][:]])
+            cache[1][key] = table
+        result[key] = table[torch.as_tensor(rel, dtype=torch.long)]
+    if rest:
+        result.update(_ORIGINAL_QUERY(self, rest))
+    return result
+
+
+def install_fast_query() -> None:
+    global _ORIGINAL_QUERY
+    from lerobot.datasets.dataset_reader import DatasetReader
+    if _ORIGINAL_QUERY is None:
+        _ORIGINAL_QUERY = DatasetReader._query_hf_dataset
+    DatasetReader._query_hf_dataset = fast_query_hf_dataset
+
+
+def fast_query_worker_init(worker_id: int) -> None:
+    """DataLoader の worker_init_fn。名前で pickle されるので、読み手のプロセスでこのモジュールが読み込まれて差し替わる。"""
+    install_fast_query()
+
+
 def write_reference(pretrained_dir: pathlib.Path, cfg, policy, preprocessor) -> dict:
     """学習中の方策の出力を保存点に書く（モジュールの説明の 2）。"""
     import torch
@@ -175,8 +222,20 @@ def main(argv=None) -> int:
     ap.add_argument("--reference", action="store_true")
     ap.add_argument("--cue-aug-prob", type=float, default=None)
     ap.add_argument("--cue-aug-max-m", type=float, default=None)
+    ap.add_argument("--fast-query", action="store_true")
     a = ap.parse_args(argv[:cut])
     import lerobot.scripts.lerobot_train as LT
+
+    if a.fast_query:
+        install_fast_query()            # 主プロセス（num_workers = 0 のとき）
+        original_worker_kwargs = LT._dataloader_worker_kwargs
+
+        def worker_kwargs(cfg):         # データの読み手（Windows では spawn で、差し替えを引き継がない）にも入れる
+            kw = original_worker_kwargs(cfg)
+            if cfg.num_workers > 0:
+                kw["worker_init_fn"] = fast_query_worker_init
+            return kw
+        LT._dataloader_worker_kwargs = worker_kwargs
 
     if a.cue_aug_prob is not None:
         aug = cue_augment_for(argv[cut + 1:], a.cue_aug_prob, a.cue_aug_max_m)
