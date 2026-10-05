@@ -54,7 +54,8 @@ def cmd_train(a) -> None:
     cfg = {"dataset": str(config.path(d["datasets"][base]["dataset"])), "train_scope": CFG["train"]["scope"],
            "batch_size": int(CFG["train"]["batch_size"]), "steps": steps,
            "save_freq": steps if a.smoke else save, "seed": int(CFG["train"]["seed"]),
-           "log_freq": int(CFG["train"]["log_freq"]), "num_workers": int(CFG["train"]["num_workers"]),
+           "log_freq": int(CFG["train"]["log_freq"]),
+           "num_workers": int(a.num_workers if a.num_workers is not None else CFG["train"]["num_workers"]),
            "note": f"{stage} {a.name}{' smoke' if a.smoke else ''}: {steps} steps on "
                    f"{d['datasets'][base]['dataset']} (target cue, cue_augment {'on' if dec['adopt'] else 'off'} per board 0054)"}
     if ver == "v3":
@@ -192,6 +193,9 @@ def main(argv=None) -> int:
     s = sub.add_parser("train")
     s.add_argument("name", choices=["R1", "N1", "R1v2", "N1v2", "R1v3", "N1v3"],
                    help="R1v2・N1v2: 段階 2（outputs/f/data_v2.json）。R1v3・N1v3: 段階 3 の 1 周目（data_v3.json、0126）")
+    s.add_argument("--num-workers", type=int, default=None,
+                   help="データの読み手の数（既定は設定の値）。値は変わらない（試料の並びは主プロセスの sampler が決める）。"
+                        "評価と同時に回すときの主記憶の不足を避ける（0135）")
     s.add_argument("--smoke", action="store_true", help="1000 手で最後まで通す")
     s = sub.add_parser("statscopy")
     s.add_argument("name", choices=["R2", "R1plus"])
