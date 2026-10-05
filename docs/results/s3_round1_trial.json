@@ -1,0 +1,249 @@
+{
+ "what": "段階 3 の 1 周目（案 1）の試しの生成の関門（0126 の 4・0128）",
+ "run": "outputs\\gen\\S3_trial_v3_20261005-132813",
+ "seeds": [
+  58300,
+  58329
+ ],
+ "lead_definition": "閉じる前で、手先（hand 原点）から目標の立方体までの水平の残りが 25〜120 mm、指先が立方体より\n60 mm 以上高いこまの、(x_des − 手先) の水平成分を「手先 → 立方体」の向きに射影した値 [mm]。エピソードごとの中央値の、\nエピソードについての中央値。比べる基準として、段階 2 の生成（F_data_v2）の通常の最初の 30 本も同じ定義で測る。",
+ "script_success": [
+  30,
+  30
+ ],
+ "lead_mm": {
+  "median": 18.458164495401782,
+  "per_episode": [
+   19.18796871221088,
+   18.960489792134936,
+   19.798689466853514,
+   16.929154747973726,
+   20.452366649723015,
+   17.359528048300078,
+   17.30413514342545,
+   16.982694918346905,
+   17.35238095620334,
+   19.727419119037567,
+   18.162833802709624,
+   17.588853759710588,
+   21.540346282905624,
+   18.59376367439512,
+   18.399572067737402,
+   18.571211948550697,
+   18.041069773102574,
+   15.814534069888426,
+   22.19780033037932,
+   18.71077746867425,
+   18.897867595364144,
+   19.620754482006774,
+   18.4992223106654,
+   18.285866023759695,
+   19.419974145778305,
+   17.69474714808004,
+   18.417106680138165,
+   19.195985756808888,
+   18.274305056433384,
+   18.272991135717586
+  ],
+  "n": 30
+ },
+ "reference_v2_lead_mm": {
+  "run": "outputs\\gen\\F_data_v2_20260929-205251",
+  "median": 41.93802513475754,
+  "n": 30
+ },
+ "duration_s": {
+  "median": 16.41,
+  "p95": 18.535999999999998
+ },
+ "g3_replay": [
+  {
+   "episode": "n_58300_green_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.21301763622275316,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58301_blue_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.22206236063253595,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58302_red_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.2070610004899068,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58303_green_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.18543530690260038,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58304_blue_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.17833128762740283,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58305_red_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.20151455980621102,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58306_green_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.18484561128786,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58307_blue_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.20373332860394372,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58308_red_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.16595114279269257,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58309_green_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.16284793831370756,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58310_blue_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.1783685430869574,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58311_red_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.17506599176625298,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58312_green_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.21367977767082616,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58313_blue_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.22760821780576804,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58314_red_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.17127557003781518,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58315_green_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.16772420849215666,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58316_blue_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.15086747628685848,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58317_red_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.20026494042515333,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58318_green_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.1862724904825298,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58319_blue_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.18763882808436338,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58320_red_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.18029686569300465,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58321_green_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.19241450539108748,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58322_blue_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.15434398870693133,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58323_red_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.21552499745992723,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58324_green_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.19997831272309635,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58325_blue_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.19958195056506167,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58326_red_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.16672098682874975,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58327_green_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.1798250919008889,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58328_blue_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.19197938174747375,
+   "g3_violations": 0
+  },
+  {
+   "episode": "n_58329_red_r0",
+   "replay_success": true,
+   "ee_rms_mm": 0.1776451299874455,
+   "g3_violations": 0
+  }
+ ],
+ "gates": {
+  "lead_median_le_20mm": true,
+  "script_success_ge_29": true,
+  "g3_violations_0": true,
+  "duration_median_le_20s": true
+ },
+ "stop_before_training": false,
+ "pass": true,
+ "written": "2026-10-05 13:37:12"
+}
