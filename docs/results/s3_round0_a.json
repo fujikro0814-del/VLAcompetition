@@ -1,0 +1,289 @@
+{
+ "what": "段階 3 の 0 周目 段 A（0126 の 4・0127）",
+ "experiment": "V3R0A",
+ "trials": "natural:199433:33",
+ "model": "R1v2_20000",
+ "successes": {
+  "N10_sf": 31,
+  "N10_nosf": 43,
+  "S10_sf": 47,
+  "S10_nosf": 65,
+  "N6_sf": 49
+ },
+ "n": {
+  "N10_sf": 99,
+  "N10_nosf": 99,
+  "S10_sf": 99,
+  "S10_nosf": 99,
+  "N6_sf": 99
+ },
+ "diff_vs_N10_sf": {
+  "S10_sf": 16,
+  "N6_sf": 18
+ },
+ "paired_vs_N10_sf": {
+  "S10_sf": {
+   "pairs": 99,
+   "x_rate": 0.47474747474747475,
+   "y_rate": 0.31313131313131315,
+   "x_only": 22,
+   "y_only": 6,
+   "both": 25,
+   "neither": 46,
+   "mcnemar_exact_p": 0.0037191659212112427,
+   "diff_95ci_newcombe": [
+    0.06054545086815474,
+    0.25714471981976816
+   ]
+  },
+  "N6_sf": {
+   "pairs": 99,
+   "x_rate": 0.494949494949495,
+   "y_rate": 0.31313131313131315,
+   "x_only": 29,
+   "y_only": 11,
+   "both": 20,
+   "neither": 39,
+   "mcnemar_exact_p": 0.006426576095691416,
+   "diff_95ci_newcombe": [
+    0.05976410599599412,
+    0.29580670960890554
+   ]
+  },
+  "N10_nosf": {
+   "pairs": 99,
+   "x_rate": 0.43434343434343436,
+   "y_rate": 0.31313131313131315,
+   "x_only": 18,
+   "y_only": 6,
+   "both": 25,
+   "neither": 50,
+   "mcnemar_exact_p": 0.022655844688415527,
+   "diff_95ci_newcombe": [
+    0.02668746931559879,
+    0.21217345376353489
+   ]
+  },
+  "S10_nosf": {
+   "pairs": 99,
+   "x_rate": 0.6565656565656566,
+   "y_rate": 0.31313131313131315,
+   "x_only": 39,
+   "y_only": 5,
+   "both": 26,
+   "neither": 29,
+   "mcnemar_exact_p": 1.4051624930289108e-07,
+   "diff_95ci_newcombe": [
+    0.2249216449121711,
+    0.4463582745237463
+   ]
+  }
+ },
+ "rule_l1": "候補 − N10_sf ≥ +5。N6 と S10 がどちらも通り差が 3 以内なら N6",
+ "passed": [
+  "S10_sf",
+  "N6_sf"
+ ],
+ "candidate": "N6",
+ "rule_l2": "0107 の 5: あり の成功が なし より 3.0 ポイント以上低ければ外す（N10 の対）",
+ "safety_pair": "N10",
+ "safety_success": {
+  "pairs": 99,
+  "x_rate": 0.31313131313131315,
+  "y_rate": 0.43434343434343436,
+  "x_only": 6,
+  "y_only": 18,
+  "both": 25,
+  "neither": 50,
+  "mcnemar_exact_p": 0.022655844688415527,
+  "diff_95ci_newcombe": [
+   -0.21217345376353489,
+   -0.02668746931559879
+  ]
+ },
+ "safety_contact": {
+  "pairs": 99,
+  "x_rate": 0.0,
+  "y_rate": 0.26262626262626265,
+  "x_only": 0,
+  "y_only": 26,
+  "both": 0,
+  "neither": 73,
+  "mcnemar_exact_p": 2.9802322387695312e-08,
+  "diff_95ci_newcombe": [
+   -0.3570062141051224,
+   -0.17736215774560715
+  ]
+ },
+ "safety_drop_points": 12.121212121212121,
+ "safety_keep_tentative": false,
+ "next": "段 B（E3 の守り）",
+ "g_audit": {
+  "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R0A\\N10_sf": {
+   "dir": "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R0A\\N10_sf",
+   "trials": 99,
+   "trials_without_audit": 0,
+   "g1_violations": 0,
+   "g1_trials": 0,
+   "g2_world_stops": 0,
+   "g2_early_use": 0,
+   "g2_trials": 0,
+   "g3_violations": 0,
+   "g3_trials": 0,
+   "g3_by_item": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "g3_max_ratio": {
+    "joint_vel": 0.9899989820054652,
+    "joint_acc": 0.9900000000051534,
+    "joint_jerk": 0.990000000022917,
+    "cart_vel": 0.6752504954947295,
+    "cart_acc": 0.9499992764219799,
+    "cart_jerk": 0.9499997090231825,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   },
+   "met": true
+  },
+  "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R0A\\N10_nosf": {
+   "dir": "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R0A\\N10_nosf",
+   "trials": 99,
+   "trials_without_audit": 0,
+   "g1_violations": 0,
+   "g1_trials": 0,
+   "g2_world_stops": 0,
+   "g2_early_use": 0,
+   "g2_trials": 0,
+   "g3_violations": 0,
+   "g3_trials": 0,
+   "g3_by_item": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "g3_max_ratio": {
+    "joint_vel": 0.39884615097388343,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000229169,
+    "cart_vel": 0.1232391700645177,
+    "cart_acc": 0.6214553933190593,
+    "cart_jerk": 0.7670816567665492,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   },
+   "met": true
+  },
+  "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R0A\\S10_sf": {
+   "dir": "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R0A\\S10_sf",
+   "trials": 99,
+   "trials_without_audit": 0,
+   "g1_violations": 0,
+   "g1_trials": 0,
+   "g2_world_stops": 0,
+   "g2_early_use": 0,
+   "g2_trials": 0,
+   "g3_violations": 0,
+   "g3_trials": 0,
+   "g3_by_item": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "g3_max_ratio": {
+    "joint_vel": 0.9385841750935945,
+    "joint_acc": 0.9900000000051534,
+    "joint_jerk": 0.990000000022917,
+    "cart_vel": 0.7110869704056703,
+    "cart_acc": 0.9499985359448999,
+    "cart_jerk": 0.949999843950537,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   },
+   "met": true
+  },
+  "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R0A\\S10_nosf": {
+   "dir": "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R0A\\S10_nosf",
+   "trials": 99,
+   "trials_without_audit": 0,
+   "g1_violations": 0,
+   "g1_trials": 0,
+   "g2_world_stops": 0,
+   "g2_early_use": 0,
+   "g2_trials": 0,
+   "g3_violations": 0,
+   "g3_trials": 0,
+   "g3_by_item": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "g3_max_ratio": {
+    "joint_vel": 0.39884615097388343,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000229169,
+    "cart_vel": 0.1232391700645177,
+    "cart_acc": 0.6214553933190593,
+    "cart_jerk": 0.7670816567504631,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   },
+   "met": true
+  },
+  "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R0A\\N6_sf": {
+   "dir": "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R0A\\N6_sf",
+   "trials": 99,
+   "trials_without_audit": 0,
+   "g1_violations": 0,
+   "g1_trials": 0,
+   "g2_world_stops": 0,
+   "g2_early_use": 0,
+   "g2_trials": 0,
+   "g3_violations": 0,
+   "g3_trials": 0,
+   "g3_by_item": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "g3_max_ratio": {
+    "joint_vel": 0.9899999999999469,
+    "joint_acc": 0.9900000000051534,
+    "joint_jerk": 0.990000000022917,
+    "cart_vel": 0.865343717836718,
+    "cart_acc": 0.949999032695161,
+    "cart_jerk": 0.9499997120233482,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   },
+   "met": true
+  }
+ },
+ "written": "2026-10-05 16:26:24"
+}
