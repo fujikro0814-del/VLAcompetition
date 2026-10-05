@@ -1,0 +1,189 @@
+{
+ "model": "N1v3",
+ "runs": [
+  "outputs\\gen\\S3H_N1v3_20261006-025349_s0of2",
+  "outputs\\gen\\S3H_N1v3_20261006-025409_s1of2"
+ ],
+ "attempts": 198,
+ "saved": 120,
+ "discards": {
+  "cube_moved": 62,
+  "success_before_handover": 13,
+  "closed_at_handover": 3
+ },
+ "triggers_all": {
+  "close_off": 114,
+  "stalled": 20,
+  "None": 13,
+  "random": 51
+ },
+ "triggers_saved": {
+  "close_off": 68,
+  "random": 47,
+  "stalled": 5
+ },
+ "boundary_ok": true,
+ "g3_violations_saved": 0,
+ "g3_discards": 0,
+ "state_at_handover_saved": {
+  "tip_to_cube_xy": {
+   "median": 0.02087561207683879,
+   "p10": 0.010580723142105538,
+   "p90": 0.07368664488323058
+  },
+  "hand_z_minus_grasp_z": {
+   "median": 0.014645060267045304,
+   "p10": 0.007598973516029127,
+   "p90": 0.1560260139171401
+  },
+  "lead_xy": {
+   "median": 0.0028947107905937406,
+   "p10": 0.0011369244934942677,
+   "p90": 0.017470115444477845
+  },
+  "t": {
+   "median": 6.15,
+   "p10": 2.68,
+   "p90": 8.6
+  }
+ },
+ "phase_at_handover_saved": {
+  "approach": 113,
+  "close": 2,
+  "descend": 3,
+  "settle": 2
+ },
+ "rerun": [
+  {
+   "name": "H_44001_red_r0",
+   "same_handover": true,
+   "saved_again": true,
+   "n_frames": [
+    331,
+    331
+   ],
+   "truth_identical": {
+    "cube_pos": true,
+    "cube_quat": true,
+    "fingertip": true,
+    "x_des": true,
+    "step_x_des": true,
+    "step_gripper_cmd": true,
+    "gripper_closed": true,
+    "phase": true,
+    "step": true
+   },
+   "sensed_max_abs_diff": {
+    "ee_pos": 0.00042529395855192553,
+    "joints": 0.0005714698323349698,
+    "fingers": 0.0001999999999999988
+   },
+   "arrays_identical": true
+  },
+  {
+   "name": "H_44006_green_r0",
+   "same_handover": true,
+   "saved_again": true,
+   "n_frames": [
+    357,
+    357
+   ],
+   "truth_identical": {
+    "cube_pos": true,
+    "cube_quat": true,
+    "fingertip": true,
+    "x_des": true,
+    "step_x_des": true,
+    "step_gripper_cmd": true,
+    "gripper_closed": true,
+    "phase": true,
+    "step": true
+   },
+   "sensed_max_abs_diff": {
+    "ee_pos": 0.0002817868391020162,
+    "joints": 0.0005037400187268837,
+    "fingers": 0.0002500000000000002
+   },
+   "arrays_identical": true
+  },
+  {
+   "name": "H_44008_red_r0",
+   "same_handover": true,
+   "saved_again": true,
+   "n_frames": [
+    355,
+    355
+   ],
+   "truth_identical": {
+    "cube_pos": true,
+    "cube_quat": true,
+    "fingertip": true,
+    "x_des": true,
+    "step_x_des": true,
+    "step_gripper_cmd": true,
+    "gripper_closed": true,
+    "phase": true,
+    "step": true
+   },
+   "sensed_max_abs_diff": {
+    "ee_pos": 0.0002797865717210357,
+    "joints": 0.0005376026749719376,
+    "fingers": 0.00020000000000000573
+   },
+   "arrays_identical": true
+  },
+  {
+   "name": "H_44012_blue_r0",
+   "same_handover": true,
+   "saved_again": true,
+   "n_frames": [
+    349,
+    349
+   ],
+   "truth_identical": {
+    "cube_pos": true,
+    "cube_quat": true,
+    "fingertip": true,
+    "x_des": true,
+    "step_x_des": true,
+    "step_gripper_cmd": true,
+    "gripper_closed": true,
+    "phase": true,
+    "step": true
+   },
+   "sensed_max_abs_diff": {
+    "ee_pos": 0.00034466089638124364,
+    "joints": 0.0005707975482924788,
+    "fingers": 0.00020000000000000573
+   },
+   "arrays_identical": true
+  },
+  {
+   "name": "H_44013_red_r0",
+   "same_handover": true,
+   "saved_again": true,
+   "n_frames": [
+    366,
+    366
+   ],
+   "truth_identical": {
+    "cube_pos": true,
+    "cube_quat": true,
+    "fingertip": true,
+    "x_des": true,
+    "step_x_des": true,
+    "step_gripper_cmd": true,
+    "gripper_closed": true,
+    "phase": true,
+    "step": true
+   },
+   "sensed_max_abs_diff": {
+    "ee_pos": 0.00034604949314959166,
+    "joints": 0.0005202657913145892,
+    "fingers": 0.0001999999999999988
+   },
+   "arrays_identical": true
+  }
+ ],
+ "written": "2026-10-06 04:19:18"
+}
