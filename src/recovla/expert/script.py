@@ -221,15 +221,36 @@ class Expert:
         self.finger_rest_speed = float(e["finger_rest_speed"])
         self.idle_s = float(e["idle_after_place_s"])
         self.slot_radius = float(cfg["scene"]["slot_occupied_radius"])
+        fa = e.get("final_approach")              # 段階 3 の案 1（configs/expert_v3.yaml）。なければ従来どおり
+        self.final = None if not fa else {
+            "radius": float(fa["radius_m"]), "blend": float(fa["blend_m"]), "xy": float(fa["xy"]) * params.speed_scale,
+            "z_band": float(fa["z_band_m"]), "z_blend": float(fa["z_blend_m"]), "z": float(fa["z"]) * params.speed_scale}
         self.clocks = Clocks()
 
     # -- helpers --
-    def _vel_to(self, x_cmd, goal) -> np.ndarray:
-        v = self.gain * (np.asarray(goal, float) - np.asarray(x_cmd, float))
+    @staticmethod
+    def _ramp(dist: float, near: float, blend: float, low: float, high: float) -> float:
+        """dist ≤ near で low、near + blend 以上で high、その間は直線（上限を距離について連続にする）。"""
+        if dist <= near:
+            return low
+        if dist >= near + blend:
+            return high
+        return low + (high - low) * (dist - near) / blend
+
+    def _vel_to(self, x_cmd, goal, final_aim=None) -> np.ndarray:
+        """final_aim（把持点に向かう段の水平の狙い）を渡したときだけ、案 1 の終盤の上限を掛ける。"""
+        x_cmd = np.asarray(x_cmd, float)
+        v = self.gain * (np.asarray(goal, float) - x_cmd)
+        xy_max, z_max = self.xy_max, self.z_max
+        if self.final is not None and final_aim is not None:
+            f = self.final
+            xy_max = min(xy_max, self._ramp(float(np.hypot(*(np.asarray(final_aim) - x_cmd[:2]))),
+                                            f["radius"], f["blend"], f["xy"], self.xy_max))
+            z_max = min(z_max, self._ramp(float(x_cmd[2] - self.pp.grasp_z), f["z_band"], f["z_blend"], f["z"], self.z_max))
         n = np.linalg.norm(v[:2])
-        if n > self.xy_max:
-            v[:2] *= self.xy_max / n
-        v[2] = float(np.clip(v[2], -self.z_max, self.z_max))
+        if n > xy_max:
+            v[:2] *= xy_max / n
+        v[2] = float(np.clip(v[2], -z_max, z_max))
         return v
 
     def _rise_first(self, x_cmd, goal, safe_z: float) -> np.ndarray:
@@ -304,8 +325,8 @@ class Expert:
             if (np.hypot(*off) <= self.move_tol and abs(x[2] - self.pp.grasp_z) <= self.move_tol
                     and self._hand_still(truth)):
                 return Command(zero, True, ph)
-            return Command(self._vel_to(x, goal), False, ph)
+            return Command(self._vel_to(x, goal, aim), False, ph)
         if ph == Phase.descend:
-            return Command(self._vel_to(x, np.array([aim[0], aim[1], self.pp.grasp_z])), False, ph)
+            return Command(self._vel_to(x, np.array([aim[0], aim[1], self.pp.grasp_z]), aim), False, ph)
         goal = self._rise_first(x, np.array([aim[0], aim[1], self.approach_z]), self.approach_z)
-        return Command(self._vel_to(x, goal), False, ph)
+        return Command(self._vel_to(x, goal, aim), False, ph)

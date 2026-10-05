@@ -287,11 +287,18 @@ def run_spec(rig, spec: EpisodeSpec, run_dir=None, render: bool = True, max_retr
 _RIG = None
 
 
+def rig_config(rig_kind: str):
+    """v3: 段階 3 の案 1（v2 の設定に configs/expert_v3.yaml を重ねる。エキスパートの終盤の速さだけが変わる、0126）。"""
+    if rig_kind == "v3":
+        return config.load(*[n for n in config.V2_LAYERS if (config.CONFIG_DIR / f"{n}.yaml").is_file()], "expert_v3")
+    return None
+
+
 def _init_worker(render: bool, rig_kind: str = "v1") -> None:
     global _RIG
-    if rig_kind == "v2":                              # 目標書 v2（0106）: 実機と同じ指令の口・センサの模型で記録する
+    if rig_kind in ("v2", "v3"):                      # 目標書 v2（0106）: 実機と同じ指令の口・センサの模型で記録する
         from recovla.harness.gen_v2 import SensedDrivenRig
-        _RIG = SensedDrivenRig()
+        _RIG = SensedDrivenRig(rig_config(rig_kind))
         return
     from recovla.sim.rig import SimRig
     _RIG = SimRig(render=render)
@@ -320,7 +327,7 @@ def generate(specs: list, run_dir, workers: int = 1, render: bool = True, max_re
     (run_dir / "run.json").write_text(json.dumps({
         "created": datetime.datetime.now().astimezone().isoformat(timespec="seconds"),
         "workers": workers, "render": render, "n_specs": len(specs), "code_version": version,
-        "config_expert": _CFG["expert"], "config_scene": _CFG["scene"], "rig_kind": rig_kind,
+        "config_expert": (rig_config(rig_kind) or _CFG)["expert"], "config_scene": _CFG["scene"], "rig_kind": rig_kind,
     }, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
     groups = {}
     for s in specs:                                   # 同じ配置（組）を 1 つの仕事にまとめる。順は最初に現れた順
