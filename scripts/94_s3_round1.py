@@ -149,6 +149,105 @@ def cmd_trial_check(a) -> None:
                       "duration_median": res["duration_s"]["median"]}, ensure_ascii=False, indent=1))
 
 
+# ---- 1 周目の検証（0126 の 4・0129）。方式と安全フィルタは 0 周目の判断（docs/results/s3_round0_*.json）に従う ----
+EXP_V = "V3R1"
+MODELS_V = {"R1v2": "R1v2_20000", "N1v2": "N1v2", "R1v3": "R1v3", "N1v3": "N1v3"}
+TRIALS_V = {"nat": ("natural:199230:33", None), "P1a": ("induced:199130:33", "P1"), "P1b": ("induced:199730:66", "P1")}
+OFFSET_GAIN_MM = 15.0      # 下り始めのずれの中央値が R1v2 より 15 mm 以上 0 に近づく
+R_REC_DROP = 0.10          # R の P1 の復帰／成立が R1v2 より 10 ポイント以上下がらない
+
+
+def round0_choice() -> dict:
+    a = json.loads((RES / "s3_round0_a.json").read_text(encoding="utf-8"))
+    pb = RES / "s3_round0_b.json"
+    if a["candidate"] == "N10":
+        arm = "N10"
+    elif pb.is_file():
+        arm = json.loads(pb.read_text(encoding="utf-8"))["final_arm"]
+    else:
+        raise SystemExit("0 周目の段 B の判断（s3_round0_b.json）がまだない")
+    return {"arm": arm, "safety": bool(a["safety_keep_tentative"])}
+
+
+def cmd_run_verify(a) -> None:
+    r0 = _mod92()
+    ch = round0_choice()
+    jobs = {}
+    for name, model in MODELS_V.items():
+        for part, (trials, induce) in TRIALS_V.items():
+            jobs[f"{name}_{part}"] = r0.run_args(EXP_V, f"{name}_{part}", model, trials, ch["arm"], ch["safety"], induce=induce)
+    r0.run_pool(EXP_V, jobs, a.parallel)
+
+
+def _mod92():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("r0", config.ROOT / "scripts" / "92_s3_round0.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+def descent_offsets(d: pathlib.Path) -> list:
+    """下り始め（最初に閉じる前で、指先が立方体より 130 mm 以上高い最後のこま）の、指先 − 立方体の水平の差を、ロボットの
+    根元から立方体への向きに射影した値 [mm]（負＝手前）。診断 1 の d1_c.py と同じ定義。閉じなかった試行は数えない。"""
+    out = []
+    for f in sorted(d.glob("trial_*.json")):
+        m = json.loads(f.read_text(encoding="utf-8"))
+        z = np.load(f.with_suffix(".npz"))
+        ti = COLORS.index(m["target"].split(">")[0])
+        closed = z["gripper_closed"].astype(bool)
+        if not closed.any():
+            continue
+        k = int(np.where(closed)[0][0])
+        tip, cube = z["fingertip"][:k], z["cube_pos"][:k, ti]
+        idx = np.where((tip[:, 2] - cube[:, 2]) * 1e3 >= 130)[0]
+        if not idx.size:
+            continue
+        j = int(idx[-1])
+        u = cube[j, :2] / np.linalg.norm(cube[j, :2])
+        out.append(float((tip[j, :2] - cube[j, :2]) @ u * 1e3))
+    return out
+
+
+def cmd_decide_verify(a) -> None:
+    from recovla.eval import gate
+    from recovla.eval import report as R
+    r0 = _mod92()
+    v = config.path(CFG["paths"]["outputs"]) / "v2eval" / EXP_V
+    dirs = [v / f"{n}_{p}" for n in MODELS_V for p in TRIALS_V]
+    gsum = gate.require(dirs, "段階 3 の 1 周目の検証（0126・0129）")
+    rows = {d.name: {(r["seed"], r["target"]): r for r in R.collect([d])} for d in dirs}
+
+    def p1(name):
+        return {**rows[f"{name}_P1a"], **rows[f"{name}_P1b"]}
+    nat = {n: sum(bool(r["success"]) for r in rows[f"{n}_nat"].values()) for n in MODELS_V}
+    offs = {n: descent_offsets(v / f"{n}_nat") for n in MODELS_V}
+    med = {n: (float(np.median(offs[n])) if offs[n] else None) for n in MODELS_V}
+    rec = {}
+    for n in MODELS_V:
+        est = [r for r in p1(n).values() if r["induce_established"]]
+        rec[n] = {"established": len(est), "recovered": sum(bool(r["recovered"]) for r in est),
+                  "rate": (sum(bool(r["recovered"]) for r in est) / len(est)) if est else None}
+    e3 = {ver: r0.e3_stats(p1(f"R1{ver}"), p1(f"N1{ver}")) for ver in ("v2", "v3")}
+    ok_offset = med["R1v3"] is not None and med["R1v2"] is not None and abs(med["R1v3"]) <= abs(med["R1v2"]) - OFFSET_GAIN_MM
+    ok_nat = nat["R1v3"] >= nat["R1v2"]
+    rb, rc = rec["R1v2"]["rate"], rec["R1v3"]["rate"]
+    ok_rec = rb is None or (rc is not None and rc > rb - R_REC_DROP)
+    adopt = ok_offset and ok_nat and ok_rec
+    res = {"what": "段階 3 の 1 周目（案 1）の検証と判定（0126 の 4・0129）", "experiment": EXP_V, "trials": TRIALS_V,
+           "models": MODELS_V, "round0": round0_choice(), "natural_success": nat, "descent_offset_mm_median": med,
+           "descent_offset_n": {n: len(offs[n]) for n in offs}, "p1_recovery_R": rec, "e3_like": e3,
+           "rules": {"offset": f"|中央値(R1v3)| ≤ |中央値(R1v2)| − {OFFSET_GAIN_MM} mm",
+                     "natural": "R1v3 の自然の成功 ≥ R1v2", "p1": f"R1v3 の P1 の復帰／成立 > R1v2 − {int(R_REC_DROP * 100)} ポイント",
+                     "gate": "関所の違反 0"},
+           "ok_offset": ok_offset, "ok_natural": ok_nat, "ok_p1": ok_rec, "adopt": adopt,
+           "next": "2 周目は R1v3・N1v3 を土台に案 3" if adopt else "2 周目は R1v2・N1v2 を土台に案 3（0126 の 4）",
+           "g_audit": gsum, "written": time.strftime("%Y-%m-%d %H:%M:%S")}
+    (RES / "s3_round1_verify.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
+    print(json.dumps({k: res[k] for k in ("natural_success", "descent_offset_mm_median", "p1_recovery_R", "e3_like",
+                                          "ok_offset", "ok_natural", "ok_p1", "adopt")}, ensure_ascii=False, indent=1, default=float))
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -156,8 +255,12 @@ def main(argv=None) -> int:
     p.add_argument("--workers", type=int, default=3)
     p = sub.add_parser("trial-check")
     p.add_argument("--run", required=True)
+    p = sub.add_parser("run-verify")
+    p.add_argument("--parallel", type=int, default=3)
+    sub.add_parser("decide-verify")
     a = ap.parse_args(argv)
-    {"trial-gen": cmd_trial_gen, "trial-check": cmd_trial_check}[a.cmd](a)
+    {"trial-gen": cmd_trial_gen, "trial-check": cmd_trial_check, "run-verify": cmd_run_verify,
+     "decide-verify": cmd_decide_verify}[a.cmd](a)
     return 0
 
 

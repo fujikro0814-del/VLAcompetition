@@ -36,6 +36,11 @@ for _m, _d in V2_TRAIN.items():
 # 直す前の選択（ckpt_decision_v2_*.json、どちらも 2 万手）は G3 の違反を含んでいたので使わない
 CKPT["R1v2"] = CKPT["R1v2_20000"]
 CKPT["N1v2"] = CKPT["N1v2_30000"]
+# 段階 3（0126）: 学習した組は 2 万手の保存点を使う（保存点の選択はしない）。学習の出力のうち最新のもの
+for _m in ("R1v3", "N1v3"):
+    _runs = sorted(config.path(CFG["paths"]["train_output"]).glob(f"train_{_m}_2*"))
+    if _runs and (_runs[-1] / "checkpoints" / "020000" / "pretrained_model").is_dir():
+        CKPT[_m] = str((_runs[-1] / "checkpoints" / "020000" / "pretrained_model").relative_to(config.ROOT))
 
 
 def trial_list(spec: str) -> list:
