@@ -1,0 +1,173 @@
+{
+ "what": "段階 3 の 0 周目 段 B（E3 の守り、0126 の 4・0127）",
+ "experiment": "V3R0B",
+ "trials": "induced:199010:50",
+ "models": {
+  "R": "R1v2_20000",
+  "N": "N1v2"
+ },
+ "safety": false,
+ "candidate": "N6",
+ "stats": {
+  "N10": {
+   "pairs_both_established": 38,
+   "r_only": 5,
+   "n_only": 1,
+   "diff": 4,
+   "r_established": 40,
+   "r_recovered": 5,
+   "r_recovery_rate": 0.125
+  },
+  "N6": {
+   "pairs_both_established": 33,
+   "r_only": 10,
+   "n_only": 0,
+   "diff": 10,
+   "r_established": 34,
+   "r_recovered": 11,
+   "r_recovery_rate": 0.3235294117647059
+  }
+ },
+ "rule": "候補の diff が N10 より 2 以上小さくならず、R の復帰／成立が 10 ポイント以上下がらない",
+ "ok_diff": true,
+ "ok_recovery": true,
+ "final_arm": "N6",
+ "final_mode": "naive",
+ "final_exec_interval": 6,
+ "safety_keep_tentative": false,
+ "g_audit": {
+  "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R0B\\R_N10": {
+   "dir": "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R0B\\R_N10",
+   "trials": 50,
+   "trials_without_audit": 0,
+   "g1_violations": 0,
+   "g1_trials": 0,
+   "g2_world_stops": 0,
+   "g2_early_use": 0,
+   "g2_trials": 0,
+   "g3_violations": 0,
+   "g3_trials": 0,
+   "g3_by_item": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "g3_max_ratio": {
+    "joint_vel": 0.40239547036323675,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000229169,
+    "cart_vel": 0.12410514061184931,
+    "cart_acc": 0.7651776288574468,
+    "cart_jerk": 0.7645108730204517,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   },
+   "met": true
+  },
+  "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R0B\\R_N6": {
+   "dir": "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R0B\\R_N6",
+   "trials": 50,
+   "trials_without_audit": 0,
+   "g1_violations": 0,
+   "g1_trials": 0,
+   "g2_world_stops": 0,
+   "g2_early_use": 0,
+   "g2_trials": 0,
+   "g3_violations": 0,
+   "g3_trials": 0,
+   "g3_by_item": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "g3_max_ratio": {
+    "joint_vel": 0.4026445448263602,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000229169,
+    "cart_vel": 0.12288549918811574,
+    "cart_acc": 0.7651776288574468,
+    "cart_jerk": 0.7645108730469735,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   },
+   "met": true
+  },
+  "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R0B\\N_N10": {
+   "dir": "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R0B\\N_N10",
+   "trials": 50,
+   "trials_without_audit": 0,
+   "g1_violations": 0,
+   "g1_trials": 0,
+   "g2_world_stops": 0,
+   "g2_early_use": 0,
+   "g2_trials": 0,
+   "g3_violations": 0,
+   "g3_trials": 0,
+   "g3_by_item": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "g3_max_ratio": {
+    "joint_vel": 0.39359839940827607,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000229169,
+    "cart_vel": 0.12330414561682007,
+    "cart_acc": 0.7651774017041977,
+    "cart_jerk": 0.7645108730204517,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   },
+   "met": true
+  },
+  "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R0B\\N_N6": {
+   "dir": "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R0B\\N_N6",
+   "trials": 50,
+   "trials_without_audit": 0,
+   "g1_violations": 0,
+   "g1_trials": 0,
+   "g2_world_stops": 0,
+   "g2_early_use": 0,
+   "g2_trials": 0,
+   "g3_violations": 0,
+   "g3_trials": 0,
+   "g3_by_item": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "g3_max_ratio": {
+    "joint_vel": 0.3937782741496358,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000229169,
+    "cart_vel": 0.12030229347814692,
+    "cart_acc": 0.7651774017041977,
+    "cart_jerk": 0.7645108730469735,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   },
+   "met": true
+  }
+ },
+ "written": "2026-10-05 18:04:07"
+}
