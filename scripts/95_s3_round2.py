@@ -216,6 +216,158 @@ def _rerun(model: str, rows: list) -> list:
     return out
 
 
+# ---- データ（0139 の 1）: R2v3 ＝ R1v3 のデータ ＋ 引き継ぎ 120（R1v3 から）、N2v3 ＝ N1v3 のデータ ＋ 引き継ぎ 120（N1v3 から） ----
+DATA_OUT = config.path(CFG["paths"]["outputs"]) / "f"
+
+
+def _gen_runs(model: str) -> list:
+    runs = sorted(GEN.glob(f"S3H_{model}_2*_s*of*"))
+    if not runs:
+        raise SystemExit(f"{model} の集めがない")
+    return [str(r.relative_to(config.ROOT)) for r in runs]
+
+
+def cmd_data(a) -> None:
+    import collections
+    import subprocess
+    import sys
+    from recovla.common import code_version
+    from recovla.data import convert as CV
+    v3 = json.loads((DATA_OUT / "data_v3.json").read_text(encoding="utf-8"))
+    sel = {}
+    for m in MODELS:
+        runs = a.runs_r if (m == "R1v3" and a.runs_r) else a.runs_n if (m == "N1v3" and a.runs_n) else _gen_runs(m)
+        rows = [r for r in _rows(runs) if r["saved"]]
+        sel[m] = {"runs": runs, "rows": rows}
+    n = min(QUOTA, *(len(v["rows"]) for v in sel.values()))        # 0139 の 1: 片方が届かなければ少ない方にそろえる
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    procs, out = {}, {}
+    for m, base, key in (("R1v3", "R1", "R2"), ("N1v3", "N1", "N2")):
+        rows = sel[m]["rows"][:n]
+        sel[m]["used"] = rows
+        prev = json.loads(config.path(v3["datasets"][base]["manifest"]).read_text(encoding="utf-8"))
+        h_entries = [{"run": str(pathlib.Path(r["path"]).resolve().parent.relative_to(config.ROOT)).replace("\\", "/"),
+                      "key": r["name"]} for r in rows]
+        dname = f"{key}v3_{stamp}"
+        mpath = config.path(CFG["paths"]["outputs"]) / "manifests" / f"{dname}.json"
+        CV.write_manifest(mpath, dname, prev["entries"] + h_entries,
+                          f"Stage 3 round 2 {key}v3: {base}v3 data ({v3['datasets'][base]['manifest']}) + {len(rows)} "
+                          f"policy-to-script handover episodes from {m} (seeds 44000-, board 0139)")
+        ds = config.path(CFG["paths"]["outputs"]) / "datasets" / dname
+        log = DATA_OUT / f"convert_{dname}.log"
+        f = open(log, "w", encoding="utf-8")
+        procs[key] = (subprocess.Popen([sys.executable, "-m", "recovla.data.convert", "--manifest", str(mpath), "--out", str(ds),
+                                        "--name", dname, *v3["cue_convert_args"]], stdout=f, stderr=subprocess.STDOUT,
+                                       cwd=config.ROOT), f, mpath, ds, log, len(prev["entries"]) + len(rows), time.perf_counter())
+    for key, (p, f, mpath, ds, log, n_ep, t1) in procs.items():
+        c1 = p.wait()
+        c2 = subprocess.run([sys.executable, "-m", "recovla.data.convert", "--verify", str(ds)], stdout=f,
+                            stderr=subprocess.STDOUT, cwd=config.ROOT).returncode
+        f.close()
+        text = log.read_text(encoding="utf-8", errors="replace")
+        info = json.loads((ds / "meta" / "info.json").read_text(encoding="utf-8")) if (ds / "meta" / "info.json").is_file() else {}
+        out[key] = {"manifest": str(mpath.relative_to(config.ROOT)), "dataset": str(ds.relative_to(config.ROOT)),
+                    "episodes": n_ep, "frames": info.get("total_frames"), "convert_exit": c1, "verify_exit": c2,
+                    "verify_pass": "[verify] PASS" in text, "convert_wall_s": round(time.perf_counter() - t1, 1),
+                    "log": str(log.relative_to(config.ROOT))}
+    res = {"check": "data_v3r2", "written": time.strftime("%Y-%m-%d %H:%M:%S"), "rule": "0139 の 1",
+           "base": "outputs/f/data_v3.json", "cue_convert_args": v3["cue_convert_args"], "handover_per_model": n,
+           "code_version": code_version.code_version(), "datasets": out,
+           "handover": {m: {"runs": v["runs"], "attempts_seen": len(_rows(v["runs"])), "saved_seen": len(v["rows"]),
+                            "used": [r["name"] for r in v["used"]],
+                            "last_seed_used": v["used"][-1]["seed"] if v["used"] else None,
+                            "triggers_used": dict(collections.Counter(r["handover"]["trigger"] for r in v["used"]))}
+                        for m, v in sel.items()}}
+    (DATA_OUT / "data_v3r2.json").write_text(json.dumps(res, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+    print(json.dumps({k: res[k] for k in ("handover_per_model", "datasets")}, ensure_ascii=False, indent=1))
+    if not all(v["verify_pass"] and v["convert_exit"] == 0 for v in out.values()):
+        raise SystemExit("変換か照合に失敗")
+
+
+# ---- 2 周目の検証と判定（0139 の 2） ----
+EXP_V = "V3R2"
+MODELS_V = ("R1v3", "N1v3", "R2v3", "N2v3")
+TRIALS_V = {"nat": ("natural:199330:33", None), "P1a": ("induced:199163:33", "P1"), "P1b": ("induced:198120:66", "P1")}
+NAT_GAIN = 5               # 1: R2v3 − R1v3 ≥ +5（99 中）
+R_REC_DROP = 0.10          # 3: R の P1 の復帰／成立が 10 ポイント以上下がらない
+E3_DIFF_DROP = 2           # 3: R だけ復帰 − N だけ復帰 が 2 以上小さくならない
+FAR_M = 0.015              # 4: 最初に閉じたこまで、水平 > 15 mm か 手の高さ − grasp_z > 15 mm
+
+
+def cmd_run_verify(a) -> None:
+    r0 = _load("r0", "92_s3_round0.py")
+    ch = runtime_choice()
+    jobs = {}
+    for name in (a.models or MODELS_V):
+        for part, (trials, induce) in TRIALS_V.items():
+            jobs[f"{name}_{part}"] = r0.run_args(EXP_V, f"{name}_{part}", name, trials, ch["arm"], ch["safety"], induce=induce)
+    r0.run_pool(EXP_V, jobs, a.parallel)
+
+
+def close_metrics(d: pathlib.Path) -> dict:
+    """自然の試行の仕組みの指標（0139 の 2 の 4 と、記録だけの「固まった」割合）。"""
+    grasp_z = float(config.load("expert_v3")["expert"]["grasp_z"])
+    far, closed_trials, still_frames, pre_frames = 0, 0, 0, 0
+    for f in sorted(d.glob("trial_*.json")):
+        m = json.loads(f.read_text(encoding="utf-8"))
+        z = np.load(f.with_suffix(".npz"))
+        ti = ["red", "green", "blue"].index(m["target"].split(">")[0])
+        closed = z["gripper_closed"].astype(bool)
+        k = int(np.where(closed)[0][0]) if closed.any() else len(closed)
+        if closed.any():
+            closed_trials += 1
+            dxy = float(np.hypot(*(z["fingertip"][k, :2] - z["cube_pos"][k, ti, :2])))
+            dz = float(z["ee_pos"][k, 2] - grasp_z)
+            far += int(dxy > FAR_M or dz > FAR_M)
+        t, ee = z["sim_time"][:k], z["ee_pos"][:k]
+        if len(ee) > 1:
+            sp = np.linalg.norm(np.diff(ee, axis=0), axis=1) / np.diff(t)
+            use = t[1:] >= 1.0
+            still_frames += int(np.sum(sp[use] < 0.01))
+            pre_frames += int(np.sum(use))
+    return {"far_close_trials": far, "closed_trials": closed_trials,
+            "still_fraction_before_close": still_frames / pre_frames if pre_frames else None}
+
+
+def cmd_decide_verify(a) -> None:
+    from recovla.eval import gate
+    from recovla.eval import report as R
+    from recovla.eval import stats as ST
+    r0 = _load("r0", "92_s3_round0.py")
+    v = config.path(CFG["paths"]["outputs"]) / "v2eval" / EXP_V
+    dirs = [v / f"{n}_{p}" for n in MODELS_V for p in TRIALS_V]
+    gsum = gate.require(dirs, "段階 3 の 2 周目の検証（0139）")
+    rows = {d.name: {(r["seed"], r["target"]): r for r in R.collect([d])} for d in dirs}
+
+    def p1(name):
+        return {**rows[f"{name}_P1a"], **rows[f"{name}_P1b"]}
+    nat = {n: sum(bool(r["success"]) for r in rows[f"{n}_nat"].values()) for n in MODELS_V}
+    e3 = {"round1": r0.e3_stats(p1("R1v3"), p1("N1v3")), "round2": r0.e3_stats(p1("R2v3"), p1("N2v3"))}
+    mech = {n: close_metrics(v / f"{n}_nat") for n in MODELS_V}
+    ok_nat = nat["R2v3"] - nat["R1v3"] >= NAT_GAIN
+    rb, rc = e3["round1"]["r_recovery_rate"], e3["round2"]["r_recovery_rate"]
+    ok_p1 = (rb is None or (rc is not None and rc > rb - R_REC_DROP)) and e3["round2"]["diff"] > e3["round1"]["diff"] - E3_DIFF_DROP
+    ok_mech = mech["R2v3"]["far_close_trials"] <= mech["R1v3"]["far_close_trials"]
+    pairs = sorted(set(rows["R1v3_nat"]) & set(rows["R2v3_nat"]))
+    b = sum(bool(rows["R2v3_nat"][k]["success"]) and not rows["R1v3_nat"][k]["success"] for k in pairs)
+    c = sum(bool(rows["R1v3_nat"][k]["success"]) and not rows["R2v3_nat"][k]["success"] for k in pairs)
+    adopt = ok_nat and ok_p1 and ok_mech
+    res = {"what": "段階 3 の 2 周目（案 3）の検証と判定（0139 の 2）", "experiment": EXP_V, "trials": TRIALS_V,
+           "runtime": runtime_choice(), "natural_success": nat, "natural_R2_vs_R1_discordant": {"R2_only": b, "R1_only": c},
+           "natural_mcnemar_p_report_only": ST.mcnemar_exact(b, c),
+           "e3_like": e3, "mechanism": mech,
+           "rules": {"natural": f"R2v3 − R1v3 ≥ +{NAT_GAIN}（99 中）", "gate": "8 組とも関所の違反 0",
+                     "p1": f"R2v3 の復帰／成立 > R1v3 − {int(R_REC_DROP * 100)} ポイント、かつ R だけ復帰 − N だけ復帰 > "
+                           f"1 周目の値 − {E3_DIFF_DROP}",
+                     "mechanism": "最初に閉じたこまで外れていた自然の試行の数が R2v3 ≤ R1v3"},
+           "ok_natural": ok_nat, "ok_p1": ok_p1, "ok_mechanism": ok_mech, "adopt": adopt,
+           "next": "3 周目は R2v3・N2v3 を土台に案 3 を繰り返す" if adopt else "引き継ぎの区間を外し、R1v3・N1v3 に戻す（3 周目の案 3 は回さない）",
+           "g_audit": gsum, "written": time.strftime("%Y-%m-%d %H:%M:%S")}
+    (RES / "s3_round2_verify.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=float), encoding="utf-8")
+    print(json.dumps({k: res[k] for k in ("natural_success", "e3_like", "mechanism", "ok_natural", "ok_p1", "ok_mechanism",
+                                          "adopt")}, ensure_ascii=False, indent=1, default=float))
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -230,8 +382,16 @@ def main(argv=None) -> int:
     s.add_argument("--runs", nargs="+", required=True)
     s.add_argument("--rerun", type=int, default=0)
     s.add_argument("--tag", default="")
+    s = sub.add_parser("data")
+    s.add_argument("--runs-r", nargs="*", help="R1v3 の集めのフォルダ（既定は outputs/gen/S3H_R1v3_* の全部）")
+    s.add_argument("--runs-n", nargs="*")
+    s = sub.add_parser("run-verify")
+    s.add_argument("--models", nargs="*", choices=MODELS_V)
+    s.add_argument("--parallel", type=int, default=2)
+    sub.add_parser("decide-verify")
     a = ap.parse_args(argv)
-    {"smoke": cmd_smoke, "gen": cmd_gen, "check": cmd_check}[a.cmd](a)
+    {"smoke": cmd_smoke, "gen": cmd_gen, "check": cmd_check, "data": cmd_data, "run-verify": cmd_run_verify,
+     "decide-verify": cmd_decide_verify}[a.cmd](a)
     return 0
 
 

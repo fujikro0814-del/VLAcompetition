@@ -6,6 +6,7 @@
     ... train N1 [--smoke]
     ... train R1v2 / N1v2 [--smoke]                                   # 段階 2（目標書 v2、outputs/f/data_v2.json、0115）
     ... train R1v3 / N1v3 [--smoke]                                   # 段階 3 の 1 周目（outputs/f/data_v3.json、2 万手、0126）
+    ... train R2v3 / N2v3 [--smoke]                                   # 段階 3 の 2 周目（outputs/f/data_v3r2.json、2 万手、0139）
 
 データは目標の手がかりつき（17 次元、旗は記録のみ）の R1cue・N1cue（outputs/f/data_cue.json、掲示板 0053）。
 学習の種は R1・N1 で同じ（configs の train.seed）。行動エキスパートのみ、バッチ 32。学習時の手がかりのずらし
@@ -33,6 +34,7 @@ def write(name: str, obj: dict) -> pathlib.Path:
 
 STAGE3_STEPS = 20000          # 段階 3: R・N とも 2 万手（2 万と 3 万手で差がない＝0124、0126 の 4）。学習率の予定は変えない
 STAGE3_SAVE = 5000
+STAGE3_ROUND2_DATA = "data_v3r2.json"   # 2 周目（案 3）の R2v3・N2v3（scripts/95_s3_round2.py data、0139）
 
 
 def cmd_train(a) -> None:
@@ -41,14 +43,17 @@ def cmd_train(a) -> None:
     from recovla.policy import train_launcher as tl
     ver = a.name[-2:] if a.name[-2:] in ("v2", "v3") else ""
     base = a.name[:-2] if ver else a.name
-    d = json.loads((config.path(CFG["paths"]["outputs"]) / "f" / (f"data_{ver}.json" if ver else "data_cue.json"))
-                   .read_text(encoding="utf-8"))
+    data_file = STAGE3_ROUND2_DATA if a.name in ("R2v3", "N2v3") else (f"data_{ver}.json" if ver else "data_cue.json")
+    d = json.loads((config.path(CFG["paths"]["outputs"]) / "f" / data_file).read_text(encoding="utf-8"))
     dec_path = OUT / "cue_aug_decision.json"
     if not dec_path.is_file():
         raise SystemExit(f"{dec_path} がない（K1 での手がかりのずらしの採否を先に決める＝掲示板 0054）")
     dec = json.loads(dec_path.read_text(encoding="utf-8"))
-    rc = CFG["train"]["runs"][base]
-    full_steps, save = (STAGE3_STEPS, STAGE3_SAVE) if ver == "v3" else (int(rc["steps"]), int(rc["save_freq"]))
+    if ver == "v3":
+        full_steps, save = STAGE3_STEPS, STAGE3_SAVE
+    else:
+        rc = CFG["train"]["runs"][base]
+        full_steps, save = int(rc["steps"]), int(rc["save_freq"])
     steps = 1000 if a.smoke else full_steps
     stage = {"v2": "Stage 2", "v3": "Stage 3"}.get(ver, "Step H")
     cfg = {"dataset": str(config.path(d["datasets"][base]["dataset"])), "train_scope": CFG["train"]["scope"],
@@ -191,8 +196,9 @@ def main(argv=None) -> int:
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("decide")
     s = sub.add_parser("train")
-    s.add_argument("name", choices=["R1", "N1", "R1v2", "N1v2", "R1v3", "N1v3"],
-                   help="R1v2・N1v2: 段階 2（outputs/f/data_v2.json）。R1v3・N1v3: 段階 3 の 1 周目（data_v3.json、0126）")
+    s.add_argument("name", choices=["R1", "N1", "R1v2", "N1v2", "R1v3", "N1v3", "R2v3", "N2v3"],
+                   help="R1v2・N1v2: 段階 2（outputs/f/data_v2.json）。R1v3・N1v3: 段階 3 の 1 周目（data_v3.json、0126）。"
+                        "R2v3・N2v3: 段階 3 の 2 周目（data_v3r2.json、0139）")
     s.add_argument("--num-workers", type=int, default=None,
                    help="データの読み手の数（既定は設定の値）。値は変わらない（試料の並びは主プロセスの sampler が決める）。"
                         "評価と同時に回すときの主記憶の不足を避ける（0135）")
