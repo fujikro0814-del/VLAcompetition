@@ -1,0 +1,487 @@
+{
+ "what": "段階 3 の 2 周目（案 3）の検証と判定（0139 の 2）",
+ "experiment": "V3R2",
+ "trials": {
+  "nat": [
+   "natural:199330:33",
+   null
+  ],
+  "P1a": [
+   "induced:199163:33",
+   "P1"
+  ],
+  "P1b": [
+   "induced:198120:66",
+   "P1"
+  ]
+ },
+ "runtime": {
+  "arm": "N6",
+  "mode": "naive",
+  "exec_interval": 6,
+  "safety": false
+ },
+ "natural_success": {
+  "R1v3": 78,
+  "N1v3": 77,
+  "R2v3": 78,
+  "N2v3": 74
+ },
+ "natural_R2_vs_R1_discordant": {
+  "R2_only": 16,
+  "R1_only": 16
+ },
+ "natural_mcnemar_p_report_only": 1.0,
+ "e3_like": {
+  "round1": {
+   "pairs_both_established": 65,
+   "r_only": 35,
+   "n_only": 0,
+   "diff": 35,
+   "r_established": 74,
+   "r_recovered": 41,
+   "r_recovery_rate": 0.5540540540540541
+  },
+  "round2": {
+   "pairs_both_established": 60,
+   "r_only": 18,
+   "n_only": 4,
+   "diff": 14,
+   "r_established": 76,
+   "r_recovered": 31,
+   "r_recovery_rate": 0.40789473684210525
+  }
+ },
+ "mechanism": {
+  "R1v3": {
+   "far_close_trials": 50,
+   "closed_trials": 99,
+   "still_fraction_before_close": 0.062381682141891284
+  },
+  "N1v3": {
+   "far_close_trials": 50,
+   "closed_trials": 99,
+   "still_fraction_before_close": 0.05476984055490496
+  },
+  "R2v3": {
+   "far_close_trials": 31,
+   "closed_trials": 95,
+   "still_fraction_before_close": 0.0560351206037587
+  },
+  "N2v3": {
+   "far_close_trials": 45,
+   "closed_trials": 98,
+   "still_fraction_before_close": 0.05688361542488222
+  }
+ },
+ "rules": {
+  "natural": "R2v3 − R1v3 ≥ +5（99 中）",
+  "gate": "8 組とも関所の違反 0",
+  "p1": "R2v3 の復帰／成立 > R1v3 − 10 ポイント、かつ R だけ復帰 − N だけ復帰 > 1 周目の値 − 2",
+  "mechanism": "最初に閉じたこまで外れていた自然の試行の数が R2v3 ≤ R1v3"
+ },
+ "ok_natural": false,
+ "ok_p1": false,
+ "ok_mechanism": true,
+ "adopt": false,
+ "next": "引き継ぎの区間を外し、R1v3・N1v3 に戻す（3 周目の案 3 は回さない）",
+ "g_audit": {
+  "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R2\\R1v3_nat": {
+   "dir": "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R2\\R1v3_nat",
+   "trials": 99,
+   "trials_without_audit": 0,
+   "g1_violations": 0,
+   "g1_trials": 0,
+   "g2_world_stops": 0,
+   "g2_early_use": 0,
+   "g2_trials": 0,
+   "g3_violations": 0,
+   "g3_trials": 0,
+   "g3_by_item": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "g3_max_ratio": {
+    "joint_vel": 0.38843796957376625,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000229169,
+    "cart_vel": 0.12305855805686272,
+    "cart_acc": 0.6188971587740237,
+    "cart_jerk": 0.7630854213177444,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   },
+   "met": true
+  },
+  "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R2\\R1v3_P1a": {
+   "dir": "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R2\\R1v3_P1a",
+   "trials": 33,
+   "trials_without_audit": 0,
+   "g1_violations": 0,
+   "g1_trials": 0,
+   "g2_world_stops": 0,
+   "g2_early_use": 0,
+   "g2_trials": 0,
+   "g3_violations": 0,
+   "g3_trials": 0,
+   "g3_by_item": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "g3_max_ratio": {
+    "joint_vel": 0.38209825195065955,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000229169,
+    "cart_vel": 0.1195834215939765,
+    "cart_acc": 0.7352083334321793,
+    "cart_jerk": 0.760169876418635,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   },
+   "met": true
+  },
+  "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R2\\R1v3_P1b": {
+   "dir": "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R2\\R1v3_P1b",
+   "trials": 66,
+   "trials_without_audit": 0,
+   "g1_violations": 0,
+   "g1_trials": 0,
+   "g2_world_stops": 0,
+   "g2_early_use": 0,
+   "g2_trials": 0,
+   "g3_violations": 0,
+   "g3_trials": 0,
+   "g3_by_item": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "g3_max_ratio": {
+    "joint_vel": 0.40160094863942186,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000229169,
+    "cart_vel": 0.12345453300191872,
+    "cart_acc": 0.7355538528017822,
+    "cart_jerk": 0.7680525493680855,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   },
+   "met": true
+  },
+  "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R2\\N1v3_nat": {
+   "dir": "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R2\\N1v3_nat",
+   "trials": 99,
+   "trials_without_audit": 0,
+   "g1_violations": 0,
+   "g1_trials": 0,
+   "g2_world_stops": 0,
+   "g2_early_use": 0,
+   "g2_trials": 0,
+   "g3_violations": 0,
+   "g3_trials": 0,
+   "g3_by_item": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "g3_max_ratio": {
+    "joint_vel": 0.38878209154422566,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000229169,
+    "cart_vel": 0.12273098060613828,
+    "cart_acc": 0.61889715876628,
+    "cart_jerk": 0.7630854213399636,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   },
+   "met": true
+  },
+  "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R2\\N1v3_P1a": {
+   "dir": "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R2\\N1v3_P1a",
+   "trials": 33,
+   "trials_without_audit": 0,
+   "g1_violations": 0,
+   "g1_trials": 0,
+   "g2_world_stops": 0,
+   "g2_early_use": 0,
+   "g2_trials": 0,
+   "g3_violations": 0,
+   "g3_trials": 0,
+   "g3_by_item": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "g3_max_ratio": {
+    "joint_vel": 0.39013634828295557,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000229169,
+    "cart_vel": 0.12014544641150915,
+    "cart_acc": 0.7352083362886268,
+    "cart_jerk": 0.760169876418635,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   },
+   "met": true
+  },
+  "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R2\\N1v3_P1b": {
+   "dir": "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R2\\N1v3_P1b",
+   "trials": 66,
+   "trials_without_audit": 0,
+   "g1_violations": 0,
+   "g1_trials": 0,
+   "g2_world_stops": 0,
+   "g2_early_use": 0,
+   "g2_trials": 0,
+   "g3_violations": 0,
+   "g3_trials": 0,
+   "g3_by_item": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "g3_max_ratio": {
+    "joint_vel": 0.394319091632591,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000229169,
+    "cart_vel": 0.12359299672206563,
+    "cart_acc": 0.7355538499571358,
+    "cart_jerk": 0.768052549425601,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   },
+   "met": true
+  },
+  "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R2\\R2v3_nat": {
+   "dir": "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R2\\R2v3_nat",
+   "trials": 99,
+   "trials_without_audit": 0,
+   "g1_violations": 0,
+   "g1_trials": 0,
+   "g2_world_stops": 0,
+   "g2_early_use": 0,
+   "g2_trials": 0,
+   "g3_violations": 0,
+   "g3_trials": 0,
+   "g3_by_item": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "g3_max_ratio": {
+    "joint_vel": 0.38954048813721,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000229169,
+    "cart_vel": 0.12421832560965941,
+    "cart_acc": 0.6188971587740237,
+    "cart_jerk": 0.7630854213399636,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   },
+   "met": true
+  },
+  "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R2\\R2v3_P1a": {
+   "dir": "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R2\\R2v3_P1a",
+   "trials": 33,
+   "trials_without_audit": 0,
+   "g1_violations": 0,
+   "g1_trials": 0,
+   "g2_world_stops": 0,
+   "g2_early_use": 0,
+   "g2_trials": 0,
+   "g3_violations": 0,
+   "g3_trials": 0,
+   "g3_by_item": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "g3_max_ratio": {
+    "joint_vel": 0.3814983105334501,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000229169,
+    "cart_vel": 0.11706689109736572,
+    "cart_acc": 0.7352083334321793,
+    "cart_jerk": 0.760169876418635,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   },
+   "met": true
+  },
+  "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R2\\R2v3_P1b": {
+   "dir": "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R2\\R2v3_P1b",
+   "trials": 66,
+   "trials_without_audit": 0,
+   "g1_violations": 0,
+   "g1_trials": 0,
+   "g2_world_stops": 0,
+   "g2_early_use": 0,
+   "g2_trials": 0,
+   "g3_violations": 0,
+   "g3_trials": 0,
+   "g3_by_item": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "g3_max_ratio": {
+    "joint_vel": 0.39504521949132615,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000229169,
+    "cart_vel": 0.12425694898792276,
+    "cart_acc": 0.7355538525677703,
+    "cart_jerk": 0.7680525493680855,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   },
+   "met": true
+  },
+  "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R2\\N2v3_nat": {
+   "dir": "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R2\\N2v3_nat",
+   "trials": 99,
+   "trials_without_audit": 0,
+   "g1_violations": 0,
+   "g1_trials": 0,
+   "g2_world_stops": 0,
+   "g2_early_use": 0,
+   "g2_trials": 0,
+   "g3_violations": 0,
+   "g3_trials": 0,
+   "g3_by_item": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "g3_max_ratio": {
+    "joint_vel": 0.382534557789729,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000229169,
+    "cart_vel": 0.12038677540878238,
+    "cart_acc": 0.6188971587787074,
+    "cart_jerk": 0.7630854213577926,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   },
+   "met": true
+  },
+  "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R2\\N2v3_P1a": {
+   "dir": "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R2\\N2v3_P1a",
+   "trials": 33,
+   "trials_without_audit": 0,
+   "g1_violations": 0,
+   "g1_trials": 0,
+   "g2_world_stops": 0,
+   "g2_early_use": 0,
+   "g2_trials": 0,
+   "g3_violations": 0,
+   "g3_trials": 0,
+   "g3_by_item": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "g3_max_ratio": {
+    "joint_vel": 0.3803122585473242,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000229169,
+    "cart_vel": 0.11307019766771517,
+    "cart_acc": 0.7352083362886268,
+    "cart_jerk": 0.760169876418635,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   },
+   "met": true
+  },
+  "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R2\\N2v3_P1b": {
+   "dir": "C:\\PAI\\recovery_vla\\outputs\\v2eval\\V3R2\\N2v3_P1b",
+   "trials": 66,
+   "trials_without_audit": 0,
+   "g1_violations": 0,
+   "g1_trials": 0,
+   "g2_world_stops": 0,
+   "g2_early_use": 0,
+   "g2_trials": 0,
+   "g3_violations": 0,
+   "g3_trials": 0,
+   "g3_by_item": {
+    "joint_vel": 0,
+    "joint_acc": 0,
+    "joint_jerk": 0,
+    "cart_vel": 0,
+    "cart_acc": 0,
+    "cart_jerk": 0,
+    "gripper_speed": 0,
+    "gripper_force": 0
+   },
+   "g3_max_ratio": {
+    "joint_vel": 0.3875523627382888,
+    "joint_acc": 0.9900000000007125,
+    "joint_jerk": 0.9900000000229169,
+    "cart_vel": 0.119893371384398,
+    "cart_acc": 0.7355538528017822,
+    "cart_jerk": 0.768052549425601,
+    "gripper_speed": 0.7999999999999999,
+    "gripper_force": 0.5714285714285714
+   },
+   "met": true
+  }
+ },
+ "written": "2026-10-06 15:58:21"
+}
