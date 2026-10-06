@@ -225,7 +225,8 @@ def cmd_task(a) -> None:
         per = Perception(setup, Params.from_config(rtv["perception"]), thr)
         sf = None if a.no_safety else PerceptionSafetyFilter(setup, CFG["safety_filter"], float(rtv["safety_extra_margin_m"]))
         prt = PolicyRuntime(io, setup, pol, perception=per, safety=sf, checks=rtv["checks"], gripper_gate=rtv.get("gripper_gate"),
-                            tip_offset=float(CFG["sim"]["fingertip_offset"]), mode="naive", s=int(rt_cfg["exec_interval"]),
+                            tip_offset=float(CFG["sim"]["fingertip_offset"]), mode="naive",
+                            s=int(a.exec_interval or rt_cfg["exec_interval"]),          # 段階 3 は 6 行（0142）
                             d_init=int(rt_cfg["delay_steps"]), motion=Motion(setup, margin=float(act["limiter_margin"]),
                                                                              xcmd_leash_m=rtv.get("xcmd_leash_m"),
                                                                              cart_margin=rtv.get("cart_margin")))
@@ -381,6 +382,7 @@ def main(argv=None) -> int:
     p.add_argument("--trials", required=True, help="<種の先頭>:<数>")
     p.add_argument("--text", default="全部片付けて")
     p.add_argument("--no-safety", action="store_true")
+    p.add_argument("--exec-interval", type=int, default=None, help="塊の実行の行数（既定は configs の値）")
     p = sub.add_parser("e6")
     p.add_argument("--experiment", required=True)
     p.add_argument("--condition", required=True)

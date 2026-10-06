@@ -41,6 +41,10 @@ STAGES = {
     "s2": {"experiment": "V2S2", "base": 130000, "final": "A",
            "sets": {"A": ("R1v2", "naive", True), "B": ("N1v2", "naive", True), "C": ("R1v2", "sync", True),
                     "D": ("N1v2", "sync", True), "E": ("R1v2", "rtc", True), "H": ("R1v2", "naive", False)}},
+    # 段階 3（0142）: 本線 = naive・6 行（0 周目の判断）。同期は 0 周目と同じ 10 行。4 つ目の値は塊の実行の行数
+    "s3": {"experiment": "V3S3", "base": 140000, "final": "A",
+           "sets": {"A": ("R1v3", "naive", True, 6), "B": ("N1v3", "naive", True, 6), "C": ("R1v3", "sync", True, 10),
+                    "D": ("N1v3", "sync", True, 10), "E": ("R1v3", "rtc", True, 6), "H": ("R1v3", "naive", False, 6)}},
     "dev": {"experiment": "V2DEVE", "base": 59800, "final": "F",
             "sets": {"F": ("R2", "naive", True), "H": ("R2", "naive", False)}},
 }
@@ -52,6 +56,11 @@ def trials_of(stage: str, part: str) -> str:
         return {"nat": f"natural:{b}:2", "P1": f"induced:{b + 100}:3", "P2": f"induced:{b + 200}:3", "P3": f"induced:{b + 300}:3"}[part]
     return {"nat": f"natural:{b}:33", "P1": f"induced:{b + 1000}:50", "P2": f"induced:{b + 2000}:50",
             "P3": f"induced:{b + 3000}:50"}[part]
+
+
+def _interval_args(entry) -> list:
+    """組の 4 つ目の値（塊の実行の行数）。段階 1・2 の組にはない（configs の値＝10 行）。"""
+    return ["--exec-interval", str(entry[3])] if len(entry) > 3 else []
 
 
 def _e50():
@@ -66,13 +75,13 @@ def cmd_plan(a) -> list:
     main_safety = a.main_safety == "on"
     q = []
     for s in (a.sets.split(",") if a.sets else st["sets"]):
-        model, mode, safety = st["sets"][s]
+        model, mode, safety = st["sets"][s][:3]
         if s == "H" and not main_safety:
             continue                                    # 本線がフィルタ切なら H は本線と同じ
         safety = safety and main_safety
         for part in PARTS:
             args = ["run", "--experiment", st["experiment"], "--condition", f"{s}_{part}", "--model", model,
-                    "--mode", mode, "--trials", trials_of(a.stage, part)]
+                    "--mode", mode, "--trials", trials_of(a.stage, part)] + _interval_args(st["sets"][s])
             if part != "nat":
                 args += ["--induce", part]
             if not safety:
@@ -211,13 +220,21 @@ def cmd_safety_decide(a) -> None:
     接触の減り方は記録だけ。結果は outputs/results/v2_safety_main_<stage>.json（以後、この判定に使った決まりは直さない＝0113 の 4）。"""
     from recovla.eval import report as R
     e50 = _e50()
-    model = STAGES[a.stage]["sets"][STAGES[a.stage]["final"]][0]
+    fin = STAGES[a.stage]["sets"][STAGES[a.stage]["final"]]
+    model = fin[0]
     exp = a.experiment or f"V2SF_{a.stage}"
+    procs = []
     for cond, extra in (("on", []), ("off", ["--no-safety"])):
         d = OUT / "v2eval" / exp / cond
         if not (d / "run.json").is_file():
-            subprocess.run([sys.executable, str(config.ROOT / "scripts" / "82_v2_eval.py"), "run", "--experiment", exp,
-                            "--condition", cond, "--model", model, "--trials", a.trials, *extra], cwd=config.ROOT, check=True)
+            cmd = [sys.executable, str(config.ROOT / "scripts" / "82_v2_eval.py"), "run", "--experiment", exp,
+                   "--condition", cond, "--model", model, "--mode", fin[1], "--trials", a.trials, *_interval_args(fin), *extra]
+            p = subprocess.Popen(cmd, cwd=config.ROOT)
+            if not a.parallel:
+                p.wait()
+            procs.append(p)
+    if any(p.wait() != 0 for p in procs):
+        raise SystemExit("安全フィルタの判定の評価が落ちた")
     from recovla.eval import gate
     gsum = gate.require([OUT / "v2eval" / exp / c for c in ("on", "off")], f"安全フィルタの判定（{exp}）")
     X = {(r["seed"], r["target"]): r for r in R.collect([OUT / "v2eval" / exp / "on"])}
@@ -249,6 +266,7 @@ def main(argv=None) -> int:
     p.add_argument("--stage", required=True, choices=sorted(STAGES))
     p.add_argument("--trials", default="natural:199800:33")
     p.add_argument("--experiment", default=None, help="出力の実験名（既定 V2SF_<段階>。回し直しで前の判定を上書きしない）")
+    p.add_argument("--parallel", action="store_true", help="あり・なしを同時に回す（値は変わらない）")
     a = ap.parse_args(argv)
     {"plan": cmd_plan, "run": cmd_run, "report": cmd_report, "safety-decide": cmd_safety_decide}[a.cmd](a)
     return 0
