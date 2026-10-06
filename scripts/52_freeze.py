@@ -111,14 +111,69 @@ def cmd_verify(a) -> None:
     raise SystemExit(1 if changed or missing else 0)
 
 
+# ---- 段階 3 の最終評価の凍結（0142・0143）: 評価に使う保存点（R1v3・N1v3 の 2 万手と実行のフォルダの直下）、その学習データと
+# マニフェスト、出発点のモデル。一覧は docs/freeze/s3_hashes.json、タグは v3-s3-freeze
+S3_FILE = OUT_DIR / "s3_hashes.json"
+
+
+def s3_targets() -> tuple:
+    ev = importlib_load("ev82", ROOT / "scripts" / "82_v2_eval.py")
+    v3 = json.loads((ROOT / "outputs" / "f" / "data_v3.json").read_text(encoding="utf-8"))
+    ckpts = {m: str((ROOT / ev.CKPT[m]).parent.relative_to(ROOT).as_posix()) for m in ("R1v3", "N1v3")}
+    dirs = list(ckpts.values()) + [v3["datasets"][k]["dataset"].replace("\\", "/") for k in ("R1", "N1")] + ["models"]
+    paths = []
+    for d in dirs:
+        paths += sorted(p for p in (ROOT / d).rglob("*") if p.is_file())
+    for c in ckpts.values():
+        paths += sorted(p for p in (ROOT / c).parents[1].iterdir() if p.is_file())
+    paths += [ROOT / v3["datasets"][k]["manifest"] for k in ("R1", "N1")]
+    return ckpts, dirs, paths
+
+
+def importlib_load(name, path):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(name, path)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+def cmd_write_s3(a) -> None:
+    t0 = time.time()
+    ckpts, dirs, paths = s3_targets()
+    files = listing(paths)
+    head = subprocess.run([str(ROOT / ".tools" / "git" / "cmd" / "git.exe"), "rev-parse", "HEAD"], cwd=ROOT,
+                          capture_output=True, text=True).stdout.strip()
+    res = {"note": "段階 3 の最終評価の凍結（0143）。一覧はこのファイルを含むコミット（タグ v3-s3-freeze）の版に対応する。"
+                   "parent_head はこの一覧を書いたときの HEAD", "parent_head": head, "checkpoints": ckpts, "trees": dirs,
+           "n_files": len(files), "total_bytes": sum(v["bytes"] for v in files.values()), "files": files,
+           "written": time.strftime("%Y-%m-%d %H:%M:%S"), "seconds": round(time.time() - t0, 1)}
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    S3_FILE.write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
+    print(json.dumps({k: v for k, v in res.items() if k != "files"}, ensure_ascii=False))
+
+
+def cmd_verify_s3(a) -> None:
+    ref = json.loads(S3_FILE.read_text(encoding="utf-8"))["files"]
+    now = listing(s3_targets()[2])
+    missing = sorted(k for k in ref if k not in now)
+    changed = sorted(k for k in ref if k in now and now[k] != ref[k])
+    print(json.dumps({"n_ref": len(ref), "n_changed": len(changed), "changed": changed[:50], "n_missing": len(missing),
+                      "missing": missing[:20]}, ensure_ascii=False))
+    raise SystemExit(1 if changed or missing else 0)
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("write")
     sub.add_parser("verify")
     sub.add_parser("addendum")
+    sub.add_parser("write-s3")
+    sub.add_parser("verify-s3")
     a = ap.parse_args(argv)
-    {"write": cmd_write, "verify": cmd_verify, "addendum": cmd_addendum}[a.cmd](a)
+    {"write": cmd_write, "verify": cmd_verify, "addendum": cmd_addendum, "write-s3": cmd_write_s3,
+     "verify-s3": cmd_verify_s3}[a.cmd](a)
     return 0
 
 
