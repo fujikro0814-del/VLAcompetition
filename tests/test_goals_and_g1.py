@@ -7,6 +7,8 @@ import pytest
 from recovla.common import goals
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+# 目標書・版のタグ・G1 の既知の一覧は開発用のリポジトリにだけある（提出用のリポジトリでは飛ばす）
+needs_governance = pytest.mark.skipif(not (ROOT / goals.GOALS_PATH).is_file(), reason="目標書と版のタグがないリポジトリ")
 
 
 def _g1():
@@ -16,11 +18,13 @@ def _g1():
     return mod
 
 
+@needs_governance
 def test_goals_fingerprint_matches_tag():
     fp = goals.fingerprint()
     assert fp["version"] >= 2 and fp["tag"] == f"goals-v{fp['version']}" and len(fp["sha256"]) == 64
 
 
+@needs_governance
 def test_goals_rejects_edited_copy(tmp_path, monkeypatch):
     real = (ROOT / goals.GOALS_PATH).read_bytes()
     monkeypatch.setattr(goals, "_blob_at", lambda root, tag: real)
@@ -56,6 +60,7 @@ def test_g1_scan_allows_sensor_only_code():
     assert not _g1().scan(src)
 
 
+@needs_governance
 def test_g1_no_new_violations_in_work_tree():
     assert _g1().main([]) == 0
 

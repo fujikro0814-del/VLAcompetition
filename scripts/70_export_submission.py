@@ -22,17 +22,24 @@ ROOT = config.ROOT
 INCLUDE = [
     "pyproject.toml", ".gitignore",
     "src/recovla", "configs/default.yaml", "configs/demo",
+    # 段階 3（0146 の 3）: センサだけの実行系（v2）の設定と、段階 3 のエキスパートの設定
+    "configs/sensor_v1.yaml", "configs/runtime_v2.yaml", "configs/runtime_v2_color.yaml", "configs/runtime_v2_derived.yaml",
+    "configs/runtime_v2_judge.yaml", "configs/latency_v1.json", "configs/expert_v3.yaml",
     "assets/mjcf/scene_3cube.xml", "assets/mjcf/panda",
     "env/setup_env.ps1", "env/requirements-lock.txt", "env/session_env.example.ps1",
     "tests", "docs/interfaces",
     "paper/template.html", "paper/fig1.svg",
-    "docs/freeze/stepJ_hashes.json", "docs/freeze/stepJ_hashes_addendum.json", "docs/freeze/pip_freeze.txt",
-    "docs/results/results.md", "docs/results/e4_tradeoff_final.png",
+    "docs/freeze/s3_hashes.json", "docs/freeze/pip_freeze.txt",
+    "docs/results/results_s3.md", "docs/results/s3_round1_verify.json", "docs/results/s3_round2_verify.json",
     "scripts/10_gen_normal.py", "scripts/11_d_checks.py", "scripts/20_k1.py", "scripts/23_color_fit.py",
     "scripts/24_cue_check.py", "scripts/30_f.py", "scripts/40_h.py", "scripts/41_results.py", "scripts/42_g_checks.py",
     "scripts/46_r2.py", "scripts/47_steps.py", "scripts/48_rtc_redo.py", "scripts/49_contact.py", "scripts/50_e_eval.py",
-    "scripts/51_planner.py", "scripts/52_freeze.py", "scripts/53_results.py", "scripts/60_paper.py", "scripts/61_demo.py",
-    "scripts/62_video.py", "scripts/replay_check.py",
+    "scripts/51_planner.py", "scripts/52_freeze.py", "scripts/53_results.py", "scripts/54_results_s3.py",
+    "scripts/60_paper.py", "scripts/61_demo.py", "scripts/62_video.py", "scripts/63_demo_v2.py", "scripts/replay_check.py",
+    "scripts/80_g3_measure.py", "scripts/81_hand_check.py", "scripts/82_v2_eval.py", "scripts/83_perception_check.py",
+    "scripts/85_v2_judge.py", "scripts/86_stage2_a.py", "scripts/87_v2_e.py", "scripts/88_cause.py", "scripts/89_gate.py",
+    "scripts/90_rerun.py", "scripts/91_fast_query_check.py", "scripts/92_s3_round0.py", "scripts/93_s3_l0.py",
+    "scripts/94_s3_round1.py", "scripts/95_s3_round2.py", "scripts/check_g1_boundary.py",
 ]
 EXCLUDE = [r"__pycache__", r"\.pyc$", r"tests/test_c_port\.py$", r"tests/test_push_check\.py$",
            r"tests/fixtures/scene_g0_reference\.json$", r"tests/planner/fixtures/final_sentences\.json$"]
@@ -54,6 +61,7 @@ g0:
 %(placement)s
 """
 EXTRA_FILES = ["assets/mjcf/scene_g0.xml"]
+VERBATIM = {"docs/freeze/s3_hashes.json"}               # 文の置き換えをかけない（凍結の一覧のパスがずれる）
 KEEP = ("README.md", "THIRD_PARTY_NOTICES.md")          # 書き出し先で手で書くファイル（書き出しで消さない）
 TEXT_EXT = {".py", ".yaml", ".yml", ".xml", ".ps1", ".md", ".txt", ".toml", ".html", ".svg", ".json", ".cfg", ".ini"}
 
@@ -124,6 +132,11 @@ REPLACE = [
     (r"卒研|卒業研究", "以前の研究"),
     (r"学生", "利用者"),
     (r"模型", "モデル"),
+    (r"関所", "監査の関門"),
+    (r"諮る", "確認する"),
+    (r"諮った", "確認した"),
+    (r"諮り", "確認し"),
+    (r"諮", "確認"),
 ]
 
 
@@ -167,12 +180,16 @@ def cmd_export(a) -> None:
     for rel in included_files():
         src, dst = ROOT / rel, dest / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
-        if (src.suffix.lower() in TEXT_EXT or src.name == ".gitignore") and rel != "docs/freeze/stepJ_hashes.json":
+        if (src.suffix.lower() in TEXT_EXT or src.name == ".gitignore") and rel not in VERBATIM:
             t, c = transform(src.read_text(encoding="utf-8"))
             dst.write_text(t, encoding="utf-8", newline="")
             if c:
                 report["files"][rel] = c
                 report["total"] += sum(c.values())
+        elif rel in VERBATIM:                          # 一覧の値はそのまま、説明の文だけ置き換える
+            d = json.loads(src.read_text(encoding="utf-8"))
+            d["note"] = transform(d["note"])[0]
+            dst.write_text(json.dumps(d, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
         else:
             shutil.copyfile(src, dst)
     import yaml
