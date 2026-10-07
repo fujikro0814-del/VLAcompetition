@@ -11,7 +11,8 @@
 書くもの: --out の JSON（primary＝30 s の主な指標、secondary＝45・60 s と曲線、補正なし）と、--svg の図（横に時間、
   縦に累積の成功率の階段、30 s と 60 s に縦の線）。図の語は 60_paper.py の FORBIDDEN に当たらないかを確かめ、
   当たれば標準エラーに書いて終了コード 1。
---labels は図と JSON に出す名前。利用者向けの日本語にする（モデルの記号は書かない）。省くと「条件 A」「条件 B」。
+--labels は図と JSON に出す名前。利用者向けの日本語にする（モデルの記号は書かない）。省くと「条件 A」「条件 B」
+（--svg を付けるときは必須）。
 """
 import argparse
 import ast
@@ -122,6 +123,8 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     if len(a.dirs) > 2:
         ap.error("--dirs は 1 つか 2 つ")
+    if a.svg and not a.labels:
+        ap.error("--svg には --labels が要る（図に仮の名前が出ないように）")
     labels = a.labels or ["条件 A", "条件 B"][:len(a.dirs)]
     if len(labels) != len(a.dirs):
         ap.error("--labels の数が --dirs と違う")

@@ -20,11 +20,15 @@ def _script():
 
 
 def rec(seed, t_success, target="red", time_limit_s=60.0, induce=None):
-    """harness/loop.py の記録と同じ欄（使うものだけ）。induce は None（通常の試行）か established の真偽。"""
+    """harness/loop.py の記録と同じ欄（使うものだけ）。induce は None（通常の試行）か established の真偽。
+    成立した誘発は 5 s に成立したことにする（t_established）。"""
+    ind = {"kind": None, "established": False} if induce is None else {"kind": "P1", "established": bool(induce)}
+    if induce:
+        ind["t_established"] = 5.0
     return {"seed": seed, "target": target, "success": t_success is not None, "t_success": t_success,
             "time_limit_s": time_limit_s, "t_end": t_success if t_success is not None else time_limit_s,
             "steps": [{"target": target, "t_start": 0.0, "success": t_success is not None, "t_success": t_success}],
-            "induce": {"kind": None, "established": False} if induce is None else {"kind": "P1", "established": bool(induce)}}
+            "induce": ind}
 
 
 # ------------------------------------------------------------------ success_at
@@ -116,6 +120,31 @@ def test_induced_pairs_need_both_established():
     assert (d["both"], d["a_only"], d["b_only"], d["neither"]) == (1, 1, 0, 0)
 
 
+def _late(seed, t_success, t_est):
+    r = rec(seed, t_success, induce=True)
+    r["induce"]["t_established"] = t_est
+    return r
+
+
+def test_induced_denominator_depends_on_limit():
+    # 失敗が 35 s に成立した試行は、30 s の分母に入らず、45・60 s の分母には入る（段階 3 の 30 s と同じ定義）
+    rs = [_late(1, 20.0, 8.0), _late(2, None, 12.0), _late(3, 50.0, 35.0)]
+    sc = TS.condition_scores(rs, induced=True)["by_limit"]
+    assert (sc["30"]["successes"], sc["30"]["n"]) == (1, 2)
+    assert (sc["45"]["successes"], sc["45"]["n"]) == (1, 3)
+    assert (sc["60"]["successes"], sc["60"]["n"]) == (2, 3)
+    c = TS.compare_conditions(rs, [_late(1, None, 9.0), _late(2, 25.0, 10.0), _late(3, None, 20.0)], induced=True)
+    assert c["by_limit"]["30"]["pairs"] == 2 and c["by_limit"]["60"]["pairs"] == 3
+
+
+def test_induced_without_time_cannot_cut_early():
+    r = rec(1, 10.0, induce=True)
+    del r["induce"]["t_established"]                   # 成立の時刻がない記録
+    assert TS.established(r, 60.0)                     # 回した時間いっぱいなら判断できる
+    with pytest.raises(ValueError):
+        TS.established(r, 30.0)
+
+
 def test_mcnemar_per_limit_uses_stats():
     # 30 s: A だけ成功 6、B だけ成功 1、両方 2、両方失敗 3。45 s では B の遅い成功が 3 つ増える
     a = [rec(i, 10.0) for i in range(8)] + [rec(8 + i, None) for i in range(4)]
@@ -125,7 +154,7 @@ def test_mcnemar_per_limit_uses_stats():
     d30, d45 = c["by_limit"]["30"], c["by_limit"]["45"]
     assert (d30["both"], d30["a_only"], d30["b_only"], d30["neither"]) == (2, 6, 1, 3)
     assert d30["mcnemar_exact_p"] == stats.mcnemar_exact(6, 1)
-    diff, lo, hi = stats.paired_diff_ci(2, 6, 1, 3)
+    diff, lo, hi = stats.paired_diff_ci(2, 6, 1, 3, phi_correction=False)    # 段階 3 の報告（50_e_eval._newcombe）とそろえる
     assert d30["diff_a_minus_b"] == diff and d30["diff_95ci_newcombe"] == [lo, hi]
     assert (d45["both"], d45["a_only"], d45["b_only"]) == (5, 3, 1)
 
@@ -166,8 +195,8 @@ def test_svg_has_no_forbidden_words(induced):
     m = _script()
     a, b = _pair_set()
     if induced:
-        a = [dict(r, induce={"kind": "P1", "established": True}) for r in a]
-        b = [dict(r, induce={"kind": "P1", "established": True}) for r in b]
+        a = [dict(r, induce={"kind": "P1", "established": True, "t_established": 5.0}) for r in a]
+        b = [dict(r, induce={"kind": "P1", "established": True, "t_established": 5.0}) for r in b]
     svg = m.curve_svg(TS.time_report(a, b, ("復帰デモあり", "復帰デモなし"), induced=induced))
     assert svg.startswith("<svg") and "</svg>" in svg
     assert ("意図的な失敗" if induced else "通常の試行") in svg

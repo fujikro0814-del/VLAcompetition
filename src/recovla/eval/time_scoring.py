@@ -12,8 +12,12 @@ t_success <= 30 と同じ。回した時間（time_limit_s）より長い制限�
 
 主な指標は 30 s の 1 つだけ（2 条件を種の対で比べた正確な McNemar）。45・60 s と時間ごとの曲線は補正なしの記述
 （出力の JSON では primary と secondary に分ける）。
-意図的な失敗の条件では、分母を induce_established が真の試行に絞れる（50_e_eval.py の summary・paired_binary と同じ考え方。
-対は両方で真のものだけ）。
+意図的な失敗の条件では、分母を「その制限時間までに失敗が成立した試行」（induce.t_established <= T）に絞れる
+（50_e_eval.py の summary・paired_binary と同じ考え方。対は両方で成立したものだけ）。段階 3 は 30 s で打ち切ったので
+成立はすべて 30 s 以内だった。60 s の記録で 30 s より後に成立した試行を 30 s の分母に入れると、段階 3 と同じ定義に
+ならない（目標書_段階4.md 第 3-1 節、96_s4_resume.py の score と同じ規則）。
+時間ごとの曲線では、分母を曲線の終わり（t_max）までに成立した試行に固定する（記述用）。
+差の区間は 50_e_eval.py の _newcombe と同じ φ の補正なし（段階 3 の報告の値とそろえる。stats.paired_diff_ci の既定は補正あり）。
 
 3 個の連続タスク（run_*.json）は採点し直さない。1 手順の持ち時間が切れると、やり直しや次の手順へ進むので、制限時間
 によって経過そのものが変わる（60 s で回した記録の最初の 30 s は、30 s で回した記録と同じにならない）。
@@ -50,12 +54,24 @@ def load_runs(d) -> list[dict]:
     return _load(d, _RUN)
 
 
-def established(rec: dict) -> bool:
-    """意図的な失敗が起きた試行か。集計の行（induce_established）と生の記録（induce.established）のどちらも読む。"""
+def established(rec: dict, by_s: float = None) -> bool:
+    """意図的な失敗が起きた試行か。集計の行（induce_established）と生の記録（induce.established）のどちらも読む。
+    by_s を渡すと、by_s 秒までに成立したものだけを真にする（induce.t_established <= by_s）。成立の時刻が分からず、
+    by_s が回した時間より短いときは判断できないので ValueError。"""
     if "induce_established" in rec:
-        return bool(rec["induce_established"])
-    ind = rec.get("induce") or {}
-    return bool(ind.get("kind")) and bool(ind.get("established"))      # metrics.trial_metrics と同じ
+        ok = bool(rec["induce_established"])
+        t_est = rec.get("induce_t_established")
+    else:
+        ind = rec.get("induce") or {}
+        ok = bool(ind.get("kind")) and bool(ind.get("established"))    # metrics.trial_metrics と同じ
+        t_est = ind.get("t_established")
+    if not ok or by_s is None:
+        return ok
+    if t_est is None:
+        if float(by_s) >= float(rec["time_limit_s"]) - EPS:
+            return True
+        raise ValueError(f"seed {rec.get('seed')!r}: 成立の時刻がないので {float(by_s):g} s までに成立したか分からない")
+    return float(t_est) <= float(by_s) + EPS
 
 
 def success_at(rec: dict, limit_s: float) -> bool:
@@ -72,15 +88,16 @@ def _key(lim) -> str:
     return f"{float(lim):g}"
 
 
-def _use(recs, induced):
-    return [r for r in recs if established(r)] if induced else list(recs)
+def _use(recs, induced, by_s=None):
+    return [r for r in recs if established(r, by_s)] if induced else list(recs)
 
 
 def condition_scores(recs, limits=DEFAULT_LIMITS, induced: bool = False) -> dict:
-    """1 つの条件の、制限時間ごとの成功数・分母・Wilson の 95% 信頼区間。induced なら分母を induce_established が真の試行に絞る。"""
-    use = _use(recs, induced)
-    out = {"n_records": len(recs), "n": len(use), "by_limit": {}}
+    """1 つの条件の、制限時間ごとの成功数・分母・Wilson の 95% 信頼区間。
+    induced なら分母をその制限時間までに失敗が成立した試行に絞る（制限時間ごとに分母が違いうる）。"""
+    out = {"n_records": len(recs), "n": len(_use(recs, induced)), "by_limit": {}}
     for lim in limits:
+        use = _use(recs, induced, lim)
         k = sum(success_at(r, lim) for r in use)
         lo, hi = stats.wilson_interval(k, len(use))
         out["by_limit"][_key(lim)] = {"limit_s": float(lim), "successes": k, "n": len(use),
@@ -91,7 +108,7 @@ def condition_scores(recs, limits=DEFAULT_LIMITS, induced: bool = False) -> dict
 def success_curve(recs, t_max: float = 60.0, step: float = GRID_STEP_S, induced: bool = False) -> dict:
     """累積の成功率を 0〜t_max の格子（step 刻み）で。t における値は success_at(r, t) の割合（階段）。
     t_success の生の値（成功した試行だけ、小さい順）も付ける。"""
-    use = _use(recs, induced)
+    use = _use(recs, induced, t_max)
     n_grid = int(round(t_max / step))
     grid = [round(i * step, 9) for i in range(n_grid + 1)]
     rates = [sum(success_at(r, t) for r in use) / len(use) if use else None for t in grid]
@@ -106,23 +123,28 @@ def _pair_rows(recs):
 
 def compare_conditions(recs_a, recs_b, limits=DEFAULT_LIMITS, induced: bool = False) -> dict:
     """2 条件を種で対にして、制限時間ごとに正確な McNemar と Newcombe の差の 95% 区間（stats.py のもの）。
-    片方にしかない種は除く。induced なら両方で induce_established が真の対だけを使う。"""
-    pairs = stats.pair_by_seed(_pair_rows(recs_a), _pair_rows(recs_b), key="pair")
-    n_common = len(pairs)
-    if induced:
-        pairs = [(x, y) for x, y in pairs if established(x["rec"]) and established(y["rec"])]
-    out = {"pairs": len(pairs), "common_seeds": n_common, "only_a": len(recs_a) - n_common, "only_b": len(recs_b) - n_common,
-           "by_limit": {}}
+    片方にしかない種は除く。induced なら、その制限時間までに両方で失敗が成立した対だけを使う（制限時間ごとに対の数が違いうる）。"""
+    all_pairs = stats.pair_by_seed(_pair_rows(recs_a), _pair_rows(recs_b), key="pair")
+    n_common = len(all_pairs)
+
+    def _pairs(by_s=None):
+        if not induced:
+            return all_pairs
+        return [(x, y) for x, y in all_pairs if established(x["rec"], by_s) and established(y["rec"], by_s)]
+
+    out = {"pairs": len(_pairs()), "common_seeds": n_common, "only_a": len(recs_a) - n_common,
+           "only_b": len(recs_b) - n_common, "by_limit": {}}
     for lim in limits:
+        pairs = _pairs(lim)
         sa = [success_at(x["rec"], lim) for x, _ in pairs]
         sb = [success_at(y["rec"], lim) for _, y in pairs]
         n11 = sum(a and b for a, b in zip(sa, sb))
         n10 = sum(a and not b for a, b in zip(sa, sb))
         n01 = sum(b and not a for a, b in zip(sa, sb))
         n00 = len(pairs) - n11 - n10 - n01
-        diff, lo, hi = stats.paired_diff_ci(n11, n10, n01, n00)
+        diff, lo, hi = stats.paired_diff_ci(n11, n10, n01, n00, phi_correction=False)    # 50_e_eval._newcombe と同じ
         out["by_limit"][_key(lim)] = {
-            "limit_s": float(lim), "both": n11, "a_only": n10, "b_only": n01, "neither": n00,
+            "limit_s": float(lim), "pairs": len(pairs), "both": n11, "a_only": n10, "b_only": n01, "neither": n00,
             "a_rate": (n11 + n10) / len(pairs) if pairs else None, "b_rate": (n11 + n01) / len(pairs) if pairs else None,
             "mcnemar_exact_p": stats.mcnemar_exact(n10, n01),
             "diff_a_minus_b": None if math.isnan(diff) else diff,
@@ -144,12 +166,14 @@ def time_report(recs_a, recs_b=None, labels=("条件 A", "条件 B"), limits=DEF
 
     def at(k):
         return {"conditions": {s: {"label": c["label"], **c["by_limit"][k]} for s, c in conds.items()},
-                "compare": None if cmp is None else {"pairs": cmp["pairs"], **cmp["by_limit"][k]}}
+                "compare": None if cmp is None else cmp["by_limit"][k]}
 
     return {
         "settings": {"limits_s": limits, "primary_limit_s": PRIMARY_LIMIT_S, "induced_only": induced, "grid_step_s": step,
                      "labels": {s: lab for s, lab, _ in sides}, "pair_key": "seed と目標の色",
-                     "denominator": "induce_established が真の試行（対は両方で真）" if induced else "すべての試行"},
+                     "denominator": ("その制限時間までに失敗が成立した試行（induce.t_established <= T。対は両方で成立）"
+                                     if induced else "すべての試行"),
+                     "diff_ci": "Newcombe の方法 10、φ の補正なし（50_e_eval.py の _newcombe と同じ）"},
         "records": {s: {"n_records": c["n_records"], "n": c["n"]} for s, c in conds.items()},
         "pairing": None if cmp is None else {k: cmp[k] for k in ("pairs", "common_seeds", "only_a", "only_b")},
         "primary": {"metric": f"{PRIMARY_LIMIT_S:g} s 以内の成功（種の対の正確な McNemar、両側）", "limit_s": PRIMARY_LIMIT_S,
