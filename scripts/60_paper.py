@@ -196,10 +196,17 @@ def values() -> dict:
     v["perc_med_mm"], v["perc_p95_mm"] = f"{pa['median_m'] * 1000:.0f}", f"{pa['p95_m'] * 1000:.0f}"
     # 動画の場面の時刻（本文の「動画 m:ss〜m:ss」）
     t = 0.0
+    span = {}
     for sc in video_scenes():
+        span[sc["id"]] = (t, t + sc["dur_s"])
         v[f"v_{sc['id']}"] = f"{mmss(t)}〜{mmss(t + sc['dur_s'])}"
         t += sc["dur_s"]
+    if "task_intro" in span:                    # 実演の条件の説明から実演の終わりまでを、本文では一続きの場面とする
+        v["v_task"] = f"{mmss(span['task_intro'][0])}〜{mmss(span['task'][1])}"
     v["v_total"] = mmss(t)
+    # 動画の実演の条件（上位層の実行器の設定）
+    v["step_timeout"] = f"{float(CFG['planner']['step_timeout_s']):g}"
+    v["retry"] = str(int(CFG["planner"]["retry"]))
     return v
 
 
