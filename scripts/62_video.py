@@ -175,8 +175,13 @@ def task_scene(sc, title):
             text(d, (1470, y), f"{mark} {COLOR[s['color']]}を箱へ", 32, C_B if done else (INK if active else MUTED), True)
             y += 50
             if len(s["attempts"]) > 1 and s["attempts"][1]["t_begin"] <= t:
-                text(d, (1510, y), "待機位置へ戻して再試行", 24, C_C)
+                a1 = s["attempts"][1]
+                quick = a1["t_judge"] is not None and a1["t_judge"] - a1["t_begin"] < 3.0   # 戻った時点で既に箱の中
+                text(d, (1510, y), "待機位置へ戻ってから完了を確認" if quick else "待機位置へ戻して再試行", 24, C_C)
                 y += 38
+        for e in sc.get("events", []):
+            if e["t0"] <= t < e["t1"]:
+                text(d, (1470, y + 20), e["text"], 30, C_C, True)
         return im
     return int(sc["dur_s"] * FPS), f
 
@@ -191,13 +196,17 @@ def fig1_image():
     body = pm.render(v)
     style = re.search(r"<style>.*?</style>", body, re.S).group(0)
     svg = re.search(r"<svg.*?</svg>", body, re.S).group(0)
+    svg = re.sub(r"（\d+(\.\d+)? 節）", "", svg)                 # 説明資料の節番号は動画に出さない（10/07 の指示）
     page = BUILD / "fig1_only.html"
     page.write_text(f"<!doctype html><meta charset='utf-8'>{style}<body style='margin:0;background:#fff'>"
                     f"<div style='width:1800px;padding:20px 60px'>{svg}</div></body>", encoding="utf-8")
     png = BUILD / "fig1_video.png"
     subprocess.run([str(pm.EDGE), "--headless", "--disable-gpu", "--hide-scrollbars", f"--screenshot={png}",
-                    "--window-size=1920,1400", page.as_uri()], check=True, capture_output=True, timeout=120)
-    return Image.open(png).convert("RGB")
+                    "--window-size=1920,2000", page.as_uri()], check=True, capture_output=True, timeout=120)
+    from PIL import ImageChops
+    im = Image.open(png).convert("RGB")
+    box = ImageChops.difference(im, Image.new("RGB", im.size, "white")).getbbox()   # 図の下の余白を落とす
+    return im.crop((0, 0, im.width, min(im.height, box[3] + 20)))
 
 
 def image_scene(sc, img, title, lines):
@@ -235,14 +244,20 @@ def scenes(v):
         "task_intro": lambda sc: card(sc, "実演の条件", [
             ("指示は「全部片付けて」の 1 文だけ", 34, INK),
             ("LLM が片付ける順番を決め（例: 赤 → 緑 → 青）、1 個ずつ箱へ運ぶ", 34, INK),
+            ("学習したのは「指示した 1 色を箱へ入れる」動作だけ。", 34, INK),
+            ("カメラで箱に入ったことを確かめたら、次の色の指示に切り替える", 34, INK),
             (f"1 個につき {v['step_timeout']} 秒以内。終わらなければ待機位置に戻って {v['retry']} 回だけやり直す", 34, INK),
             (f"評価に使っていない {v['e7_n']} 配置のうち、3 個とも片付いたのは {v['e7_k']} 配置。次の映像はそのうちの 1 つ", 28, MUTED)]),
         "task": lambda sc: task_scene(sc, "実演: 日本語の指示から 3 個を順に片付ける"),
         "numbers": lambda sc: card(sc, "主な結果（評価に使っていない配置で測定）", [
-            (f"把持の失敗から片方だけが回復した組: 復帰デモあり {v['e3a_xo']} 組、復帰デモなし {v['e3a_yo']} 組", 34, INK),
-            (f"通常の試行（意図的に失敗させない）での成功率 {v['e1_pct']}（{v['e1_k']}/{v['e1_n']}）", 34, INK),
-            (f"1 回の試行＝指示した 1 色を {v['time_limit']} 秒以内に箱へ入れる。{v['nat_layouts']} 配置 × 3 色で {v['nat_n']} 回", 26, MUTED),
-            (f"3 個を続けて片付けられたのは {v['e7_k']}/{v['e7_n']}", 34, INK),
+            (f"■ 1 個を片付ける試行（指示した 1 色を {v['time_limit']} 秒以内に箱へ入れる）", 30, MUTED),
+            (f"成功率 {v['e1_pct']}（{v['nat_layouts']} 配置 × 3 色＝{v['nat_n']} 回のうち {v['e1_k']} 回）", 34, INK),
+            (f"把持を意図的に失敗させたとき、掴み直して成功した回数（同じ配置・同じ失敗の {v['e3a_pairs']} 回）:", 34, INK),
+            (f"復帰デモあり {v['e3a_xk']} 回、復帰デモなし {v['e3a_yk']} 回", 34, INK),
+            ("", 10, BG),
+            ("■ 3 個を片付ける実演（「全部片付けて」の 1 文）", 30, MUTED),
+            (f"3 個とも片付いたのは {v['e7_n']} 配置のうち {v['e7_k']} 配置", 34, INK),
+            ("", 10, BG),
             ("詳しい数字と条件は説明資料に記載", 26, MUTED)]),
         "limits": lambda sc: card(sc, "限界と今後", [
             ("シミュレーションのみで、実機では確かめていない", 34, INK),

@@ -1,0 +1,39 @@
+<svg viewBox="0 0 1080 330" role="img" aria-label="復帰デモの作り方。エキスパートが成功デモを生成する途中で意図的に失敗させ、失敗が確定した時点から、エキスパートが復帰して箱へ収納するまでを記録する。">
+  <defs>
+    <marker id="m2c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="head-cmd" d="M0,0 L10,5 L0,10 z"/></marker>
+  </defs>
+  <rect class="bx d" x="40" y="20" width="220" height="124" rx="6"/>
+  <text class="bt" x="150" y="48" text-anchor="middle">成功デモの生成</text>
+  <text class="t" x="150" y="74" text-anchor="middle">エキスパートが</text>
+  <text class="t" x="150" y="95" text-anchor="middle">通常どおり把持し</text>
+  <text class="t" x="150" y="116" text-anchor="middle">箱へ運ぶ</text>
+  <rect class="bx c" x="295" y="20" width="250" height="124" rx="6"/>
+  <text class="bt" x="420" y="48" text-anchor="middle">意図的な失敗</text>
+  <text class="t" x="311" y="74">把持失敗: ずらして閉じる</text>
+  <text class="t" x="311" y="95">落下: 運ぶ途中で開く</text>
+  <text class="t" x="311" y="116">置き損ね: 別の位置で放す</text>
+  <rect class="bx c" x="580" y="20" width="200" height="124" rx="6"/>
+  <text class="bt" x="680" y="48" text-anchor="middle">失敗の確定</text>
+  <text class="t" x="680" y="74" text-anchor="middle">物理の状態で判定</text>
+  <text class="t" x="680" y="95" text-anchor="middle">（持ち上がらない、</text>
+  <text class="t" x="680" y="116" text-anchor="middle">テーブルに着地）</text>
+  <rect class="bx b" x="815" y="20" width="235" height="124" rx="6"/>
+  <text class="bt" x="932" y="48" text-anchor="middle">復帰して収納</text>
+  <text class="t" x="932" y="74" text-anchor="middle">エキスパートが</text>
+  <text class="t" x="932" y="95" text-anchor="middle">掴み直し・運び直して</text>
+  <text class="t" x="932" y="116" text-anchor="middle">箱へ収納するまで</text>
+  <line class="cmd" x1="260" y1="82" x2="293" y2="82" marker-end="url(#m2c)"/>
+  <line class="cmd" x1="545" y1="82" x2="578" y2="82" marker-end="url(#m2c)"/>
+  <line class="cmd" x1="780" y1="82" x2="813" y2="82" marker-end="url(#m2c)"/>
+
+  <rect class="skipbar" x="40" y="176" width="740" height="40" rx="4"/>
+  <text class="t" x="410" y="202" text-anchor="middle">記録しない</text>
+  <rect class="recbar" x="780" y="176" width="270" height="40" rx="4"/>
+  <text class="bt" x="915" y="202" text-anchor="middle">復帰デモとして記録</text>
+  <line class="cmd" x1="780" y1="144" x2="780" y2="232" style="stroke-dasharray:4 3"/>
+  <text class="lab" x="772" y="250" text-anchor="end">失敗の確定 ＝ 記録の開始</text>
+  <line class="cmd" x1="40" y1="232" x2="1048" y2="232" marker-end="url(#m2c)"/>
+  <text class="lab" x="1050" y="252" text-anchor="end">時間</text>
+  <text class="t" x="40" y="284">本数: 把持失敗 {{n_rec_grasp}} 本・落下 {{n_rec_drop}} 本・置き損ね {{n_rec_place}} 本（計 {{n_recovery}} 本）</text>
+  <text class="tm" x="40" y="312">エキスパートはシミュレーションの真の状態を参照する。学習する方策（VLA）はセンサの出力だけを使う。</text>
+</svg>
