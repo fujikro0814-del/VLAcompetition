@@ -1,0 +1,250 @@
+{
+ "written": "2026-10-08 07:15:57",
+ "by": "担当 B（98_s4_d_e7.py defs）",
+ "arms": {
+  "E0": {
+   "diag": "D-E7",
+   "arm": "E0",
+   "ja": "今の実行器（同じ 40 種で 2 回。条件名 E0_run1・E0_run2）",
+   "goal": null,
+   "text": "全部片付けて"
+  },
+  "EH": {
+   "diag": "D-E7",
+   "arm": "EH",
+   "ja": "学習の home の関節角へ、関節空間で制限層を通して戻す",
+   "goal": "home",
+   "goal_q": [
+    0.0,
+    -0.684,
+    0.0,
+    -2.907,
+    0.0,
+    2.216,
+    0.785
+   ],
+   "text": "全部片付けて",
+   "goal_params": {
+    "vmax_rad_s": 0.5,
+    "gain_per_s": 2.0,
+    "tol_cmd_rad": 0.001,
+    "tol_vel_rad_s": 0.005,
+    "hold_s": 0.5,
+    "timeout_s": 10.0,
+    "open_wait_max_s": 1.0,
+    "meas_corrections": 1,
+    "meas_settle_s": 0.25
+   }
+  },
+  "ES": {
+   "diag": "D-E7",
+   "arm": "ES",
+   "ja": "学習の待機位置の始めの姿勢（z 0.314）へ、関節空間で制限層を通して戻す",
+   "goal": "standby_start",
+   "goal_q": [
+    0.162272,
+    -0.394371,
+    0.27625,
+    -2.802853,
+    0.159527,
+    2.408117,
+    1.081562
+   ],
+   "text": "全部片付けて",
+   "goal_params": {
+    "vmax_rad_s": 0.5,
+    "gain_per_s": 2.0,
+    "tol_cmd_rad": 0.001,
+    "tol_vel_rad_s": 0.005,
+    "hold_s": 0.5,
+    "timeout_s": 10.0,
+    "open_wait_max_s": 1.0,
+    "meas_corrections": 1,
+    "meas_settle_s": 0.25
+   }
+  },
+  "EO": {
+   "diag": "D-E7",
+   "arm": "EO",
+   "ja": "緑 → 赤 → 青の順（指示文を変え、段階 4 の計画役で 1 回呼んでキャッシュ）",
+   "goal": null,
+   "text": "緑、赤、青の順に全部片付けて",
+   "expected_order": [
+    "green",
+    "red",
+    "blue"
+   ]
+  },
+  "EX": {
+   "diag": "D-E7",
+   "arm": "EX",
+   "ja": "条件つき（8-4 の行 1・行 3 の矛盾の枝のときだけ）。手順の切り替えで実行系を作り直す",
+   "goal": null,
+   "rebuild": true,
+   "text": "全部片付けて",
+   "conditional": true
+  }
+ },
+ "goal_params": {
+  "vmax_rad_s": 0.5,
+  "gain_per_s": 2.0,
+  "tol_cmd_rad": 0.001,
+  "tol_vel_rad_s": 0.005,
+  "hold_s": 0.5,
+  "timeout_s": 10.0,
+  "open_wait_max_s": 1.0,
+  "meas_corrections": 1,
+  "meas_settle_s": 0.25
+ },
+ "poses": {
+  "HOME_Q": [
+   0.0,
+   -0.684,
+   0.0,
+   -2.907,
+   0.0,
+   2.216,
+   0.785
+  ],
+  "STANDBY_START_Q": [
+   0.162272,
+   -0.394371,
+   0.27625,
+   -2.802853,
+   0.159527,
+   2.408117,
+   1.081562
+  ],
+  "STANDBY_END_Q": [
+   0.166045,
+   -0.359234,
+   0.280733,
+   -2.804154,
+   0.155684,
+   2.432485,
+   1.092411
+  ],
+  "source": "outputs/manifests/R1v3_20261005-133737.json の kind n（通常デモ）: start=home 162 本・start=retreat 78 本の 0 こま目、全 240 本の最後のこまの joints の平均（担当 B が 10/08 に読み取りで計算。train_pose_means で計算し直せる）。HOME_Q は目標書 8-3・8-5 の値そのもの（学習の home の平均 [0.000032, -0.684448, ..., 0.785001] と 5e-4 rad 以内）",
+  "train_means": {
+   "start_home": {
+    "n": 162,
+    "joints": [
+     3.225717086938849e-05,
+     -0.6844481696015081,
+     -1.6497607484508585e-06,
+     -2.906586077909076,
+     -1.0330417510382394e-05,
+     2.2163020469682944,
+     0.785000983869755
+    ],
+    "ee": [
+     0.3069029015716037,
+     9.146577194843484e-06,
+     0.35528362106843336
+    ]
+   },
+   "start_retreat": {
+    "n": 78,
+    "joints": [
+     0.16227163740797027,
+     -0.39437070877039737,
+     0.2762495063583348,
+     -2.802853153539978,
+     0.15952719193813622,
+     2.4081165372147253,
+     1.0815622863973262
+    ],
+    "ee": [
+     0.3301087003790444,
+     0.14568506680704063,
+     0.31443811251315673
+    ]
+   },
+   "end": {
+    "n": 240,
+    "joints": [
+     0.16604515891501015,
+     -0.35923422265724186,
+     0.28073348964772044,
+     -2.8041536514954353,
+     0.15568446105097442,
+     2.432484767939158,
+     1.0924105218777427
+    ],
+    "ee": [
+     0.33024368178920305,
+     0.1486663631707973,
+     0.30359138752144754
+    ]
+   }
+  },
+  "constant_vs_mean": {
+   "standby_start_vs_train_mean_max_abs": 4.936416652112641e-07,
+   "standby_end_vs_train_mean_max_abs": 4.89647720425257e-07,
+   "home_vs_train_mean_max_abs": 0.00044816960150806384
+  },
+  "fk_hand_xyz": {
+   "home": [
+    0.30676653906595014,
+    4.640385298237959e-20,
+    0.35493651527659253
+   ],
+   "standby_start": [
+    0.33010868929011977,
+    0.1456853781072382,
+    0.3144382963664842
+   ],
+   "standby_end": [
+    0.3302443731915946,
+    0.14866688025463717,
+    0.30359119310941507
+   ]
+  }
+ },
+ "apply_at": "2 番目以降の手順の 1 回目の試みの前（前の手順の完了の判定の後）。やり直しの前の戻す動きは E0 と同じ",
+ "run_settings": {
+  "exec_interval": 6,
+  "no_safety": true,
+  "step_timeout_s": 30,
+  "retry": 1,
+  "task_time_limit_s": 200,
+  "planner": "s4（decompose_s4、claude-haiku-5-5）",
+  "world_per_trial": true,
+  "model": "R1v3",
+  "basis": "段階 3 の E7（V3S3\\E7_R1v3）: 推論の間隔 6 行（runtime.inference の k_obs の差）、runtime.safety が null"
+ },
+ "eo": {
+  "text": "緑、赤、青の順に全部片付けて",
+  "expected_order": [
+   "green",
+   "red",
+   "blue"
+  ],
+  "cache_key_all_three_on_table": "0d6b73a5aff523c9fc4f1deaa0b10097007e0c8ca8173a53eead0bf396ddba08",
+  "cache_present": false,
+  "note": "検出した机上の色が 3 個（並べ替えて blue, green, red）、箱が空のときの鍵。無ければ本番の最初の EO の試行で 1 回だけ呼ぶ"
+ },
+ "metrics": {
+  "first_close_lift": "2 番目の手順の 1 回目の試みの最初の閉じ（gripper_closed の 0→1）から次に開くまでに目標が CUBE_REST_Z + 0.02 m を超えた。分母は 2 番目の手順が始まった試行",
+  "plus_y_shift": "その閉じのこまでの（指先 − 目標）の y > +1 cm。分母は最初の閉じが起きた試行",
+  "all_three_true": "meta.all_three_in_box（真値。終わりに 3 個とも箱の中）",
+  "same_as": "docs\\local\\strategy_20261008\\work\\upper_skeptic\\e7_first_grasp.py（V3S3 の E7 で 2 番目の 1 回目 5/20・+y 16/19 を再現。tests\\test_s4_diag_B.py）"
+ },
+ "bands": {
+  "production": "190300〜190339（D_E7）",
+  "conditions": [
+   "E0_run1",
+   "E0_run2",
+   "EH",
+   "ES",
+   "EO"
+  ],
+  "interleave": "同じ時期に種の塊ごとに交互（目標書 第 4 節）。並びは運用役が決める"
+ },
+ "files_sha256": {
+  "src/recovla/diag/e7.py": "469a99b49ed319c591afa2e676e08bdec3d525b3a3b8cec7bd942a465c033dd5",
+  "scripts/98_s4_d_e7.py": "afeb3c87bb4c8d1c64060ba0f09a0f5bb8a6852d2f8c3b99afd4fa54ffe5e99b",
+  "scripts/96_s4_resume.py": "43e593b6f8172b0375c6e384d8cf39d6860fcde12859e72b0654945ce147a5ff",
+  "configs/s4_gates.json": "cf2e8c96a205bf10126bdf647bdbf2e8b9d5a315ebbe881c03bafac82b12940d"
+ }
+}

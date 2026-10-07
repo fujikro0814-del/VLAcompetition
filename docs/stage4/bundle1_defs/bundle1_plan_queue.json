@@ -1,0 +1,2923 @@
+{
+ "schema": "recovery_vla.s4_bundle1_plan/2",
+ "name": "bundle1",
+ "experiment": "S4DRTC・S4DE7・S4DSTART・S4XPL・S4DREC・outputs\\s4\\x2（担当のスクリプトの既定）",
+ "written": "2026-10-08 07:45:24",
+ "by": "担当 D（運用役）、scripts\\98_s4_d_plan.py plan",
+ "with_ex": false,
+ "pre_steps": [
+  {
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_rtc.py settings --out outputs\\s4\\d_rtc\\settings.json",
+   "writes": "outputs\\s4\\d_rtc\\settings.json（6 設定の中身と、回す前に掲示する定義＝移動の比の 30 s 版・影の推論・ZEROS）"
+  },
+  {
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_e7.py defs",
+   "writes": "outputs\\s4\\d_e7\\definitions.json（腕の定義）"
+  },
+  {
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_start.py defs",
+   "writes": "outputs\\s4\\d_start\\definitions.json（壁際・格子・移植の添字）"
+  },
+  {
+   "cmd": "（掲示）上の 3 つの SHA-256 を掲示板に出す",
+   "writes": "-"
+  }
+ ],
+ "conditions": [
+  {
+   "id": "RTC_current_repro",
+   "diag": "D-RTC",
+   "gate": "R",
+   "group": "D-RTC",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4DRTC",
+   "record_condition": "current_repro",
+   "model": "R1v3",
+   "trials_spec": "natural:190200:10",
+   "seeds": [
+    190200,
+    190209
+   ],
+   "trials": 30,
+   "band": "D_RTC",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "rtc",
+   "est": {
+    "budget_ph": 0.56,
+    "k_scaled_ph": 0.493,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4DRTC\\current_repro",
+   "progress": "outputs\\v2eval\\S4DRTC\\current_repro\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": [
+    "scripts\\96_s4_resume.py",
+    "run",
+    "--experiment",
+    "S4DRTC",
+    "--condition",
+    "current_repro",
+    "--model",
+    "R1v3",
+    "--trials",
+    "natural:190200:10",
+    "--mode",
+    "rtc",
+    "--exec-interval",
+    "6",
+    "--no-safety",
+    "--time-limit-s",
+    "60"
+   ],
+   "notes": "ZEROS・paper_formula の中身は実装役が回す前に掲示（s4_gates R.known_issue。98_s4_d_rtc.py settings）",
+   "job": "J_RTC_rotate"
+  },
+  {
+   "id": "RTC_paper_formula_range44_cap5",
+   "diag": "D-RTC",
+   "gate": "R",
+   "group": "D-RTC",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4DRTC",
+   "record_condition": "paper_formula_range44_cap5",
+   "model": "R1v3",
+   "trials_spec": "natural:190200:10",
+   "seeds": [
+    190200,
+    190209
+   ],
+   "trials": 30,
+   "band": "D_RTC",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "rtc",
+   "est": {
+    "budget_ph": 0.56,
+    "k_scaled_ph": 0.493,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4DRTC\\paper_formula_range44_cap5",
+   "progress": "outputs\\v2eval\\S4DRTC\\paper_formula_range44_cap5\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "ZEROS・paper_formula の中身は実装役が回す前に掲示（s4_gates R.known_issue。98_s4_d_rtc.py settings）",
+   "job": "J_RTC_rotate"
+  },
+  {
+   "id": "RTC_range40_cap5",
+   "diag": "D-RTC",
+   "gate": "R",
+   "group": "D-RTC",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4DRTC",
+   "record_condition": "range40_cap5",
+   "model": "R1v3",
+   "trials_spec": "natural:190200:10",
+   "seeds": [
+    190200,
+    190209
+   ],
+   "trials": 30,
+   "band": "D_RTC",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "rtc",
+   "est": {
+    "budget_ph": 0.56,
+    "k_scaled_ph": 0.493,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4DRTC\\range40_cap5",
+   "progress": "outputs\\v2eval\\S4DRTC\\range40_cap5\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "ZEROS・paper_formula の中身は実装役が回す前に掲示（s4_gates R.known_issue。98_s4_d_rtc.py settings）",
+   "job": "J_RTC_rotate"
+  },
+  {
+   "id": "RTC_range10_cap5",
+   "diag": "D-RTC",
+   "gate": "R",
+   "group": "D-RTC",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4DRTC",
+   "record_condition": "range10_cap5",
+   "model": "R1v3",
+   "trials_spec": "natural:190200:10",
+   "seeds": [
+    190200,
+    190209
+   ],
+   "trials": 30,
+   "band": "D_RTC",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "rtc",
+   "est": {
+    "budget_ph": 0.56,
+    "k_scaled_ph": 0.493,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4DRTC\\range10_cap5",
+   "progress": "outputs\\v2eval\\S4DRTC\\range10_cap5\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "ZEROS・paper_formula の中身は実装役が回す前に掲示（s4_gates R.known_issue。98_s4_d_rtc.py settings）",
+   "job": "J_RTC_rotate"
+  },
+  {
+   "id": "RTC_ZEROS",
+   "diag": "D-RTC",
+   "gate": "R",
+   "group": "D-RTC",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4DRTC",
+   "record_condition": "ZEROS",
+   "model": "R1v3",
+   "trials_spec": "natural:190200:10",
+   "seeds": [
+    190200,
+    190209
+   ],
+   "trials": 30,
+   "band": "D_RTC",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "rtc",
+   "est": {
+    "budget_ph": 0.56,
+    "k_scaled_ph": 0.493,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4DRTC\\ZEROS",
+   "progress": "outputs\\v2eval\\S4DRTC\\ZEROS\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "ZEROS・paper_formula の中身は実装役が回す前に掲示（s4_gates R.known_issue。98_s4_d_rtc.py settings）",
+   "job": "J_RTC_rotate"
+  },
+  {
+   "id": "RTC_naive",
+   "diag": "D-RTC",
+   "gate": "R",
+   "group": "D-RTC",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4DRTC",
+   "record_condition": "naive",
+   "model": "R1v3",
+   "trials_spec": "natural:190200:10",
+   "seeds": [
+    190200,
+    190209
+   ],
+   "trials": 30,
+   "band": "D_RTC",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "rtc",
+   "est": {
+    "budget_ph": 0.56,
+    "k_scaled_ph": 0.493,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4DRTC\\naive",
+   "progress": "outputs\\v2eval\\S4DRTC\\naive\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": [
+    "scripts\\96_s4_resume.py",
+    "run",
+    "--experiment",
+    "S4DRTC",
+    "--condition",
+    "naive",
+    "--model",
+    "R1v3",
+    "--trials",
+    "natural:190200:10",
+    "--mode",
+    "naive",
+    "--exec-interval",
+    "6",
+    "--no-safety",
+    "--time-limit-s",
+    "60"
+   ],
+   "notes": "ZEROS・paper_formula の中身は実装役が回す前に掲示（s4_gates R.known_issue。98_s4_d_rtc.py settings）",
+   "job": "J_RTC_rotate"
+  },
+  {
+   "id": "RTC_shadow",
+   "diag": "D-RTC の影の推論",
+   "gate": "R（R.b1）",
+   "group": "D-RTC-shadow",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4DRTC",
+   "record_condition": "shadow_current_repro",
+   "model": "R1v3",
+   "trials_spec": "natural:190220:4",
+   "seeds": [
+    190220,
+    190223
+   ],
+   "trials": 12,
+   "band": "D_RTC_shadow",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "rtc",
+   "est": {
+    "budget_ph": 0.224,
+    "k_scaled_ph": 0.197,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4DRTC\\shadow_current_repro",
+   "progress": "outputs\\v2eval\\S4DRTC\\shadow_current_repro\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "誘導しない塊を同じ観測・同じ雑音で並べて記録。実行は current_repro（98_s4_d_rtc.py の既定）",
+   "job": "J_RTC_shadow"
+  },
+  {
+   "id": "X2_gen",
+   "diag": "X2 の生成",
+   "gate": "R（R.b1）",
+   "group": "X2",
+   "kind": "x2",
+   "enabled": true,
+   "experiment": "outputs\\s4\\x2",
+   "record_condition": "gen\\X2_gen",
+   "model": null,
+   "trials_spec": "44404:20",
+   "seeds": [
+    44404,
+    44423
+   ],
+   "trials": 20,
+   "band": "X2_gen",
+   "time_limits": null,
+   "cost_kind": "x2_gen",
+   "est": {
+    "budget_ph": 0.1,
+    "k_scaled_ph": 0.1,
+    "basis": "推測"
+   },
+   "out_dir": "outputs\\s4\\x2\\gen\\X2_gen",
+   "progress": "outputs\\s4\\x2\\gen\\X2_gen\\progress.json",
+   "records": "診断のスクリプトが決める（progress.json は同じ鍵で書く）",
+   "equivalent_96": null,
+   "notes": "学習用の帯（学習には入れない）。見込みは推測（数分）",
+   "job": "X2_gen"
+  },
+  {
+   "id": "X2_measure",
+   "diag": "X2 の測定",
+   "gate": "R（R.b1）",
+   "group": "X2",
+   "kind": "x2",
+   "enabled": true,
+   "experiment": "outputs\\s4\\x2",
+   "record_condition": "eval_X2_gen_R1v3",
+   "model": "R1v3",
+   "trials_spec": "44404:20",
+   "seeds": [
+    44404,
+    44423
+   ],
+   "trials": 20,
+   "band": "X2_gen",
+   "time_limits": null,
+   "cost_kind": "x2_measure",
+   "est": {
+    "budget_ph": 0.05,
+    "k_scaled_ph": 0.05,
+    "basis": "推測"
+   },
+   "out_dir": "outputs\\s4\\x2\\eval_X2_gen_R1v3",
+   "progress": "outputs\\s4\\x2\\eval_X2_gen_R1v3\\progress.json",
+   "records": "診断のスクリプトが決める（progress.json は同じ鍵で書く）",
+   "equivalent_96": null,
+   "notes": "10・20・30・40 行先の予測の不足。GPU 数分（推測）",
+   "job": "X2_measure"
+  },
+  {
+   "id": "E7_E0_r1",
+   "diag": "D-E7",
+   "gate": "T",
+   "group": "D-E7",
+   "kind": "task",
+   "enabled": true,
+   "experiment": "S4DE7",
+   "record_condition": "E0_run1",
+   "model": "R1v3",
+   "trials_spec": "190300:40",
+   "seeds": [
+    190300,
+    190339
+   ],
+   "trials": 40,
+   "band": "D_E7",
+   "time_limits": {
+    "step_timeout_s": 30,
+    "retry": 1,
+    "task_time_limit_s": 200,
+    "scored": "3 個とも（真値）がそのまま主（段階 3 と同じ定義）"
+   },
+   "cost_kind": "e7",
+   "est": {
+    "budget_ph": 3.639,
+    "k_scaled_ph": 3.639,
+    "basis": "E7 は速さを未測定（束 0 の E7 の速さ 190150〜 は未実行）なので予算のまま"
+   },
+   "out_dir": "outputs\\v2eval\\S4DE7\\E0_run1",
+   "progress": "outputs\\v2eval\\S4DE7\\E0_run1\\progress.json",
+   "records": "run_NNNN.json・.npz・run_NNNN_runtime.json（96_s4_resume.py task と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "今の実行器。E7_E0_r1・r2 は同じ 40 種（回し直しのぶれ d_E0・rho_hat）",
+   "job": "E7_E0_r1",
+   "arm": "E0"
+  },
+  {
+   "id": "E7_E0_r2",
+   "diag": "D-E7",
+   "gate": "T",
+   "group": "D-E7",
+   "kind": "task",
+   "enabled": true,
+   "experiment": "S4DE7",
+   "record_condition": "E0_run2",
+   "model": "R1v3",
+   "trials_spec": "190300:40",
+   "seeds": [
+    190300,
+    190339
+   ],
+   "trials": 40,
+   "band": "D_E7",
+   "time_limits": {
+    "step_timeout_s": 30,
+    "retry": 1,
+    "task_time_limit_s": 200,
+    "scored": "3 個とも（真値）がそのまま主（段階 3 と同じ定義）"
+   },
+   "cost_kind": "e7",
+   "est": {
+    "budget_ph": 3.639,
+    "k_scaled_ph": 3.639,
+    "basis": "E7 は速さを未測定（束 0 の E7 の速さ 190150〜 は未実行）なので予算のまま"
+   },
+   "out_dir": "outputs\\v2eval\\S4DE7\\E0_run2",
+   "progress": "outputs\\v2eval\\S4DE7\\E0_run2\\progress.json",
+   "records": "run_NNNN.json・.npz・run_NNNN_runtime.json（96_s4_resume.py task と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "今の実行器。E7_E0_r1・r2 は同じ 40 種（回し直しのぶれ d_E0・rho_hat）",
+   "job": "E7_E0_r2",
+   "arm": "E0"
+  },
+  {
+   "id": "E7_EH",
+   "diag": "D-E7",
+   "gate": "T",
+   "group": "D-E7",
+   "kind": "task",
+   "enabled": true,
+   "experiment": "S4DE7",
+   "record_condition": "EH",
+   "model": "R1v3",
+   "trials_spec": "190300:40",
+   "seeds": [
+    190300,
+    190339
+   ],
+   "trials": 40,
+   "band": "D_E7",
+   "time_limits": {
+    "step_timeout_s": 30,
+    "retry": 1,
+    "task_time_limit_s": 200,
+    "scored": "3 個とも（真値）がそのまま主（段階 3 と同じ定義）"
+   },
+   "cost_kind": "e7",
+   "est": {
+    "budget_ph": 3.639,
+    "k_scaled_ph": 3.639,
+    "basis": "E7 は速さを未測定（束 0 の E7 の速さ 190150〜 は未実行）なので予算のまま"
+   },
+   "out_dir": "outputs\\v2eval\\S4DE7\\EH",
+   "progress": "outputs\\v2eval\\S4DE7\\EH\\progress.json",
+   "records": "run_NNNN.json・.npz・run_NNNN_runtime.json（96_s4_resume.py task と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "学習の home の関節角へ関節空間で制限層を通して戻す",
+   "job": "E7_EH",
+   "arm": "EH"
+  },
+  {
+   "id": "E7_ES",
+   "diag": "D-E7",
+   "gate": "T",
+   "group": "D-E7",
+   "kind": "task",
+   "enabled": true,
+   "experiment": "S4DE7",
+   "record_condition": "ES",
+   "model": "R1v3",
+   "trials_spec": "190300:40",
+   "seeds": [
+    190300,
+    190339
+   ],
+   "trials": 40,
+   "band": "D_E7",
+   "time_limits": {
+    "step_timeout_s": 30,
+    "retry": 1,
+    "task_time_limit_s": 200,
+    "scored": "3 個とも（真値）がそのまま主（段階 3 と同じ定義）"
+   },
+   "cost_kind": "e7",
+   "est": {
+    "budget_ph": 3.639,
+    "k_scaled_ph": 3.639,
+    "basis": "E7 は速さを未測定（束 0 の E7 の速さ 190150〜 は未実行）なので予算のまま"
+   },
+   "out_dir": "outputs\\v2eval\\S4DE7\\ES",
+   "progress": "outputs\\v2eval\\S4DE7\\ES\\progress.json",
+   "records": "run_NNNN.json・.npz・run_NNNN_runtime.json（96_s4_resume.py task と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "待機位置の始めの姿勢（z 0.314）へ戻す",
+   "job": "E7_ES",
+   "arm": "ES"
+  },
+  {
+   "id": "E7_EO",
+   "diag": "D-E7",
+   "gate": "T",
+   "group": "D-E7",
+   "kind": "task",
+   "enabled": true,
+   "experiment": "S4DE7",
+   "record_condition": "EO",
+   "model": "R1v3",
+   "trials_spec": "190300:40",
+   "seeds": [
+    190300,
+    190339
+   ],
+   "trials": 40,
+   "band": "D_E7",
+   "time_limits": {
+    "step_timeout_s": 30,
+    "retry": 1,
+    "task_time_limit_s": 200,
+    "scored": "3 個とも（真値）がそのまま主（段階 3 と同じ定義）"
+   },
+   "cost_kind": "e7",
+   "est": {
+    "budget_ph": 3.639,
+    "k_scaled_ph": 3.639,
+    "basis": "E7 は速さを未測定（束 0 の E7 の速さ 190150〜 は未実行）なので予算のまま"
+   },
+   "out_dir": "outputs\\v2eval\\S4DE7\\EO",
+   "progress": "outputs\\v2eval\\S4DE7\\EO\\progress.json",
+   "records": "run_NNNN.json・.npz・run_NNNN_runtime.json（96_s4_resume.py task と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "緑→赤→青の順。計画役 Haiku 5.5 を 1 回呼びキャッシュ（API が要る）",
+   "job": "E7_EO",
+   "arm": "EO"
+  },
+  {
+   "id": "E7_EX",
+   "diag": "D-E7",
+   "gate": "T",
+   "group": "D-E7",
+   "kind": "task",
+   "enabled": false,
+   "experiment": "S4DE7",
+   "record_condition": "EX",
+   "model": "R1v3",
+   "trials_spec": "190300:40",
+   "seeds": [
+    190300,
+    190339
+   ],
+   "trials": 40,
+   "band": "D_E7",
+   "time_limits": {
+    "step_timeout_s": 30,
+    "retry": 1,
+    "task_time_limit_s": 200,
+    "scored": "3 個とも（真値）がそのまま主（段階 3 と同じ定義）"
+   },
+   "cost_kind": "e7",
+   "est": {
+    "budget_ph": 3.639,
+    "k_scaled_ph": 3.639,
+    "basis": "E7 は速さを未測定（束 0 の E7 の速さ 190150〜 は未実行）なので予算のまま"
+   },
+   "out_dir": "outputs\\v2eval\\S4DE7\\EX",
+   "progress": "outputs\\v2eval\\S4DE7\\EX\\progress.json",
+   "records": "run_NNNN.json・.npz・run_NNNN_runtime.json（96_s4_resume.py task と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "条件つき。手順の切り替えで実行系を作り直す（plan --with-ex で有効にする）",
+   "job": "E7_EX",
+   "arm": "EX"
+  },
+  {
+   "id": "ST_home_on_grid",
+   "diag": "D-単発の開始",
+   "gate": "S",
+   "group": "D-start",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4DSTART",
+   "record_condition": "home_on_grid",
+   "model": "R1v3",
+   "trials_spec": "natural:190400:11",
+   "seeds": [
+    190400,
+    190410
+   ],
+   "trials": 33,
+   "band": "D_single_start",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "nat",
+   "est": {
+    "budget_ph": 0.428,
+    "k_scaled_ph": 0.377,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4DSTART\\home_on_grid",
+   "progress": "outputs\\v2eval\\S4DSTART\\home_on_grid\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "壁際の定義・格子への移し方は回す前に掲示（98_s4_d_start.py defs → outputs\\s4\\d_start\\definitions.json）",
+   "job": "ST_home_on_grid",
+   "start": "home",
+   "prior": "on_grid"
+  },
+  {
+   "id": "ST_home_wall_side",
+   "diag": "D-単発の開始",
+   "gate": "S",
+   "group": "D-start",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4DSTART",
+   "record_condition": "home_wall_side",
+   "model": "R1v3",
+   "trials_spec": "natural:190400:11",
+   "seeds": [
+    190400,
+    190410
+   ],
+   "trials": 33,
+   "band": "D_single_start",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "nat",
+   "est": {
+    "budget_ph": 0.428,
+    "k_scaled_ph": 0.377,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4DSTART\\home_wall_side",
+   "progress": "outputs\\v2eval\\S4DSTART\\home_wall_side\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "壁際の定義・格子への移し方は回す前に掲示（98_s4_d_start.py defs → outputs\\s4\\d_start\\definitions.json）",
+   "job": "ST_home_wall_side",
+   "start": "home",
+   "prior": "wall_side"
+  },
+  {
+   "id": "ST_standby_start_on_grid",
+   "diag": "D-単発の開始",
+   "gate": "S",
+   "group": "D-start",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4DSTART",
+   "record_condition": "standby_start_on_grid",
+   "model": "R1v3",
+   "trials_spec": "natural:190400:11",
+   "seeds": [
+    190400,
+    190410
+   ],
+   "trials": 33,
+   "band": "D_single_start",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "nat",
+   "est": {
+    "budget_ph": 0.428,
+    "k_scaled_ph": 0.377,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4DSTART\\standby_start_on_grid",
+   "progress": "outputs\\v2eval\\S4DSTART\\standby_start_on_grid\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "壁際の定義・格子への移し方は回す前に掲示（98_s4_d_start.py defs → outputs\\s4\\d_start\\definitions.json）",
+   "job": "ST_standby_start_on_grid",
+   "start": "standby_start",
+   "prior": "on_grid"
+  },
+  {
+   "id": "ST_standby_start_wall_side",
+   "diag": "D-単発の開始",
+   "gate": "S",
+   "group": "D-start",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4DSTART",
+   "record_condition": "standby_start_wall_side",
+   "model": "R1v3",
+   "trials_spec": "natural:190400:11",
+   "seeds": [
+    190400,
+    190410
+   ],
+   "trials": 33,
+   "band": "D_single_start",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "nat",
+   "est": {
+    "budget_ph": 0.428,
+    "k_scaled_ph": 0.377,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4DSTART\\standby_start_wall_side",
+   "progress": "outputs\\v2eval\\S4DSTART\\standby_start_wall_side\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "壁際の定義・格子への移し方は回す前に掲示（98_s4_d_start.py defs → outputs\\s4\\d_start\\definitions.json）",
+   "job": "ST_standby_start_wall_side",
+   "start": "standby_start",
+   "prior": "wall_side"
+  },
+  {
+   "id": "ST_standby_end_on_grid",
+   "diag": "D-単発の開始",
+   "gate": "S",
+   "group": "D-start",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4DSTART",
+   "record_condition": "standby_end_on_grid",
+   "model": "R1v3",
+   "trials_spec": "natural:190400:11",
+   "seeds": [
+    190400,
+    190410
+   ],
+   "trials": 33,
+   "band": "D_single_start",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "nat",
+   "est": {
+    "budget_ph": 0.428,
+    "k_scaled_ph": 0.377,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4DSTART\\standby_end_on_grid",
+   "progress": "outputs\\v2eval\\S4DSTART\\standby_end_on_grid\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "壁際の定義・格子への移し方は回す前に掲示（98_s4_d_start.py defs → outputs\\s4\\d_start\\definitions.json）",
+   "job": "ST_standby_end_on_grid",
+   "start": "standby_end",
+   "prior": "on_grid"
+  },
+  {
+   "id": "ST_standby_end_wall_side",
+   "diag": "D-単発の開始",
+   "gate": "S",
+   "group": "D-start",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4DSTART",
+   "record_condition": "standby_end_wall_side",
+   "model": "R1v3",
+   "trials_spec": "natural:190400:11",
+   "seeds": [
+    190400,
+    190410
+   ],
+   "trials": 33,
+   "band": "D_single_start",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "nat",
+   "est": {
+    "budget_ph": 0.428,
+    "k_scaled_ph": 0.377,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4DSTART\\standby_end_wall_side",
+   "progress": "outputs\\v2eval\\S4DSTART\\standby_end_wall_side\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "壁際の定義・格子への移し方は回す前に掲示（98_s4_d_start.py defs → outputs\\s4\\d_start\\definitions.json）",
+   "job": "ST_standby_end_wall_side",
+   "start": "standby_end",
+   "prior": "wall_side"
+  },
+  {
+   "id": "XPL_as_r1",
+   "diag": "移植の腕",
+   "gate": "S（XPL）",
+   "group": "XPL",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4XPL",
+   "record_condition": "as_r1",
+   "model": "R1v3",
+   "trials_spec": "xpl:190420:20",
+   "seeds": [
+    190420,
+    190439
+   ],
+   "trials": 20,
+   "band": "D_transplant",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "xpl",
+   "est": {
+    "budget_ph": 0.263,
+    "k_scaled_ph": 0.232,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4XPL\\as_r1",
+   "progress": "outputs\\v2eval\\S4XPL\\as_r1\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "目標は緑。2 番目の始めの添字・空き位置の決め方は回す前に掲示（definitions.json）。状態は V3S3\\E7_R1v3（読むだけ）",
+   "job": "XPL_as_r1",
+   "arm": "XPL_as",
+   "xpl_arm": "as",
+   "rep": 1
+  },
+  {
+   "id": "XPL_as_r2",
+   "diag": "移植の腕",
+   "gate": "S（XPL）",
+   "group": "XPL",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4XPL",
+   "record_condition": "as_r2",
+   "model": "R1v3",
+   "trials_spec": "xpl:190420:20",
+   "seeds": [
+    190420,
+    190439
+   ],
+   "trials": 20,
+   "band": "D_transplant",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "xpl",
+   "est": {
+    "budget_ph": 0.263,
+    "k_scaled_ph": 0.232,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4XPL\\as_r2",
+   "progress": "outputs\\v2eval\\S4XPL\\as_r2\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "目標は緑。2 番目の始めの添字・空き位置の決め方は回す前に掲示（definitions.json）。状態は V3S3\\E7_R1v3（読むだけ）",
+   "job": "XPL_as_r2",
+   "arm": "XPL_as",
+   "xpl_arm": "as",
+   "rep": 2
+  },
+  {
+   "id": "XPL_home_r1",
+   "diag": "移植の腕",
+   "gate": "S（XPL）",
+   "group": "XPL",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4XPL",
+   "record_condition": "home_r1",
+   "model": "R1v3",
+   "trials_spec": "xpl:190420:20",
+   "seeds": [
+    190420,
+    190439
+   ],
+   "trials": 20,
+   "band": "D_transplant",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "xpl",
+   "est": {
+    "budget_ph": 0.263,
+    "k_scaled_ph": 0.232,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4XPL\\home_r1",
+   "progress": "outputs\\v2eval\\S4XPL\\home_r1\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "目標は緑。2 番目の始めの添字・空き位置の決め方は回す前に掲示（definitions.json）。状態は V3S3\\E7_R1v3（読むだけ）",
+   "job": "XPL_home_r1",
+   "arm": "XPL_home",
+   "xpl_arm": "home",
+   "rep": 1
+  },
+  {
+   "id": "XPL_home_r2",
+   "diag": "移植の腕",
+   "gate": "S（XPL）",
+   "group": "XPL",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4XPL",
+   "record_condition": "home_r2",
+   "model": "R1v3",
+   "trials_spec": "xpl:190420:20",
+   "seeds": [
+    190420,
+    190439
+   ],
+   "trials": 20,
+   "band": "D_transplant",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "xpl",
+   "est": {
+    "budget_ph": 0.263,
+    "k_scaled_ph": 0.232,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4XPL\\home_r2",
+   "progress": "outputs\\v2eval\\S4XPL\\home_r2\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "目標は緑。2 番目の始めの添字・空き位置の決め方は回す前に掲示（definitions.json）。状態は V3S3\\E7_R1v3（読むだけ）",
+   "job": "XPL_home_r2",
+   "arm": "XPL_home",
+   "xpl_arm": "home",
+   "rep": 2
+  },
+  {
+   "id": "XPL_grid_r1",
+   "diag": "移植の腕",
+   "gate": "S（XPL）",
+   "group": "XPL",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4XPL",
+   "record_condition": "grid_r1",
+   "model": "R1v3",
+   "trials_spec": "xpl:190420:20",
+   "seeds": [
+    190420,
+    190439
+   ],
+   "trials": 20,
+   "band": "D_transplant",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "xpl",
+   "est": {
+    "budget_ph": 0.263,
+    "k_scaled_ph": 0.232,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4XPL\\grid_r1",
+   "progress": "outputs\\v2eval\\S4XPL\\grid_r1\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "目標は緑。2 番目の始めの添字・空き位置の決め方は回す前に掲示（definitions.json）。状態は V3S3\\E7_R1v3（読むだけ）",
+   "job": "XPL_grid_r1",
+   "arm": "XPL_grid",
+   "xpl_arm": "grid",
+   "rep": 1
+  },
+  {
+   "id": "XPL_grid_r2",
+   "diag": "移植の腕",
+   "gate": "S（XPL）",
+   "group": "XPL",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4XPL",
+   "record_condition": "grid_r2",
+   "model": "R1v3",
+   "trials_spec": "xpl:190420:20",
+   "seeds": [
+    190420,
+    190439
+   ],
+   "trials": 20,
+   "band": "D_transplant",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "xpl",
+   "est": {
+    "budget_ph": 0.263,
+    "k_scaled_ph": 0.232,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4XPL\\grid_r2",
+   "progress": "outputs\\v2eval\\S4XPL\\grid_r2\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "目標は緑。2 番目の始めの添字・空き位置の決め方は回す前に掲示（definitions.json）。状態は V3S3\\E7_R1v3（読むだけ）",
+   "job": "XPL_grid_r2",
+   "arm": "XPL_grid",
+   "xpl_arm": "grid",
+   "rep": 2
+  },
+  {
+   "id": "RC_R1v3_fall_as_is",
+   "diag": "D-復帰",
+   "gate": "C（報告）",
+   "group": "D-recovery",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4DREC",
+   "record_condition": "R1v3_fall_as_is",
+   "model": "R1v3",
+   "trials_spec": "induced:190500:50",
+   "seeds": [
+    190500,
+    190549
+   ],
+   "trials": 50,
+   "band": "D_recovery",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "p23",
+   "est": {
+    "budget_ph": 1.456,
+    "k_scaled_ph": 1.282,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4DREC\\R1v3_fall_as_is",
+   "progress": "outputs\\v2eval\\S4DREC\\R1v3_fall_as_is\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": [
+    "scripts\\96_s4_resume.py",
+    "run",
+    "--experiment",
+    "S4DREC",
+    "--condition",
+    "R1v3_fall_as_is",
+    "--model",
+    "R1v3",
+    "--trials",
+    "induced:190500:50",
+    "--mode",
+    "naive",
+    "--exec-interval",
+    "6",
+    "--no-safety",
+    "--time-limit-s",
+    "60",
+    "--induce",
+    "P2"
+   ],
+   "notes": "誘発は段階 3 と同じ P2",
+   "job": "J_RC_fall_as_is",
+   "variant": "fall_as_is"
+  },
+  {
+   "id": "RC_R1v3_fall_with_hold",
+   "diag": "D-復帰",
+   "gate": "C",
+   "group": "D-recovery",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4DREC",
+   "record_condition": "R1v3_fall_with_hold",
+   "model": "R1v3",
+   "trials_spec": "induced:190500:50",
+   "seeds": [
+    190500,
+    190549
+   ],
+   "trials": 50,
+   "band": "D_recovery",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "p23",
+   "est": {
+    "budget_ph": 1.456,
+    "k_scaled_ph": 1.282,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4DREC\\R1v3_fall_with_hold",
+   "progress": "outputs\\v2eval\\S4DREC\\R1v3_fall_with_hold\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "落下で手を止める版（診断専用、誘発の版は 98_s4_d_recovery.py が記録）",
+   "job": "J_RC_fall_with_hold",
+   "variant": "fall_with_hold"
+  },
+  {
+   "id": "RC_R1v3_misplace",
+   "diag": "D-復帰",
+   "gate": "C（報告）",
+   "group": "D-recovery",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4DREC",
+   "record_condition": "R1v3_misplace",
+   "model": "R1v3",
+   "trials_spec": "induced:190500:50",
+   "seeds": [
+    190500,
+    190549
+   ],
+   "trials": 50,
+   "band": "D_recovery",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "p23",
+   "est": {
+    "budget_ph": 1.456,
+    "k_scaled_ph": 1.282,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4DREC\\R1v3_misplace",
+   "progress": "outputs\\v2eval\\S4DREC\\R1v3_misplace\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": [
+    "scripts\\96_s4_resume.py",
+    "run",
+    "--experiment",
+    "S4DREC",
+    "--condition",
+    "R1v3_misplace",
+    "--model",
+    "R1v3",
+    "--trials",
+    "induced:190500:50",
+    "--mode",
+    "naive",
+    "--exec-interval",
+    "6",
+    "--no-safety",
+    "--time-limit-s",
+    "60",
+    "--induce",
+    "P3"
+   ],
+   "notes": "誘発は段階 3 と同じ P3",
+   "job": "J_RC_misplace",
+   "variant": "misplace"
+  },
+  {
+   "id": "RC_R1v3_grasp_failure",
+   "diag": "D-復帰",
+   "gate": "C（報告）",
+   "group": "D-recovery",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4DREC",
+   "record_condition": "R1v3_grasp_failure",
+   "model": "R1v3",
+   "trials_spec": "induced:190500:50",
+   "seeds": [
+    190500,
+    190549
+   ],
+   "trials": 50,
+   "band": "D_recovery",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "p1_R",
+   "est": {
+    "budget_ph": 0.935,
+    "k_scaled_ph": 0.823,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4DREC\\R1v3_grasp_failure",
+   "progress": "outputs\\v2eval\\S4DREC\\R1v3_grasp_failure\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": [
+    "scripts\\96_s4_resume.py",
+    "run",
+    "--experiment",
+    "S4DREC",
+    "--condition",
+    "R1v3_grasp_failure",
+    "--model",
+    "R1v3",
+    "--trials",
+    "induced:190500:50",
+    "--mode",
+    "naive",
+    "--exec-interval",
+    "6",
+    "--no-safety",
+    "--time-limit-s",
+    "60",
+    "--induce",
+    "P1"
+   ],
+   "notes": "誘発は段階 3 と同じ P1",
+   "job": "J_RC_grasp_failure",
+   "variant": "grasp_failure"
+  },
+  {
+   "id": "RC_N1v3_fall_as_is",
+   "diag": "D-復帰",
+   "gate": "C（報告）",
+   "group": "D-recovery",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4DREC",
+   "record_condition": "N1v3_fall_as_is",
+   "model": "N1v3",
+   "trials_spec": "induced:190500:50",
+   "seeds": [
+    190500,
+    190549
+   ],
+   "trials": 50,
+   "band": "D_recovery",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "p23",
+   "est": {
+    "budget_ph": 1.456,
+    "k_scaled_ph": 1.282,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4DREC\\N1v3_fall_as_is",
+   "progress": "outputs\\v2eval\\S4DREC\\N1v3_fall_as_is\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": [
+    "scripts\\96_s4_resume.py",
+    "run",
+    "--experiment",
+    "S4DREC",
+    "--condition",
+    "N1v3_fall_as_is",
+    "--model",
+    "N1v3",
+    "--trials",
+    "induced:190500:50",
+    "--mode",
+    "naive",
+    "--exec-interval",
+    "6",
+    "--no-safety",
+    "--time-limit-s",
+    "60",
+    "--induce",
+    "P2"
+   ],
+   "notes": "誘発は段階 3 と同じ P2",
+   "job": "J_RC_fall_as_is",
+   "variant": "fall_as_is"
+  },
+  {
+   "id": "RC_N1v3_fall_with_hold",
+   "diag": "D-復帰",
+   "gate": "C",
+   "group": "D-recovery",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4DREC",
+   "record_condition": "N1v3_fall_with_hold",
+   "model": "N1v3",
+   "trials_spec": "induced:190500:50",
+   "seeds": [
+    190500,
+    190549
+   ],
+   "trials": 50,
+   "band": "D_recovery",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "p23",
+   "est": {
+    "budget_ph": 1.456,
+    "k_scaled_ph": 1.282,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4DREC\\N1v3_fall_with_hold",
+   "progress": "outputs\\v2eval\\S4DREC\\N1v3_fall_with_hold\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": null,
+   "notes": "落下で手を止める版（診断専用、誘発の版は 98_s4_d_recovery.py が記録）",
+   "job": "J_RC_fall_with_hold",
+   "variant": "fall_with_hold"
+  },
+  {
+   "id": "RC_N1v3_misplace",
+   "diag": "D-復帰",
+   "gate": "C（報告）",
+   "group": "D-recovery",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4DREC",
+   "record_condition": "N1v3_misplace",
+   "model": "N1v3",
+   "trials_spec": "induced:190500:50",
+   "seeds": [
+    190500,
+    190549
+   ],
+   "trials": 50,
+   "band": "D_recovery",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "p23",
+   "est": {
+    "budget_ph": 1.456,
+    "k_scaled_ph": 1.282,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4DREC\\N1v3_misplace",
+   "progress": "outputs\\v2eval\\S4DREC\\N1v3_misplace\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": [
+    "scripts\\96_s4_resume.py",
+    "run",
+    "--experiment",
+    "S4DREC",
+    "--condition",
+    "N1v3_misplace",
+    "--model",
+    "N1v3",
+    "--trials",
+    "induced:190500:50",
+    "--mode",
+    "naive",
+    "--exec-interval",
+    "6",
+    "--no-safety",
+    "--time-limit-s",
+    "60",
+    "--induce",
+    "P3"
+   ],
+   "notes": "誘発は段階 3 と同じ P3",
+   "job": "J_RC_misplace",
+   "variant": "misplace"
+  },
+  {
+   "id": "RC_N1v3_grasp_failure",
+   "diag": "D-復帰",
+   "gate": "C（報告）",
+   "group": "D-recovery",
+   "kind": "run",
+   "enabled": true,
+   "experiment": "S4DREC",
+   "record_condition": "N1v3_grasp_failure",
+   "model": "N1v3",
+   "trials_spec": "induced:190500:50",
+   "seeds": [
+    190500,
+    190549
+   ],
+   "trials": 50,
+   "band": "D_recovery",
+   "time_limits": {
+    "time_limit_s": 60,
+    "scored_at_s": {
+     "primary": 30,
+     "secondary": 60,
+     "descriptive": 45
+    },
+    "induced_denominator": "誘発の試行は induce.t_established <= L の試行（L = 30・60）"
+   },
+   "cost_kind": "p1_N",
+   "est": {
+    "budget_ph": 1.172,
+    "k_scaled_ph": 1.032,
+    "basis": "予算の式に、K の実測で換算（単発の試行）"
+   },
+   "out_dir": "outputs\\v2eval\\S4DREC\\N1v3_grasp_failure",
+   "progress": "outputs\\v2eval\\S4DREC\\N1v3_grasp_failure\\progress.json",
+   "records": "trial_NNNN.json・.npz・runtime_NNNN.json（96_s4_resume.py run と同じ形）＋診断の条件の欄",
+   "equivalent_96": [
+    "scripts\\96_s4_resume.py",
+    "run",
+    "--experiment",
+    "S4DREC",
+    "--condition",
+    "N1v3_grasp_failure",
+    "--model",
+    "N1v3",
+    "--trials",
+    "induced:190500:50",
+    "--mode",
+    "naive",
+    "--exec-interval",
+    "6",
+    "--no-safety",
+    "--time-limit-s",
+    "60",
+    "--induce",
+    "P1"
+   ],
+   "notes": "誘発は段階 3 と同じ P1",
+   "job": "J_RC_grasp_failure",
+   "variant": "grasp_failure"
+  }
+ ],
+ "jobs": [
+  {
+   "id": "J_RTC_rotate",
+   "covers": [
+    "RTC_current_repro",
+    "RTC_paper_formula_range44_cap5",
+    "RTC_range40_cap5",
+    "RTC_range10_cap5",
+    "RTC_ZEROS",
+    "RTC_naive"
+   ],
+   "group": "D-RTC",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_d_rtc.py",
+    "rotate",
+    "--settings",
+    "all",
+    "--tag",
+    "bundle1"
+   ],
+   "script": "scripts\\98_s4_d_rtc.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_rtc.py rotate --settings all --tag bundle1",
+   "progress": "outputs\\s4\\d_rtc\\rotate_bundle1.progress.json",
+   "block_trials": null,
+   "after": [],
+   "needs_api": false,
+   "requires": [],
+   "enabled": true,
+   "trials": 180,
+   "est": {
+    "budget_ph": 3.36,
+    "k_scaled_ph": 2.958
+   },
+   "notes": "6 設定を 1 つのプロセスで交互に（方策は読み込んだまま）。塊は 98_s4_d_rtc.py の --block-seeds（既定 1 種）"
+  },
+  {
+   "id": "J_RTC_shadow",
+   "covers": [
+    "RTC_shadow"
+   ],
+   "group": "D-RTC-shadow",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_d_rtc.py",
+    "run",
+    "--setting",
+    "current_repro",
+    "--shadow"
+   ],
+   "script": "scripts\\98_s4_d_rtc.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_rtc.py run --setting current_repro --shadow",
+   "progress": "outputs\\v2eval\\S4DRTC\\shadow_current_repro\\progress.json",
+   "block_trials": null,
+   "after": [],
+   "needs_api": false,
+   "requires": [],
+   "enabled": true,
+   "trials": 12,
+   "est": {
+    "budget_ph": 0.224,
+    "k_scaled_ph": 0.197
+   },
+   "notes": ""
+  },
+  {
+   "id": "X2_gen",
+   "covers": [
+    "X2_gen"
+   ],
+   "group": "X2",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_x2.py",
+    "gen",
+    "--seeds",
+    "44404:20",
+    "--name",
+    "X2_gen"
+   ],
+   "script": "scripts\\98_s4_x2.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_x2.py gen --seeds 44404:20 --name X2_gen",
+   "progress": "outputs\\s4\\x2\\gen\\X2_gen\\progress.json",
+   "block_trials": null,
+   "after": [],
+   "needs_api": false,
+   "requires": [],
+   "enabled": true,
+   "trials": 20,
+   "est": {
+    "budget_ph": 0.1,
+    "k_scaled_ph": 0.1
+   },
+   "notes": ""
+  },
+  {
+   "id": "X2_measure",
+   "covers": [
+    "X2_measure"
+   ],
+   "group": "X2",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_x2.py",
+    "eval",
+    "--name",
+    "X2_gen",
+    "--model",
+    "R1v3"
+   ],
+   "script": "scripts\\98_s4_x2.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_x2.py eval --name X2_gen --model R1v3",
+   "progress": "outputs\\s4\\x2\\eval_X2_gen_R1v3\\progress.json",
+   "block_trials": null,
+   "after": [
+    "X2_gen"
+   ],
+   "needs_api": false,
+   "requires": [],
+   "enabled": true,
+   "trials": 20,
+   "est": {
+    "budget_ph": 0.05,
+    "k_scaled_ph": 0.05
+   },
+   "notes": ""
+  },
+  {
+   "id": "E7_E0_r1",
+   "covers": [
+    "E7_E0_r1"
+   ],
+   "group": "D-E7",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_d_e7.py",
+    "run",
+    "--arm",
+    "E0",
+    "--experiment",
+    "S4DE7",
+    "--condition",
+    "E0_run1",
+    "--model",
+    "R1v3",
+    "--trials",
+    "190300:40"
+   ],
+   "script": "scripts\\98_s4_d_e7.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_e7.py run --arm E0 --experiment S4DE7 --condition E0_run1 --model R1v3 --trials 190300:40",
+   "progress": "outputs\\v2eval\\S4DE7\\E0_run1\\progress.json",
+   "block_trials": 5,
+   "after": [],
+   "needs_api": true,
+   "requires": [],
+   "enabled": true,
+   "trials": 40,
+   "est": {
+    "budget_ph": 3.639,
+    "k_scaled_ph": 3.639
+   },
+   "notes": "今の実行器。E7_E0_r1・r2 は同じ 40 種（回し直しのぶれ d_E0・rho_hat）"
+  },
+  {
+   "id": "E7_E0_r2",
+   "covers": [
+    "E7_E0_r2"
+   ],
+   "group": "D-E7",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_d_e7.py",
+    "run",
+    "--arm",
+    "E0",
+    "--experiment",
+    "S4DE7",
+    "--condition",
+    "E0_run2",
+    "--model",
+    "R1v3",
+    "--trials",
+    "190300:40"
+   ],
+   "script": "scripts\\98_s4_d_e7.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_e7.py run --arm E0 --experiment S4DE7 --condition E0_run2 --model R1v3 --trials 190300:40",
+   "progress": "outputs\\v2eval\\S4DE7\\E0_run2\\progress.json",
+   "block_trials": 5,
+   "after": [],
+   "needs_api": true,
+   "requires": [],
+   "enabled": true,
+   "trials": 40,
+   "est": {
+    "budget_ph": 3.639,
+    "k_scaled_ph": 3.639
+   },
+   "notes": "今の実行器。E7_E0_r1・r2 は同じ 40 種（回し直しのぶれ d_E0・rho_hat）"
+  },
+  {
+   "id": "E7_EH",
+   "covers": [
+    "E7_EH"
+   ],
+   "group": "D-E7",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_d_e7.py",
+    "run",
+    "--arm",
+    "EH",
+    "--experiment",
+    "S4DE7",
+    "--condition",
+    "EH",
+    "--model",
+    "R1v3",
+    "--trials",
+    "190300:40"
+   ],
+   "script": "scripts\\98_s4_d_e7.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_e7.py run --arm EH --experiment S4DE7 --condition EH --model R1v3 --trials 190300:40",
+   "progress": "outputs\\v2eval\\S4DE7\\EH\\progress.json",
+   "block_trials": 5,
+   "after": [],
+   "needs_api": true,
+   "requires": [],
+   "enabled": true,
+   "trials": 40,
+   "est": {
+    "budget_ph": 3.639,
+    "k_scaled_ph": 3.639
+   },
+   "notes": "学習の home の関節角へ関節空間で制限層を通して戻す"
+  },
+  {
+   "id": "E7_ES",
+   "covers": [
+    "E7_ES"
+   ],
+   "group": "D-E7",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_d_e7.py",
+    "run",
+    "--arm",
+    "ES",
+    "--experiment",
+    "S4DE7",
+    "--condition",
+    "ES",
+    "--model",
+    "R1v3",
+    "--trials",
+    "190300:40"
+   ],
+   "script": "scripts\\98_s4_d_e7.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_e7.py run --arm ES --experiment S4DE7 --condition ES --model R1v3 --trials 190300:40",
+   "progress": "outputs\\v2eval\\S4DE7\\ES\\progress.json",
+   "block_trials": 5,
+   "after": [],
+   "needs_api": true,
+   "requires": [],
+   "enabled": true,
+   "trials": 40,
+   "est": {
+    "budget_ph": 3.639,
+    "k_scaled_ph": 3.639
+   },
+   "notes": "待機位置の始めの姿勢（z 0.314）へ戻す"
+  },
+  {
+   "id": "E7_EO",
+   "covers": [
+    "E7_EO"
+   ],
+   "group": "D-E7",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_d_e7.py",
+    "run",
+    "--arm",
+    "EO",
+    "--experiment",
+    "S4DE7",
+    "--condition",
+    "EO",
+    "--model",
+    "R1v3",
+    "--trials",
+    "190300:40"
+   ],
+   "script": "scripts\\98_s4_d_e7.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_e7.py run --arm EO --experiment S4DE7 --condition EO --model R1v3 --trials 190300:40",
+   "progress": "outputs\\v2eval\\S4DE7\\EO\\progress.json",
+   "block_trials": 5,
+   "after": [],
+   "needs_api": true,
+   "requires": [],
+   "enabled": true,
+   "trials": 40,
+   "est": {
+    "budget_ph": 3.639,
+    "k_scaled_ph": 3.639
+   },
+   "notes": "緑→赤→青の順。計画役 Haiku 5.5 を 1 回呼びキャッシュ（API が要る）"
+  },
+  {
+   "id": "E7_EX",
+   "covers": [
+    "E7_EX"
+   ],
+   "group": "D-E7",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_d_e7.py",
+    "run",
+    "--arm",
+    "EX",
+    "--experiment",
+    "S4DE7",
+    "--condition",
+    "EX",
+    "--model",
+    "R1v3",
+    "--trials",
+    "190300:40"
+   ],
+   "script": "scripts\\98_s4_d_e7.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_e7.py run --arm EX --experiment S4DE7 --condition EX --model R1v3 --trials 190300:40",
+   "progress": "outputs\\v2eval\\S4DE7\\EX\\progress.json",
+   "block_trials": 5,
+   "after": [],
+   "needs_api": true,
+   "requires": [],
+   "enabled": false,
+   "trials": 40,
+   "est": {
+    "budget_ph": 3.639,
+    "k_scaled_ph": 3.639
+   },
+   "notes": "条件つき。手順の切り替えで実行系を作り直す（plan --with-ex で有効にする）"
+  },
+  {
+   "id": "ST_home_on_grid",
+   "covers": [
+    "ST_home_on_grid"
+   ],
+   "group": "D-start",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_d_start.py",
+    "start",
+    "--start",
+    "home",
+    "--prior",
+    "on_grid",
+    "--experiment",
+    "S4DSTART",
+    "--condition",
+    "home_on_grid",
+    "--model",
+    "R1v3",
+    "--trials",
+    "natural:190400:11"
+   ],
+   "script": "scripts\\98_s4_d_start.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_start.py start --start home --prior on_grid --experiment S4DSTART --condition home_on_grid --model R1v3 --trials natural:190400:11",
+   "progress": "outputs\\v2eval\\S4DSTART\\home_on_grid\\progress.json",
+   "block_trials": 6,
+   "after": [],
+   "needs_api": false,
+   "requires": [
+    "outputs\\s4\\d_start\\definitions.json"
+   ],
+   "enabled": true,
+   "trials": 33,
+   "est": {
+    "budget_ph": 0.428,
+    "k_scaled_ph": 0.377
+   },
+   "notes": ""
+  },
+  {
+   "id": "ST_home_wall_side",
+   "covers": [
+    "ST_home_wall_side"
+   ],
+   "group": "D-start",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_d_start.py",
+    "start",
+    "--start",
+    "home",
+    "--prior",
+    "wall_side",
+    "--experiment",
+    "S4DSTART",
+    "--condition",
+    "home_wall_side",
+    "--model",
+    "R1v3",
+    "--trials",
+    "natural:190400:11"
+   ],
+   "script": "scripts\\98_s4_d_start.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_start.py start --start home --prior wall_side --experiment S4DSTART --condition home_wall_side --model R1v3 --trials natural:190400:11",
+   "progress": "outputs\\v2eval\\S4DSTART\\home_wall_side\\progress.json",
+   "block_trials": 6,
+   "after": [],
+   "needs_api": false,
+   "requires": [
+    "outputs\\s4\\d_start\\definitions.json"
+   ],
+   "enabled": true,
+   "trials": 33,
+   "est": {
+    "budget_ph": 0.428,
+    "k_scaled_ph": 0.377
+   },
+   "notes": ""
+  },
+  {
+   "id": "ST_standby_start_on_grid",
+   "covers": [
+    "ST_standby_start_on_grid"
+   ],
+   "group": "D-start",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_d_start.py",
+    "start",
+    "--start",
+    "standby_start",
+    "--prior",
+    "on_grid",
+    "--experiment",
+    "S4DSTART",
+    "--condition",
+    "standby_start_on_grid",
+    "--model",
+    "R1v3",
+    "--trials",
+    "natural:190400:11"
+   ],
+   "script": "scripts\\98_s4_d_start.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_start.py start --start standby_start --prior on_grid --experiment S4DSTART --condition standby_start_on_grid --model R1v3 --trials natural:190400:11",
+   "progress": "outputs\\v2eval\\S4DSTART\\standby_start_on_grid\\progress.json",
+   "block_trials": 6,
+   "after": [],
+   "needs_api": false,
+   "requires": [
+    "outputs\\s4\\d_start\\definitions.json"
+   ],
+   "enabled": true,
+   "trials": 33,
+   "est": {
+    "budget_ph": 0.428,
+    "k_scaled_ph": 0.377
+   },
+   "notes": ""
+  },
+  {
+   "id": "ST_standby_start_wall_side",
+   "covers": [
+    "ST_standby_start_wall_side"
+   ],
+   "group": "D-start",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_d_start.py",
+    "start",
+    "--start",
+    "standby_start",
+    "--prior",
+    "wall_side",
+    "--experiment",
+    "S4DSTART",
+    "--condition",
+    "standby_start_wall_side",
+    "--model",
+    "R1v3",
+    "--trials",
+    "natural:190400:11"
+   ],
+   "script": "scripts\\98_s4_d_start.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_start.py start --start standby_start --prior wall_side --experiment S4DSTART --condition standby_start_wall_side --model R1v3 --trials natural:190400:11",
+   "progress": "outputs\\v2eval\\S4DSTART\\standby_start_wall_side\\progress.json",
+   "block_trials": 6,
+   "after": [],
+   "needs_api": false,
+   "requires": [
+    "outputs\\s4\\d_start\\definitions.json"
+   ],
+   "enabled": true,
+   "trials": 33,
+   "est": {
+    "budget_ph": 0.428,
+    "k_scaled_ph": 0.377
+   },
+   "notes": ""
+  },
+  {
+   "id": "ST_standby_end_on_grid",
+   "covers": [
+    "ST_standby_end_on_grid"
+   ],
+   "group": "D-start",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_d_start.py",
+    "start",
+    "--start",
+    "standby_end",
+    "--prior",
+    "on_grid",
+    "--experiment",
+    "S4DSTART",
+    "--condition",
+    "standby_end_on_grid",
+    "--model",
+    "R1v3",
+    "--trials",
+    "natural:190400:11"
+   ],
+   "script": "scripts\\98_s4_d_start.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_start.py start --start standby_end --prior on_grid --experiment S4DSTART --condition standby_end_on_grid --model R1v3 --trials natural:190400:11",
+   "progress": "outputs\\v2eval\\S4DSTART\\standby_end_on_grid\\progress.json",
+   "block_trials": 6,
+   "after": [],
+   "needs_api": false,
+   "requires": [
+    "outputs\\s4\\d_start\\definitions.json"
+   ],
+   "enabled": true,
+   "trials": 33,
+   "est": {
+    "budget_ph": 0.428,
+    "k_scaled_ph": 0.377
+   },
+   "notes": ""
+  },
+  {
+   "id": "ST_standby_end_wall_side",
+   "covers": [
+    "ST_standby_end_wall_side"
+   ],
+   "group": "D-start",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_d_start.py",
+    "start",
+    "--start",
+    "standby_end",
+    "--prior",
+    "wall_side",
+    "--experiment",
+    "S4DSTART",
+    "--condition",
+    "standby_end_wall_side",
+    "--model",
+    "R1v3",
+    "--trials",
+    "natural:190400:11"
+   ],
+   "script": "scripts\\98_s4_d_start.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_start.py start --start standby_end --prior wall_side --experiment S4DSTART --condition standby_end_wall_side --model R1v3 --trials natural:190400:11",
+   "progress": "outputs\\v2eval\\S4DSTART\\standby_end_wall_side\\progress.json",
+   "block_trials": 6,
+   "after": [],
+   "needs_api": false,
+   "requires": [
+    "outputs\\s4\\d_start\\definitions.json"
+   ],
+   "enabled": true,
+   "trials": 33,
+   "est": {
+    "budget_ph": 0.428,
+    "k_scaled_ph": 0.377
+   },
+   "notes": ""
+  },
+  {
+   "id": "XPL_as_r1",
+   "covers": [
+    "XPL_as_r1"
+   ],
+   "group": "XPL",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_d_start.py",
+    "xpl",
+    "--arm",
+    "as",
+    "--rep",
+    "1",
+    "--experiment",
+    "S4XPL",
+    "--condition",
+    "as_r1",
+    "--model",
+    "R1v3"
+   ],
+   "script": "scripts\\98_s4_d_start.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_start.py xpl --arm as --rep 1 --experiment S4XPL --condition as_r1 --model R1v3",
+   "progress": "outputs\\v2eval\\S4XPL\\as_r1\\progress.json",
+   "block_trials": 5,
+   "after": [],
+   "needs_api": false,
+   "requires": [
+    "outputs\\s4\\d_start\\definitions.json"
+   ],
+   "enabled": true,
+   "trials": 20,
+   "est": {
+    "budget_ph": 0.263,
+    "k_scaled_ph": 0.232
+   },
+   "notes": ""
+  },
+  {
+   "id": "XPL_as_r2",
+   "covers": [
+    "XPL_as_r2"
+   ],
+   "group": "XPL",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_d_start.py",
+    "xpl",
+    "--arm",
+    "as",
+    "--rep",
+    "2",
+    "--experiment",
+    "S4XPL",
+    "--condition",
+    "as_r2",
+    "--model",
+    "R1v3"
+   ],
+   "script": "scripts\\98_s4_d_start.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_start.py xpl --arm as --rep 2 --experiment S4XPL --condition as_r2 --model R1v3",
+   "progress": "outputs\\v2eval\\S4XPL\\as_r2\\progress.json",
+   "block_trials": 5,
+   "after": [],
+   "needs_api": false,
+   "requires": [
+    "outputs\\s4\\d_start\\definitions.json"
+   ],
+   "enabled": true,
+   "trials": 20,
+   "est": {
+    "budget_ph": 0.263,
+    "k_scaled_ph": 0.232
+   },
+   "notes": ""
+  },
+  {
+   "id": "XPL_home_r1",
+   "covers": [
+    "XPL_home_r1"
+   ],
+   "group": "XPL",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_d_start.py",
+    "xpl",
+    "--arm",
+    "home",
+    "--rep",
+    "1",
+    "--experiment",
+    "S4XPL",
+    "--condition",
+    "home_r1",
+    "--model",
+    "R1v3"
+   ],
+   "script": "scripts\\98_s4_d_start.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_start.py xpl --arm home --rep 1 --experiment S4XPL --condition home_r1 --model R1v3",
+   "progress": "outputs\\v2eval\\S4XPL\\home_r1\\progress.json",
+   "block_trials": 5,
+   "after": [],
+   "needs_api": false,
+   "requires": [
+    "outputs\\s4\\d_start\\definitions.json"
+   ],
+   "enabled": true,
+   "trials": 20,
+   "est": {
+    "budget_ph": 0.263,
+    "k_scaled_ph": 0.232
+   },
+   "notes": ""
+  },
+  {
+   "id": "XPL_home_r2",
+   "covers": [
+    "XPL_home_r2"
+   ],
+   "group": "XPL",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_d_start.py",
+    "xpl",
+    "--arm",
+    "home",
+    "--rep",
+    "2",
+    "--experiment",
+    "S4XPL",
+    "--condition",
+    "home_r2",
+    "--model",
+    "R1v3"
+   ],
+   "script": "scripts\\98_s4_d_start.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_start.py xpl --arm home --rep 2 --experiment S4XPL --condition home_r2 --model R1v3",
+   "progress": "outputs\\v2eval\\S4XPL\\home_r2\\progress.json",
+   "block_trials": 5,
+   "after": [],
+   "needs_api": false,
+   "requires": [
+    "outputs\\s4\\d_start\\definitions.json"
+   ],
+   "enabled": true,
+   "trials": 20,
+   "est": {
+    "budget_ph": 0.263,
+    "k_scaled_ph": 0.232
+   },
+   "notes": ""
+  },
+  {
+   "id": "XPL_grid_r1",
+   "covers": [
+    "XPL_grid_r1"
+   ],
+   "group": "XPL",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_d_start.py",
+    "xpl",
+    "--arm",
+    "grid",
+    "--rep",
+    "1",
+    "--experiment",
+    "S4XPL",
+    "--condition",
+    "grid_r1",
+    "--model",
+    "R1v3"
+   ],
+   "script": "scripts\\98_s4_d_start.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_start.py xpl --arm grid --rep 1 --experiment S4XPL --condition grid_r1 --model R1v3",
+   "progress": "outputs\\v2eval\\S4XPL\\grid_r1\\progress.json",
+   "block_trials": 5,
+   "after": [],
+   "needs_api": false,
+   "requires": [
+    "outputs\\s4\\d_start\\definitions.json"
+   ],
+   "enabled": true,
+   "trials": 20,
+   "est": {
+    "budget_ph": 0.263,
+    "k_scaled_ph": 0.232
+   },
+   "notes": ""
+  },
+  {
+   "id": "XPL_grid_r2",
+   "covers": [
+    "XPL_grid_r2"
+   ],
+   "group": "XPL",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_d_start.py",
+    "xpl",
+    "--arm",
+    "grid",
+    "--rep",
+    "2",
+    "--experiment",
+    "S4XPL",
+    "--condition",
+    "grid_r2",
+    "--model",
+    "R1v3"
+   ],
+   "script": "scripts\\98_s4_d_start.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_start.py xpl --arm grid --rep 2 --experiment S4XPL --condition grid_r2 --model R1v3",
+   "progress": "outputs\\v2eval\\S4XPL\\grid_r2\\progress.json",
+   "block_trials": 5,
+   "after": [],
+   "needs_api": false,
+   "requires": [
+    "outputs\\s4\\d_start\\definitions.json"
+   ],
+   "enabled": true,
+   "trials": 20,
+   "est": {
+    "budget_ph": 0.263,
+    "k_scaled_ph": 0.232
+   },
+   "notes": ""
+  },
+  {
+   "id": "J_RC_fall_as_is",
+   "covers": [
+    "RC_R1v3_fall_as_is",
+    "RC_N1v3_fall_as_is"
+   ],
+   "group": "D-recovery",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_d_recovery.py",
+    "run",
+    "--experiment",
+    "S4DREC",
+    "--trials",
+    "induced:190500:50",
+    "--variants",
+    "fall_as_is",
+    "--models",
+    "R1v3,N1v3",
+    "--block",
+    "10"
+   ],
+   "script": "scripts\\98_s4_d_recovery.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_recovery.py run --experiment S4DREC --trials induced:190500:50 --variants fall_as_is --models R1v3,N1v3 --block 10",
+   "progress": "outputs\\s4\\d_recovery\\progress_S4DREC_R1v3-N1v3_fall_as_is.json",
+   "block_trials": null,
+   "after": [],
+   "needs_api": false,
+   "requires": [],
+   "enabled": true,
+   "trials": 100,
+   "est": {
+    "budget_ph": 2.912,
+    "k_scaled_ph": 2.564
+   },
+   "notes": ""
+  },
+  {
+   "id": "J_RC_fall_with_hold",
+   "covers": [
+    "RC_R1v3_fall_with_hold",
+    "RC_N1v3_fall_with_hold"
+   ],
+   "group": "D-recovery",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_d_recovery.py",
+    "run",
+    "--experiment",
+    "S4DREC",
+    "--trials",
+    "induced:190500:50",
+    "--variants",
+    "fall_with_hold",
+    "--models",
+    "R1v3,N1v3",
+    "--block",
+    "10"
+   ],
+   "script": "scripts\\98_s4_d_recovery.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_recovery.py run --experiment S4DREC --trials induced:190500:50 --variants fall_with_hold --models R1v3,N1v3 --block 10",
+   "progress": "outputs\\s4\\d_recovery\\progress_S4DREC_R1v3-N1v3_fall_with_hold.json",
+   "block_trials": null,
+   "after": [],
+   "needs_api": false,
+   "requires": [],
+   "enabled": true,
+   "trials": 100,
+   "est": {
+    "budget_ph": 2.912,
+    "k_scaled_ph": 2.564
+   },
+   "notes": ""
+  },
+  {
+   "id": "J_RC_misplace",
+   "covers": [
+    "RC_R1v3_misplace",
+    "RC_N1v3_misplace"
+   ],
+   "group": "D-recovery",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_d_recovery.py",
+    "run",
+    "--experiment",
+    "S4DREC",
+    "--trials",
+    "induced:190500:50",
+    "--variants",
+    "misplace",
+    "--models",
+    "R1v3,N1v3",
+    "--block",
+    "10"
+   ],
+   "script": "scripts\\98_s4_d_recovery.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_recovery.py run --experiment S4DREC --trials induced:190500:50 --variants misplace --models R1v3,N1v3 --block 10",
+   "progress": "outputs\\s4\\d_recovery\\progress_S4DREC_R1v3-N1v3_misplace.json",
+   "block_trials": null,
+   "after": [],
+   "needs_api": false,
+   "requires": [],
+   "enabled": true,
+   "trials": 100,
+   "est": {
+    "budget_ph": 2.912,
+    "k_scaled_ph": 2.564
+   },
+   "notes": ""
+  },
+  {
+   "id": "J_RC_grasp_failure",
+   "covers": [
+    "RC_R1v3_grasp_failure",
+    "RC_N1v3_grasp_failure"
+   ],
+   "group": "D-recovery",
+   "adapter": "observed",
+   "argv": [
+    "scripts\\98_s4_d_recovery.py",
+    "run",
+    "--experiment",
+    "S4DREC",
+    "--trials",
+    "induced:190500:50",
+    "--variants",
+    "grasp_failure",
+    "--models",
+    "R1v3,N1v3",
+    "--block",
+    "10"
+   ],
+   "script": "scripts\\98_s4_d_recovery.py",
+   "cmd": ".venv\\Scripts\\python.exe scripts\\98_s4_d_recovery.py run --experiment S4DREC --trials induced:190500:50 --variants grasp_failure --models R1v3,N1v3 --block 10",
+   "progress": "outputs\\s4\\d_recovery\\progress_S4DREC_R1v3-N1v3_grasp_failure.json",
+   "block_trials": null,
+   "after": [],
+   "needs_api": false,
+   "requires": [],
+   "enabled": true,
+   "trials": 100,
+   "est": {
+    "budget_ph": 2.107,
+    "k_scaled_ph": 1.855
+   },
+   "notes": ""
+  }
+ ],
+ "adapters": {
+  "D-RTC": {
+   "status": "observed",
+   "script": "scripts\\98_s4_d_rtc.py",
+   "owner": "担当 A",
+   "seen": "rotate [--settings all] [--block-seeds 1] [--tag]（6 設定を 1 プロセスで種の塊ごとに交互）、監視 outputs\\s4\\d_rtc\\rotate_<タグ>.progress.json、既定の実験 S4DRTC・条件名＝設定名。settings で中身を掲示",
+   "exists": true,
+   "sha256": "09c5f190429b790ac3370d47265c4285160f893b0f0f2e0181a3400f1cb91add"
+  },
+  "D-RTC-shadow": {
+   "status": "observed",
+   "script": "scripts\\98_s4_d_rtc.py",
+   "owner": "担当 A",
+   "seen": "run --setting current_repro --shadow（既定の条件 shadow_current_repro、帯 natural:190220:4）",
+   "exists": true,
+   "sha256": "09c5f190429b790ac3370d47265c4285160f893b0f0f2e0181a3400f1cb91add"
+  },
+  "X2": {
+   "status": "observed",
+   "script": "scripts\\98_s4_x2.py",
+   "owner": "担当 A",
+   "seen": "gen [--seeds 44404:20] [--name X2_gen]（outputs\\s4\\x2\\gen\\<名前>、種ごとの part_<種> で続きから）→ eval [--name X2_gen] [--model R1v3]（outputs\\s4\\x2\\eval_<名前>_<モデル>）。どちらも --dry-run・--accept-env-change・--max-new と、96 と同じ鍵の progress.json（出力のフォルダ）を持つ",
+   "exists": true,
+   "sha256": "924195e49788303250a34907777a10881e1ad7321525c25b323a16c80fb90019"
+  },
+  "D-E7": {
+   "status": "observed",
+   "script": "scripts\\98_s4_d_e7.py",
+   "owner": "担当 B",
+   "seen": "run --arm <E0|EH|ES|EO|EX> --experiment S4DE7 --condition <E0_run1|E0_run2|EH|ES|EO> --model R1v3 --trials 190300:40（残りは 96_s4_resume.py task の引数。--exec-interval 6・--no-safety はスクリプトが入れる）。defs で定義を掲示",
+   "exists": true,
+   "sha256": "afeb3c87bb4c8d1c64060ba0f09a0f5bb8a6852d2f8c3b99afd4fa54ffe5e99b"
+  },
+  "D-start": {
+   "status": "observed",
+   "script": "scripts\\98_s4_d_start.py",
+   "owner": "担当 B",
+   "seen": "start --start <開始> --prior <先客> --experiment S4DSTART --condition <名前> --model R1v3 --trials natural:190400:11（残りは 96 run の引数）。outputs\\s4\\d_start\\definitions.json が無ければ止まる（defs で作る）",
+   "exists": true,
+   "sha256": "f2d8e9ce36c875f80ff707594acaf0b3bb5fa4ad0e402c810b88583f758da704"
+  },
+  "XPL": {
+   "status": "observed",
+   "script": "scripts\\98_s4_d_start.py",
+   "owner": "担当 B",
+   "seen": "xpl --arm <as|home|grid> --rep <1|2> --experiment S4XPL --condition <腕>_r<回> --model R1v3（種は --seed-base 190420 + 状態の番号、--trials は自動）。definitions.json が要る",
+   "exists": true,
+   "sha256": "f2d8e9ce36c875f80ff707594acaf0b3bb5fa4ad0e402c810b88583f758da704"
+  },
+  "D-recovery": {
+   "status": "observed",
+   "script": "scripts\\98_s4_d_recovery.py",
+   "owner": "担当 C",
+   "seen": "run --variants <通り> --models R1v3,N1v3 --block 10（R と N を種の塊ごとに交互）、監視 outputs\\s4\\d_recovery\\progress_<実験>_<モデル>_<通り>.json、既定の実験 S4DREC",
+   "exists": true,
+   "sha256": "1de2e54807af8ba7b8bc6750837423f9599f6a8a6cdcbf3d3cb9b148950dea8e"
+  }
+ },
+ "factors_60_over_30": {
+  "A_nat": 1.215,
+  "A_P1": 1.432,
+  "B_P1": 1.795,
+  "A_P2": 1.803,
+  "A_P3": 1.954
+ },
+ "rates": {
+  "nat_per_h": 93.7,
+  "p1_per_h": 76.6,
+  "p23_per_h": 64.5,
+  "e7_s": 262.0,
+  "e7_par_slow": 1.25,
+  "rtc": 1.44,
+  "pack": 0.95,
+  "xpl_critique_ph": 1.3,
+  "source": "outputs\\s4\\rules\\budget60_e7_30_calc.py の R（3 本並行の 1 プロセスあたり、段階 3 の 30 s の記録・旧ドライバ）"
+ },
+ "s4_gates_bundle1_total": {
+  "final_md": 26.9,
+  "r0_rule_role_sum": 34.5,
+  "r1": 47.7,
+  "s4_r2": 36.8,
+  "calc": "RTC 3.6 + D-E7 18.2 + 単発の開始 2.6 + D-復帰 10.8 + 移植 1.6（EX が要るときは +3.6）",
+  "parallel_3_hours": 12.9
+ },
+ "k_rate": {
+  "runs": {
+   "K1": {
+    "n": 99,
+    "wall_s": 4048.4,
+    "per_h": 88.03
+   },
+   "K2": {
+    "n": 99,
+    "wall_s": 4090.8,
+    "per_h": 87.12
+   }
+  },
+  "per_h": 87.58,
+  "source": "outputs\\v2eval\\S4K\\K1・K2\\run.json（n / wall_s。wall_s は試行の実時間の和、モデルの読み込みを含む）",
+  "note": "自然の 60 s・R1v3・naive・2 本並行。3 本並行では遅くなりうる（未測定）"
+ },
+ "k_scale": {
+  "value": 0.881,
+  "rule": "単発の試行の予算 × (予算の自然 60 s の速さ 93.7/1.215 ÷ K の実測の速さ)",
+  "budget_nat60_per_h": 77.12,
+  "k_per_h": 87.58
+ },
+ "totals": {
+  "by_diag": {
+   "D-RTC": {
+    "conditions": 6,
+    "trials": 180,
+    "budget_ph": 3.36,
+    "k_scaled_ph": 2.958
+   },
+   "D-RTC の影の推論": {
+    "conditions": 1,
+    "trials": 12,
+    "budget_ph": 0.224,
+    "k_scaled_ph": 0.197
+   },
+   "X2 の生成": {
+    "conditions": 1,
+    "trials": 20,
+    "budget_ph": 0.1,
+    "k_scaled_ph": 0.1
+   },
+   "X2 の測定": {
+    "conditions": 1,
+    "trials": 20,
+    "budget_ph": 0.05,
+    "k_scaled_ph": 0.05
+   },
+   "D-E7": {
+    "conditions": 5,
+    "trials": 200,
+    "budget_ph": 18.195,
+    "k_scaled_ph": 18.195
+   },
+   "D-単発の開始": {
+    "conditions": 6,
+    "trials": 198,
+    "budget_ph": 2.568,
+    "k_scaled_ph": 2.262
+   },
+   "移植の腕": {
+    "conditions": 6,
+    "trials": 120,
+    "budget_ph": 1.578,
+    "k_scaled_ph": 1.392
+   },
+   "D-復帰": {
+    "conditions": 8,
+    "trials": 400,
+    "budget_ph": 10.843,
+    "k_scaled_ph": 9.547
+   }
+  },
+  "conditions": 34,
+  "trials": 1150,
+  "jobs": 25,
+  "budget_ph": 36.92,
+  "k_scaled_ph": 34.7,
+  "budget_ph_without_x2": 36.77,
+  "wall_h_3lanes_pack95": {
+   "budget": 13.0,
+   "k_scaled": 12.2
+  },
+  "wall_h_3lanes_simulated": 11.59,
+  "simulated_basis": "仕事の k_scaled_ph を塊に割り振り、bundle と同じ順番の規則で 3 本に詰めた（読み込み・始める間隔は入れない）",
+  "s4_gates_bundle1_total": {
+   "final_md": 26.9,
+   "r0_rule_role_sum": 34.5,
+   "r1": 47.7,
+   "s4_r2": 36.8,
+   "calc": "RTC 3.6 + D-E7 18.2 + 単発の開始 2.6 + D-復帰 10.8 + 移植 1.6（EX が要るときは +3.6）",
+   "parallel_3_hours": 12.9
+  },
+  "ex_extra_budget_ph": 3.64
+ },
+ "simulated_first_blocks": [
+  {
+   "lane": 0,
+   "start_h": 0.0,
+   "end_h": 0.45,
+   "id": "E7_E0_r1",
+   "block": 1,
+   "of": 8
+  },
+  {
+   "lane": 1,
+   "start_h": 0.0,
+   "end_h": 0.45,
+   "id": "E7_E0_r2",
+   "block": 1,
+   "of": 8
+  },
+  {
+   "lane": 2,
+   "start_h": 0.0,
+   "end_h": 0.45,
+   "id": "E7_EH",
+   "block": 1,
+   "of": 8
+  },
+  {
+   "lane": 0,
+   "start_h": 0.45,
+   "end_h": 0.91,
+   "id": "E7_ES",
+   "block": 1,
+   "of": 8
+  },
+  {
+   "lane": 1,
+   "start_h": 0.45,
+   "end_h": 0.91,
+   "id": "E7_EO",
+   "block": 1,
+   "of": 8
+  },
+  {
+   "lane": 2,
+   "start_h": 0.45,
+   "end_h": 0.91,
+   "id": "E7_E0_r1",
+   "block": 2,
+   "of": 8
+  },
+  {
+   "lane": 0,
+   "start_h": 0.91,
+   "end_h": 1.36,
+   "id": "E7_E0_r2",
+   "block": 2,
+   "of": 8
+  },
+  {
+   "lane": 1,
+   "start_h": 0.91,
+   "end_h": 1.36,
+   "id": "E7_EH",
+   "block": 2,
+   "of": 8
+  },
+  {
+   "lane": 2,
+   "start_h": 0.91,
+   "end_h": 1.36,
+   "id": "E7_ES",
+   "block": 2,
+   "of": 8
+  },
+  {
+   "lane": 0,
+   "start_h": 1.36,
+   "end_h": 1.82,
+   "id": "E7_EO",
+   "block": 2,
+   "of": 8
+  },
+  {
+   "lane": 1,
+   "start_h": 1.36,
+   "end_h": 1.82,
+   "id": "E7_E0_r1",
+   "block": 3,
+   "of": 8
+  },
+  {
+   "lane": 2,
+   "start_h": 1.36,
+   "end_h": 1.82,
+   "id": "E7_E0_r2",
+   "block": 3,
+   "of": 8
+  }
+ ],
+ "bundle_defaults": {
+  "status": "outputs\\s4\\runs\\bundle1_status.json",
+  "stop_file": "outputs\\s4\\runs\\STOP_BUNDLE1",
+  "log": "outputs\\s4\\runs\\bundle1.log",
+  "log_dir": "outputs\\s4\\runs\\bundle1_logs"
+ },
+ "monitor": {
+  "bundle_status": "outputs\\s4\\runs\\bundle1_status.json",
+  "wait_bundle": ".venv\\Scripts\\python.exe scripts\\96_s4_ops.py wait --progress outputs\\s4\\runs\\bundle1_status.json --appear-min 30",
+  "condition_progress_files": {
+   "RTC_current_repro": "outputs\\v2eval\\S4DRTC\\current_repro\\progress.json",
+   "RTC_paper_formula_range44_cap5": "outputs\\v2eval\\S4DRTC\\paper_formula_range44_cap5\\progress.json",
+   "RTC_range40_cap5": "outputs\\v2eval\\S4DRTC\\range40_cap5\\progress.json",
+   "RTC_range10_cap5": "outputs\\v2eval\\S4DRTC\\range10_cap5\\progress.json",
+   "RTC_ZEROS": "outputs\\v2eval\\S4DRTC\\ZEROS\\progress.json",
+   "RTC_naive": "outputs\\v2eval\\S4DRTC\\naive\\progress.json",
+   "RTC_shadow": "outputs\\v2eval\\S4DRTC\\shadow_current_repro\\progress.json",
+   "X2_gen": "outputs\\s4\\x2\\gen\\X2_gen\\progress.json",
+   "X2_measure": "outputs\\s4\\x2\\eval_X2_gen_R1v3\\progress.json",
+   "E7_E0_r1": "outputs\\v2eval\\S4DE7\\E0_run1\\progress.json",
+   "E7_E0_r2": "outputs\\v2eval\\S4DE7\\E0_run2\\progress.json",
+   "E7_EH": "outputs\\v2eval\\S4DE7\\EH\\progress.json",
+   "E7_ES": "outputs\\v2eval\\S4DE7\\ES\\progress.json",
+   "E7_EO": "outputs\\v2eval\\S4DE7\\EO\\progress.json",
+   "ST_home_on_grid": "outputs\\v2eval\\S4DSTART\\home_on_grid\\progress.json",
+   "ST_home_wall_side": "outputs\\v2eval\\S4DSTART\\home_wall_side\\progress.json",
+   "ST_standby_start_on_grid": "outputs\\v2eval\\S4DSTART\\standby_start_on_grid\\progress.json",
+   "ST_standby_start_wall_side": "outputs\\v2eval\\S4DSTART\\standby_start_wall_side\\progress.json",
+   "ST_standby_end_on_grid": "outputs\\v2eval\\S4DSTART\\standby_end_on_grid\\progress.json",
+   "ST_standby_end_wall_side": "outputs\\v2eval\\S4DSTART\\standby_end_wall_side\\progress.json",
+   "XPL_as_r1": "outputs\\v2eval\\S4XPL\\as_r1\\progress.json",
+   "XPL_as_r2": "outputs\\v2eval\\S4XPL\\as_r2\\progress.json",
+   "XPL_home_r1": "outputs\\v2eval\\S4XPL\\home_r1\\progress.json",
+   "XPL_home_r2": "outputs\\v2eval\\S4XPL\\home_r2\\progress.json",
+   "XPL_grid_r1": "outputs\\v2eval\\S4XPL\\grid_r1\\progress.json",
+   "XPL_grid_r2": "outputs\\v2eval\\S4XPL\\grid_r2\\progress.json",
+   "RC_R1v3_fall_as_is": "outputs\\v2eval\\S4DREC\\R1v3_fall_as_is\\progress.json",
+   "RC_R1v3_fall_with_hold": "outputs\\v2eval\\S4DREC\\R1v3_fall_with_hold\\progress.json",
+   "RC_R1v3_misplace": "outputs\\v2eval\\S4DREC\\R1v3_misplace\\progress.json",
+   "RC_R1v3_grasp_failure": "outputs\\v2eval\\S4DREC\\R1v3_grasp_failure\\progress.json",
+   "RC_N1v3_fall_as_is": "outputs\\v2eval\\S4DREC\\N1v3_fall_as_is\\progress.json",
+   "RC_N1v3_fall_with_hold": "outputs\\v2eval\\S4DREC\\N1v3_fall_with_hold\\progress.json",
+   "RC_N1v3_misplace": "outputs\\v2eval\\S4DREC\\N1v3_misplace\\progress.json",
+   "RC_N1v3_grasp_failure": "outputs\\v2eval\\S4DREC\\N1v3_grasp_failure\\progress.json"
+  },
+  "job_progress_files": {
+   "J_RTC_rotate": "outputs\\s4\\d_rtc\\rotate_bundle1.progress.json",
+   "J_RTC_shadow": "outputs\\v2eval\\S4DRTC\\shadow_current_repro\\progress.json",
+   "X2_gen": "outputs\\s4\\x2\\gen\\X2_gen\\progress.json",
+   "X2_measure": "outputs\\s4\\x2\\eval_X2_gen_R1v3\\progress.json",
+   "E7_E0_r1": "outputs\\v2eval\\S4DE7\\E0_run1\\progress.json",
+   "E7_E0_r2": "outputs\\v2eval\\S4DE7\\E0_run2\\progress.json",
+   "E7_EH": "outputs\\v2eval\\S4DE7\\EH\\progress.json",
+   "E7_ES": "outputs\\v2eval\\S4DE7\\ES\\progress.json",
+   "E7_EO": "outputs\\v2eval\\S4DE7\\EO\\progress.json",
+   "ST_home_on_grid": "outputs\\v2eval\\S4DSTART\\home_on_grid\\progress.json",
+   "ST_home_wall_side": "outputs\\v2eval\\S4DSTART\\home_wall_side\\progress.json",
+   "ST_standby_start_on_grid": "outputs\\v2eval\\S4DSTART\\standby_start_on_grid\\progress.json",
+   "ST_standby_start_wall_side": "outputs\\v2eval\\S4DSTART\\standby_start_wall_side\\progress.json",
+   "ST_standby_end_on_grid": "outputs\\v2eval\\S4DSTART\\standby_end_on_grid\\progress.json",
+   "ST_standby_end_wall_side": "outputs\\v2eval\\S4DSTART\\standby_end_wall_side\\progress.json",
+   "XPL_as_r1": "outputs\\v2eval\\S4XPL\\as_r1\\progress.json",
+   "XPL_as_r2": "outputs\\v2eval\\S4XPL\\as_r2\\progress.json",
+   "XPL_home_r1": "outputs\\v2eval\\S4XPL\\home_r1\\progress.json",
+   "XPL_home_r2": "outputs\\v2eval\\S4XPL\\home_r2\\progress.json",
+   "XPL_grid_r1": "outputs\\v2eval\\S4XPL\\grid_r1\\progress.json",
+   "XPL_grid_r2": "outputs\\v2eval\\S4XPL\\grid_r2\\progress.json",
+   "J_RC_fall_as_is": "outputs\\s4\\d_recovery\\progress_S4DREC_R1v3-N1v3_fall_as_is.json",
+   "J_RC_fall_with_hold": "outputs\\s4\\d_recovery\\progress_S4DREC_R1v3-N1v3_fall_with_hold.json",
+   "J_RC_misplace": "outputs\\s4\\d_recovery\\progress_S4DREC_R1v3-N1v3_misplace.json",
+   "J_RC_grasp_failure": "outputs\\s4\\d_recovery\\progress_S4DREC_R1v3-N1v3_grasp_failure.json"
+  },
+  "note": "包みの全体は bundle の状態のファイルを 96_s4_ops.py wait で見る（progress.json と同じ鍵）。条件ごとの progress.json も wait で読めるが、塊に分けて回すので、塊の終わりごとに status=stopped（stop_reason max_new:N）になり、wait は 1 で終わる。条件の最後まで見るには bundle の状態か、まとめた仕事の progress（job_progress_files）を見る。まだ始まっていない条件の progress.json は無い（wait の --appear-min を長くする）"
+ },
+ "interface": {
+  "first_draft": "最初は決まりの文書から <スクリプト> <run|task> --experiment S4D1 --condition <条件> --model --trials <種の指定> [診断の引数] [96_s4_resume.py と同じ引数] と置いたが、担当 A・B・C のスクリプトが先にできたので、計画の仕事は各スクリプトの冒頭の使い方（adapters の seen）にそろえた",
+  "contract": "包みが子に求めるのは次だけ: 同じ命令をもう一度打てば続きから回る、終了コード 0/1/2/3、progress.json（あれば）の pid・status・stop_reason、塊に分ける仕事は 96_s4_resume.py の --max-new を受け付ける（N 本回したら終了コード 1・stop_reason=max_new:N。最後の試行まで回れば 0）、--dry-run",
+  "same_as_96": [
+   "--dry-run",
+   "--max-new",
+   "--stop-file",
+   "--progress-file",
+   "--min-free-gb",
+   "--min-commit-free-gb",
+   "--mem-timeout-min",
+   "--accept-env-change"
+  ],
+  "writes": "outputs\\v2eval\\<実験>\\<条件>\\: 96_s4_resume.py と同じ記録・progress.json（status・pid・proc_create_time・updated・done・total・stop_reason）・run.json・G_AUDIT.json・resume_spec.json・resume_log.json。診断の条件（腕・設定・開始状態・誘発の版など）は試行の json の欄に足す（87_v2_e.py・50_e_eval.py・recovla.eval.report・time_scoring が読めること）",
+  "exit_codes": {
+   "0": "全部そろった",
+   "1": "途中で止まった（合図・--max-new・メモリ待ちの時間切れ・Ctrl+C）",
+   "2": "エラー",
+   "3": "引数・前提の食い違い（制限時間・環境・ドライバ）"
+  },
+  "bundle_reads": "子の終了コードと、pid が子と一致する progress.json（仕事の progress）の status・stop_reason だけ"
+ },
+ "sources": {
+  "charter": {
+   "path": "docs/目標書_段階4.md",
+   "sha256": "afa069552fbcea7573706e59be3678b8d941da0dd1baf0eece8532e3a961860b"
+  },
+  "gates": {
+   "path": "configs/s4_gates.json",
+   "sha256": "cf2e8c96a205bf10126bdf647bdbf2e8b9d5a315ebbe881c03bafac82b12940d"
+  },
+  "board_0153": {
+   "docs/目標書_段階4.md": "afa069552fbcea7573706e59be3678b8d941da0dd1baf0eece8532e3a961860b",
+   "configs/s4_gates.json": "cf2e8c96a205bf10126bdf647bdbf2e8b9d5a315ebbe881c03bafac82b12940d"
+  },
+  "budget_calc": "outputs\\s4\\rules\\budget60_e7_30_calc.py（R と倍率）、configs\\s4_gates.json budget_notes",
+  "matches_board_0153": true
+ },
+ "decided_before_results": [
+  "条件の一覧・名前・帯・試行数・モデル・制限時間（目標書_段階4.md 4-2・3-1・8 節、s4_gates.json）",
+  "仕事のまとめ方: D-RTC 6 設定は 1 仕事（担当 A の rotate、1 種ごとに交互）、影は 1 仕事、D-復帰は通りごとに 1 仕事（R と N を 10 種ごとに交互）、D-E7・D-単発の開始・移植・X2 は 1 条件 1 仕事",
+  "塊の大きさ（assumed の仕事: D-E7 5 本、D-単発の開始 6 試行＝2 種、移植 5 状態。X2 は分けない）",
+  "順番の規則（群の残りの見込みの長い順、群の中は済んだ塊の少ない順＝種の塊ごとに交互）",
+  "失敗・止める合図・空きメモリ 12 GB・コミット 6 GB・メモリ待ち 120 分・始める間隔 90 s の規則",
+  "見込みの式（s4_gates.json budget_notes と同じ。単発は K の実測で換算した列を並べる）"
+ ],
+ "deviations_from_task_text": [
+  "担当の指示は「1 つの条件が終わったら次を始める」だが、決まりの文書 第 4 節（比べる組は同じ種・同じ時期に、種の塊ごとに交互に回す。final.md の共通の作法 6 も同じ）に従い、既定では比べる組を種の塊ごとに交互に流す（assumed の仕事は子に --max-new を渡し、observed の A・C はスクリプトの中で交互）。--no-interleave で指示どおり 1 条件ずつ流せる。止める合図は『今の条件』ではなく『今の塊』を終えて止まる（塊は最長で E7 の 5 本＝約 27 分。observed の仕事は塊に分けないので、その仕事が終わるまで）",
+  "担当 A・B・C のスクリプトは指示の例（--experiment S4D1 --condition <名前> --model）と違う形を選んでいた（実験 S4DRTC・S4DE7・S4DSTART・S4XPL・S4DREC と outputs\\s4\\x2、サブコマンド rotate・run・start・xpl・gen・eval、A・C は比べる組を 1 プロセスで交互）。包みはその命令をそのまま仕事にした（adapters の observed）。実験名が診断ごとに分かれるので、記録の場所は conditions の out_dir を見る",
+  "束 0 の E7 の速さ（190150〜190155）は回した記録がない（outputs\\v2eval に S4E7 が無い）。E7 の見込みは予算（段階 3 の速さ）のまま",
+  "X2（生成・測定）は束 1 の予算 36.8 に入っていない（final.md「GPU 数分」）。見込みは推測で足した"
+ ]
+}

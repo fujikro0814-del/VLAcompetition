@@ -1,0 +1,215 @@
+{
+ "written": "2026-10-08 07:46:12",
+ "settings": {
+  "current_repro": {
+   "mode": "rtc",
+   "horizon": 40,
+   "schedule": "EXP",
+   "max_guidance_weight": 10.0,
+   "ja": "現行の再現（組 E と同じ。configs/default.yaml 155〜157 行）",
+   "why": "段階 3 の組 E（V3S3/E_nat、25/99）を作った設定。崩れた基準として回す（候補にしない）",
+   "weights_d4_rows0_9": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    0.932,
+    0.867,
+    0.806,
+    0.747,
+    0.692,
+    0.639
+   ],
+   "weights_d4_exec_rows4_9": [
+    0.932,
+    0.867,
+    0.806,
+    0.747,
+    0.692,
+    0.639
+   ]
+  },
+  "paper_formula_range44_cap5": {
+   "mode": "rtc",
+   "horizon": 44,
+   "schedule": "EXP",
+   "max_guidance_weight": 5.0,
+   "ja": "論文の式どおり（範囲 H − s = 44・上限 β = 5）",
+   "why": "arXiv 2506.07339 の式 5 の重み（範囲 H − s、指数の減衰）と既定の β = 5。lerobot の EXP は E = H − s で式 5 と一致する（tests/test_s4_diag_A.py）。ヤコビアン・段数 10・s/H は変えていない（98_s4_d_rtc.py の冒頭）",
+   "weights_d4_rows0_9": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    0.938,
+    0.88,
+    0.823,
+    0.77,
+    0.719,
+    0.67
+   ],
+   "weights_d4_exec_rows4_9": [
+    0.938,
+    0.88,
+    0.823,
+    0.77,
+    0.719,
+    0.67
+   ]
+  },
+  "range40_cap5": {
+   "mode": "rtc",
+   "horizon": 40,
+   "schedule": "EXP",
+   "max_guidance_weight": 5.0,
+   "ja": "範囲 40・上限 5",
+   "why": "現行から上限だけを論文の既定 5 にする（W\\rtc_skeptic\\s2_out.json: 最終段の引き戻し 0.911 → 0.50）",
+   "weights_d4_rows0_9": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    0.932,
+    0.867,
+    0.806,
+    0.747,
+    0.692,
+    0.639
+   ],
+   "weights_d4_exec_rows4_9": [
+    0.932,
+    0.867,
+    0.806,
+    0.747,
+    0.692,
+    0.639
+   ]
+  },
+  "range10_cap5": {
+   "mode": "rtc",
+   "horizon": 10,
+   "schedule": "EXP",
+   "max_guidance_weight": 5.0,
+   "ja": "範囲 10（= s + d）・上限 5",
+   "why": "W\\rtc の F1（範囲 = s + d）。線形の模型で最新の観測の割合 0.869（a6_toy.json）",
+   "weights_d4_rows0_9": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    0.677,
+    0.433,
+    0.256,
+    0.133,
+    0.055,
+    0.013
+   ],
+   "weights_d4_exec_rows4_9": [
+    0.677,
+    0.433,
+    0.256,
+    0.133,
+    0.055,
+    0.013
+   ]
+  },
+  "ZEROS": {
+   "mode": "rtc",
+   "horizon": 44,
+   "schedule": "ZEROS",
+   "max_guidance_weight": 5.0,
+   "ja": "ZEROS（重みは前の d 行だけ 1、ほかは 0。範囲 44・上限 5）",
+   "why": "W\\rtc の F1（重みを前の d 行だけにする）。実行する行（d 行目から）には直接の引き戻しがかからない。範囲は効かない（重みは min(d, 範囲) 行だけ）が、論文の式どおりの設定と減衰の形だけが違うように 44・上限 5 にそろえた（実装役の決定、回す前に掲示）",
+   "weights_d4_rows0_9": [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "weights_d4_exec_rows4_9": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "naive": {
+   "mode": "naive",
+   "horizon": null,
+   "schedule": null,
+   "max_guidance_weight": null,
+   "ja": "naive（RTC なし。物差し K・組 A と同じ実行系）",
+   "why": "基準（R.c1・R.c3 の比べる相手）"
+  }
+ },
+ "candidates": [
+  "paper_formula_range44_cap5",
+  "range40_cap5",
+  "range10_cap5",
+  "ZEROS"
+ ],
+ "definitions_before_run": {
+  "source": "src/recovla/diag/rtc.py の冒頭・trial_metrics・summarize・shadow_trial・shadow_summary（この掲示はコードの規則を文にしたもので、規則は変えていない）。configs/s4_gates.json gates.R・metric_definitions",
+  "move_ratio_30s": {
+   "definition": "移動の比 = 最初に閉じる前（行動の時刻 < 最初に gripper_closed が真になった時刻）の、方策の行動のうち保持でない行の水平の和を u に射影したもの ÷ 必要な移動（目標の立方体の水平位置（最初に閉じた時点）− 指先の水平位置（時刻 0））の u 成分。u は根元（原点）→ 目標の立方体（最初に閉じた時点）の水平の向き。必要な移動の |u 成分| が 20 mm 以下の試行は除く（W\\rtc\\a3_travel.py の ratio_cmd_need と同じ）",
+   "30s_version": "主は 30 s 版: 最初の閉じが 30 s 以内（t_first_close <= 30 s）の試行だけを使う。区間が最初の閉じまでなので、これで最初の 30 s に限った値になる。30 s より後に最初に閉じた試行と、閉じなかった試行は除き、件数を n_first_close_after_horizon・n_no_close に出す。副は 60 s の記録全体（最初の閉じが 60 s 以内の試行）",
+   "aggregate": "主は中央値（move_ratio_median）。平均（move_ratio_mean）は同じ試行の集合で並べるだけ（判定に使わない）。根拠: s4_gates.json の move_ratio の aggregate は『出どころ W\\rtc\\a3_summary.json の集計の定義に合わせる』で、a3_summary.json の ratio_cmd_need は [中央値, 第 1 四分位, 第 3 四分位, 件数]、基準値 A 0.99・E 0.78・C 1.01 は中央値。R.c2（>= 0.95）は 30 s 版の中央値に当てる",
+   "code": "trial_metrics(meta, z, rt, horizon_s=30.0) の move_ratio、summarize の move_ratio_median・move_ratio_mean"
+  },
+  "seam_jump_30s": "継ぎ目の速度の跳び（主は 30 s 版）: 10 Hz の行動の速さ v = a[:3]/0.1 の、続く 2 行がどちらも保持でなく塊の番号が変わる所（両方の行の時刻 < 30 s）の |Δv| の試行ごとの平均 → 全試行の中央値。副は 60 s の記録全体",
+  "radial_gap": "半径方向の差は最初の閉じで決まり、制限時間によらない（主・副で同じ値）。集計は閉じた試行の中央値",
+  "shadow": {
+   "compare_with": "影 = 誘導した推論と同じ観測・同じ雑音（雑音の生成器の状態を推論の前に戻して引き直す）で、RTC の引数（inference_delay・prev_chunk_left_over）を渡さない推論（＝naive と同じ、誘導しない推論）。実行は誘導した側（current_repro）で、影は記録だけ（戻り値・次の推論の前の塊は誘導した側のまま）",
+   "metric": "推論ごとに、行 0 から h 行（h = 10・20・30・40）の後処理の後の行動の水平の和の差 (影 − 誘導)·u [mm]（u は観測の時刻の x_des → 目標の立方体の水平の向き。正は誘導した計画が短い）。使う推論: 影があり、観測の時刻が最初の閉じより前かつ 30 s 以内、|立方体 − x_des| >= 30 mm のもの",
+   "h_rule": "集計は条件の全試行の推論をまとめた h ごとの中央値。「先の計画が 15 mm 以上短い」は、どれかの h の中央値 >= 15 mm（R.b1 の影の側）。実行した行（offset から s = 6 行）の差の中央値も並べる（判定に使わない）",
+   "code": "DiagPolicy.infer、shadow_trial(horizon_s=30.0)、shadow_summary"
+  },
+  "ZEROS": {
+   "contents": "mode rtc、範囲 E = 44、減衰の形 ZEROS、上限 β = 5。誘導の重みは前の min(d, E) = d 行だけ 1、ほかは 0（d = 方策に渡す inference_delay = min(直前の推論で実際にかかった行の数, s − 1)、s = 6、d <= 5 < E なので重みのある行は d 行）。範囲 E は重みに効かない（前の塊の残りは normalize_left_over で E 行に揃えて渡すが、重み 0 の行は誘導に効かない）。範囲と上限は文書に書かれていないので、論文の式どおりの設定（E 44・β 5）と減衰の形だけが違うようにそろえた（実装役の決定）",
+   "weights_rows0_7": {
+    "d=1": [
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "d=4": [
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     0.0,
+     0.0,
+     0.0,
+     0.0
+    ],
+    "d=5": [
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     1.0,
+     0.0,
+     0.0,
+     0.0
+    ]
+   }
+  }
+ },
+ "common": "s = 6、d_init = 4、inference_delay = min(d_est, 5)、10 段、ヤコビアンなし（lerobot 0.6.1）、R1v3、安全フィルタなし、60 s",
+ "paper_check": "lerobot EXP（E = 44）と arXiv 2506.07339 の式 5（H = 50、s = 6）の重みの最大差 3.33e-16（d = 1〜5）",
+ "module_sha256": "9860d169f6502d763fa9d5154dc952eb531df4570cf49d608e30e1275bd6afb4",
+ "script_sha256": "09c5f190429b790ac3370d47265c4285160f893b0f0f2e0181a3400f1cb91add"
+}
