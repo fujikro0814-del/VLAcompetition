@@ -1,46 +1,47 @@
-"""説明資料（PDF、2〜4 ページ）を結果のファイルから作り、照合する。数字は手で書かない。
+"""説明資料（PDF、2〜4 ページ）を結果のファイルから作り、照合する。数字は手で書かない。段階 3 の版（0146・0147）。
 
-    .venv\\Scripts\\python.exe scripts\\60_paper.py build     # 値の計算 → 図 2・図 3 → HTML → PDF（Edge のヘッドレス印刷）
+    .venv\\Scripts\\python.exe scripts\\60_paper.py build     # 値の計算 → 図 2 → HTML → PDF（Edge のヘッドレス印刷）
     .venv\\Scripts\\python.exe scripts\\60_paper.py check     # 照合: 手で書いた数字がない・値が結果と一致・使わない語が 0・ページ数
 
-原稿は paper/template.html と paper/fig1.svg。数字はすべて {{キー}} の差し込み口で、values() が結果の JSON
-（outputs/results/e_report_final.json など、テスト用のシード範囲の値）と設定・学習の記録から計算する。
+原稿は paper/template.html と paper/fig1.svg。数字はすべて {{キー}} の差し込み口で、values() が段階 3 の最終評価の結果
+（outputs/results/v2_e_report_s3.json、outputs/v2eval/V3S3 の E6・E7、テスト用のシード範囲 140000〜）と、設定・学習の記録・
+凍結の一覧（docs/freeze/s3_hashes.json）・動画の場面の表（configs/demo/video_s3.yaml）から計算する。
+目標書 v1 の版（9/29 提出用）は git のタグ stepJ-freeze の版にある。
 出力: paper/build/（paper.html・図・values.json）と、paper/build/説明資料_PAI最終課題_<アカウント名>.pdf
 """
 import argparse
+import collections
 import html
 import json
-import math
 import pathlib
 import re
 import subprocess
 import sys
 
-import numpy as np
-
 from recovla.common import config, goals
 
-CFG = config.load()
+CFG = config.load_v2()
 ROOT = config.ROOT
 OUT = config.path(CFG["paths"]["outputs"])
 RES = OUT / "results"
-PL = OUT / "planner"
+S3 = OUT / "v2eval" / "V3S3"
 PAPER = ROOT / "paper"
 BUILD = PAPER / "build"
+VIDEO = ROOT / "configs" / "demo" / "video_s3.yaml"
+FREEZE = ROOT / "docs" / "freeze" / "s3_hashes.json"
 ACCOUNT = "アカウント名"                     # 提出の前に手で直す（ファイル名だけに入る）
 PDF_NAME = f"説明資料_PAI最終課題_{ACCOUNT}.pdf"
 EDGE = pathlib.Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe")
 FONT = pathlib.Path(r"C:\Windows\Fonts\BIZ-UDGothicR.ttc")
-CKPT_R2 = OUT / "train" / "train_R2_20260927-145256_20260927-145256"
 
 
 def _j(p):
     return json.loads(pathlib.Path(p).read_text(encoding="utf-8"))
 
 
-def _ee():
+def _mod(name, path):
     import importlib.util
-    spec = importlib.util.spec_from_file_location("e_eval", ROOT / "scripts" / "50_e_eval.py")
+    spec = importlib.util.spec_from_file_location(name, path)
     m = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(m)
     return m
@@ -66,54 +67,86 @@ def pv(p):
 
 
 def pv_eq(p):
-    """本文で「p {{…eq}}」と書く形: 「= 0.0044」または「< 0.001」。"""
+    """本文で「p {{…eq}}」と書く形: 「= 0.016」または「< 0.001」。"""
     s = pv(p)
     return s if s.startswith("<") else f"= {s}"
 
 
+def mmss(s):
+    return f"{int(s) // 60}:{int(s) % 60:02d}"
+
+
+def video_scenes() -> list:
+    import yaml
+    return yaml.safe_load(VIDEO.read_text(encoding="utf-8"))["scenes"]
+
+
+def v3_dataset_dir() -> str:
+    """復帰デモありの学習データ（段階 3 の 1 周目、凍結の一覧に入っているもの）。"""
+    return _j(OUT / "f" / "data_v3.json")["datasets"]["R1"]["dataset"].replace("\\", "/")
+
+
+def e7_summary() -> dict:
+    """3 個の連続タスク（E7）の記録から: 3 個とも、再試行で完了したサブタスク、完了判定の偽陰性・偽陽性、止まった位置。"""
+    runs = [_j(p) for p in sorted((S3 / "E7_R1v3").glob("run_00??.json"))]
+    out = {"n": len(runs), "all_three": 0, "retry_completed": 0, "false_neg": 0, "false_pos": 0, "stopped_at": collections.Counter()}
+    for r in runs:
+        out["all_three"] += bool(r["all_three_in_box"])
+        for s in r["steps"]:
+            truth = r["truth_success_t"].get(s["color"]) is not None
+            if len(s["attempts"]) > 1 and truth:
+                out["retry_completed"] += 1
+            if s["judged_complete"] and not truth:
+                out["false_pos"] += 1
+            if not s["judged_complete"] and r["final_in_box"].get(s["color"]):
+                out["false_neg"] += 1
+        if r.get("stopped"):
+            out["stopped_at"][int(r["stopped"]["step"])] += 1
+    return out
+
+
 def values() -> dict:
-    ee = _ee()
-    fin = _j(RES / "e_report_final.json")
-    P, sec = fin["primary"], fin["secondary"]
+    ee = _mod("e_eval", ROOT / "scripts" / "50_e_eval.py")
+    st3 = _mod("v2e", ROOT / "scripts" / "87_v2_e.py").STAGES["s3"]
+    rep = _j(RES / "v2_e_report_s3.json")
+    P, sec, sets = rep["primary"], rep["secondary"], rep["sets"]
     v = {}
     # 設定・学習の記録
-    rt, sim, pl = CFG["runtime"], CFG["sim"], CFG["planner"]
     fps = int(CFG["convert"]["fps"])
+    rows = int(st3["sets"]["A"][3])
     v["policy_hz"] = str(fps)
-    v["cam_fps"] = str(fps)
-    v["infer_period_s"] = f"{int(rt['exec_interval']) / fps:g}"
-    v["delay_d"] = str(int(rt["delay_steps"]))
-    v["delay_s"] = f"{int(rt['delay_steps']) / fps:g}"
-    pcfg = _j(CKPT_R2 / "checkpoints" / "010000" / "pretrained_model" / "config.json")
-    info = _j(OUT / "datasets" / "R2cue_20260927-140453_statsR1" / "meta" / "info.json")
+    v["exec_rows"] = str(rows)
+    v["exec_s"] = f"{rows / fps:g}"
+    lat = _j(ROOT / "configs" / "latency_v1.json")["kinds"]["policy"]
+    v["lat_p50"], v["lat_p95"] = f"{lat['p50']:.2f}", f"{lat['p95']:.2f}"
+    ck = _j(FREEZE)["checkpoints"]
+    pcfg = _j(ROOT / ck["R1v3"] / "pretrained_model" / "config.json")
     v["chunk"] = str(pcfg["chunk_size"])
-    v["chunk_s"] = f"{pcfg['chunk_size'] / fps:g}"
+    info = _j(ROOT / v3_dataset_dir() / "meta" / "info.json")
     v["act_dim"] = str(info["features"]["action"]["shape"][0])
     sd = info["features"]["observation.state"]["shape"][0]
     cue = sum(1 for n in info["features"]["observation.state"]["names"] if n.startswith("cue_"))
     v["state_dim"], v["cue_dim"], v["state_base"] = str(sd), str(cue), str(sd - cue)
-    ts = float(sim["timestep"])
-    v["phys_ms"] = f"{ts * 1000:g}"
+    v["cam_hz"] = f"{CFG['sensor']['frame_hz']:g}"
+    v["phys_ms"] = f"{float(CFG['sim']['timestep']) * 1000:g}"
+    v["train_steps"] = f"{int(pathlib.Path(ck['R1v3']).name):,}"
+    v3 = _j(OUT / "f" / "data_v3.json")["datasets"]
+    cnt = collections.Counter(e["key"].split("_")[0] for e in _j(ROOT / v3["R1"]["manifest"])["entries"])
+    v["n_normal"] = str(cnt["n"])
+    v["n_recovery"] = str(sum(c for k, c in cnt.items() if k != "n"))
+    v["n_n1"] = str(len(_j(ROOT / v3["N1"]["manifest"])["entries"]))
+    ts = float(CFG["sim"]["timestep"])
     v["phys_hz"] = f"{1 / ts:g}"
     sf = CFG["safety_filter"]
     v["sf_dmin_mm"] = f"{sf['d_min_m'] * 1000:g}"
     v["sf_detect_cm"] = f"{sf['d_detect_m'] * 100:g}"
-    v["judge_hold_s"] = f"{float(pl['completion_hold_s']):g}"
-    v["step_timeout"] = f"{float(pl['step_timeout_s']):g}"
-    v["llm_temp"] = f"{float(pl['temperature']):g}"
+    v["sf_extra_mm"] = f"{float(CFG['runtime_v2']['safety_extra_margin_m']) * 1000:.0f}"
+    v["judge_hold_s"] = f"{float(CFG['runtime_v2']['judge']['hold_s']):g}"
     v["time_limit"] = f"{float(CFG['eval']['time_limit_s']):g}"
-    m1 = _j(OUT / "manifests" / "R1_20260926-113711.json")
-    import collections
-    cnt = collections.Counter(e["key"].split("_")[0] for e in m1["entries"])
-    v["n_normal"] = str(cnt["n"])
-    v["n_recovery"] = str(sum(c for k, c in cnt.items() if k != "n"))
-    v["n_n1"] = str(len(_j(OUT / "manifests" / "N1_20260926-113711.json")["entries"]))
-    v["n_r2"] = str(len(_j(OUT / "manifests" / "R2_20260927-140453.json")["entries"]) - len(m1["entries"]))
     # テスト用の試行の数
-    st = ee.STAGES["final"]
-    v["nat_layouts"] = st["nat"].split(":")[2]
     v["nat_n"] = str(P["E1"]["n"])
-    v["p_n"] = st["P1"].split(":")[2]
+    v["nat_layouts"] = str(P["E1"]["n"] // 3)
+    v["p_n"] = str(sets["A"]["P1"]["n"])
     # 主要評価項目
     v["e1_k"], v["e1_n"] = str(P["E1"]["successes"]), str(P["E1"]["n"])
     v["e1_pct"], v["e1_ci"] = pct(P["E1"]["successes"] / P["E1"]["n"]), ci(P["E1"]["success_wilson"])
@@ -122,84 +155,77 @@ def values() -> dict:
 
     def pair(prefix, d, holm=None):
         v[f"{prefix}_x"], v[f"{prefix}_y"] = pct(d["x_rate"]), pct(d["y_rate"])
+        v[f"{prefix}_xk"], v[f"{prefix}_yk"] = str(d["x_only"] + d["both"]), str(d["y_only"] + d["both"])
+        v[f"{prefix}_xo"], v[f"{prefix}_yo"] = str(d["x_only"]), str(d["y_only"])
         v[f"{prefix}_pairs"], v[f"{prefix}_ci"] = str(d["pairs"]), dci(d)
         v[f"{prefix}_p"], v[f"{prefix}_peq"] = pv(d["mcnemar_exact_p"]), pv_eq(d["mcnemar_exact_p"])
         if holm is not None:
             v[f"{prefix}_holm"], v[f"{prefix}_holmeq"] = pv(holm), pv_eq(holm)
     pair("e3a", P["E3"]["main_A_vs_B"], P["E3"]["main_A_vs_B"]["holm_p"])
     pair("e3s", P["E3"]["sync_C_vs_D"], P["E3"]["sync_C_vs_D"]["holm_p"])
-    pair("e4", P["E4"])
-    pair("e5", P["E5"])
-    v["e5_x_k"] = str(P["E5"]["both"] + P["E5"]["x_only"])
-    v["e5_y_k"] = str(P["E5"]["both"] + P["E5"]["y_only"])
-    v["e5_x"], v["e5_y"] = f"{v['e5_x_k']}/{P['E5']['pairs']}", f"{v['e5_y_k']}/{P['E5']['pairs']}"
-    v["e5_blocked"] = str(len(sec["E5"]["blocked_by_filter"]))
-    pair("e8", P["E8"])
-    pair("e8p3", sec["E8"]["P3_recovery"])
-    pair("e8nat", sec["E8"]["nat_success"])
     pair("nat_rn", sec["E3_main"]["nat_success"])
+    pair("e4", sec["E4_naive_vs_rtc"]["P1_recovery"])
     pair("nat_nr", sec["E4_naive_vs_rtc"]["nat_success"])
-    pair("sync_p123", sec["E4_sync_vs_naive"]["P123_recovery"])
-    sj = sec["E4_naive_vs_rtc"]["seam_jump_mean_all"]
-    v["seam_naive"], v["seam_rtc"], v["seam_pairs"] = f"{sj['x_median']:.3f}", f"{sj['y_median']:.3f}", str(sj["pairs"])
-    p2 = [s["P2"]["recovery_rate"] for s in fin["sets"].values() if s["P2"]["recovery_rate"] is not None]
-    v["p2_max"] = pct(max(p2))
-    # E6
-    e6, e6c = _j(OUT / "k1" / "e6_R2_final.json"), _j(OUT / "k1" / "e6_R2_final_cue_only.json")
+    pair("con_nr", sec["E4_naive_vs_rtc"]["nat_contact"])
+    jr = sec["E4_naive_vs_rtc"]["jerk_rms_all"]
+    v["jerk_naive"], v["jerk_rtc"], v["jerk_pairs"] = f"{jr['x_median']:.1f}", f"{jr['y_median']:.1f}", str(jr["pairs"])
+    pair("e5", sec["E5"]["nat_contact"])           # 本線（フィルタなし）対 フィルタあり。x が本線
+    pair("e5s", sec["E5"]["nat_success"])
+    for part in ("P2", "P3"):
+        s = sets["A"][part]
+        v[f"a_{part.lower()}_k"], v[f"a_{part.lower()}_n"] = str(s["recovered"]), str(s["established"])
+    # E6（目標位置のキュー）
+    e6, e6c = _j(S3 / "e6_R1v3_both.json"), _j(S3 / "e6_R1v3_cue_only.json")
     k6 = round(e6["accuracy_majority"] * e6["pairs"])
     v["e6_k"], v["e6_n"], v["e6_ci"] = str(k6), str(e6["pairs"]), ci(ee._wilson(k6, e6["pairs"]))
-    v["e6_cue"] = pct(e6c["accuracy_majority"])
-    # E7
-    llm, jd, e7 = _j(PL / "llm_final_sentences_v1.json"), _j(PL / "judge_final.json"), _j(PL / "e7_summary_E7_final.json")
-    v["llm_k"], v["llm_n"], v["llm_ci"] = str(llm["correct"]), str(llm["n"]), ci(ee._wilson(llm["correct"], llm["n"]))
-    v["llm_crit"] = "29"
-    v["judge_k"], v["judge_n"] = str(jd["agree"]), str(jd["selected"])
-    v["judge_pct"], v["judge_ci"] = f"{100 * jd['agreement']:.1f}%", ci(ee._wilson(jd["agree"], jd["selected"]))
-    v["judge_crit"] = "98"
-    sel = set(jd["selected_ids"])
-    v["judge_dis"] = str(sum(1 for c in jd["cases"] if c["id"] in sel and c["truth"] != c["judge"]))
-    pr = e7["primary"]
-    v["e7_k"], v["e7_n"], v["e7_ci"] = str(pr["all_three"]), str(pr["n"]), ci(pr["wilson95"])
-    v["e7_fail"] = str(pr["n"] - pr["all_three"])
-    v["e7_false"] = str(e7["summary"]["judge_false_complete"])
-    v["e7_retry"] = str(e7["summary"]["retry_completed_steps"])
-    rc = _j(PL / "return_compare_final.json")["pairs"][0]
-    v["nr_k"], v["nr_n"] = str(rc["before_summary"]["all_three"]), str(rc["before_summary"]["n"])
-    v["nr_retry"] = str(rc["before_summary"]["retry_completed_steps"])
-    # 図 2（動画の場面の回し直し）
-    d2 = _j(OUT / "demo" / "nat_110001_R1" / "meta.json")
-    v["fig2_miss"] = f"{[e['t'] for e in d2['events'] if e['kind'] == 'grasp_miss'][0]:.0f}"
-    v["fig2_succ"] = f"{d2['t_success']:.0f}"
+    v["e6c_cue"] = str(round(e6c["accuracy_majority"] * e6c["pairs"]))
+    v["e6c_text"] = str(round(e6c["follows_instruction_text_majority"] * e6c["pairs"]))
+    v["e6c_n"] = str(e6c["pairs"])
+    # E7（3 個の連続タスク）
+    s7 = e7_summary()
+    v["e7_k"], v["e7_n"], v["e7_ci"] = str(s7["all_three"]), str(s7["n"]), ci(ee._wilson(s7["all_three"], s7["n"]))
+    v["e7_retry"], v["e7_fn"], v["e7_fp"] = str(s7["retry_completed"]), str(s7["false_neg"]), str(s7["false_pos"])
+    top_step, top_n = s7["stopped_at"].most_common(1)[0]
+    v["e7_stop2"], v["e7_stop_pos"] = str(top_n), str(top_step + 1)
+    v["e7_stopped"] = str(sum(s7["stopped_at"].values()))
+    # E9（G1〜G3 の監査）・E10（知覚の精度）
+    e9 = rep["new"]["E9"]["total"]
+    v["e9_trials"] = f"{e9['trials']:,}"
+    v["e9_viol"] = str(e9["g1"] + e9["g2_stops"] + e9["g2_early"] + e9["g3"])
+    pa = rep["new"]["E10"]["A"]
+    v["perc_med_mm"], v["perc_p95_mm"] = f"{pa['median_m'] * 1000:.0f}", f"{pa['p95_m'] * 1000:.0f}"
+    # 動画の場面の時刻（本文の「動画 m:ss〜m:ss」）
+    t = 0.0
+    for sc in video_scenes():
+        v[f"v_{sc['id']}"] = f"{mmss(t)}〜{mmss(t + sc['dur_s'])}"
+        t += sc["dur_s"]
+    v["v_total"] = mmss(t)
     return v
 
 
-# 基準の値（29 文・98%）は評価の一覧（50_e_eval.py の E7）に書いた基準。照合で一覧の文と突き合わせる
-CRITERIA = {"llm_crit": "30 文中 29 文以上", "judge_crit": "基準 98% 以上"}
-
-
-def fig2(v) -> None:
+def fig2(v) -> bool:
+    """図 2: 同じ配置での復帰デモあり（上段）となし（下段）。configs/demo/video_s3.yaml の fig2 に場面と時刻を書く。"""
+    import yaml
+    spec = yaml.safe_load(VIDEO.read_text(encoding="utf-8")).get("fig2")
+    if not spec:
+        return False
     import av
     from PIL import Image, ImageDraw, ImageFont
     font = ImageFont.truetype(str(FONT), 26)
     rows = []
-    for clip, label in (("nat_110001_R1", "R1\n（復帰デモ\nあり）"), ("nat_110001_N1", "N1\n（復帰デモ\nなし）")):
-        m = _j(OUT / "demo" / clip / "meta.json")
-        miss = [e["t"] for e in m["events"] if e["kind"] == "grasp_miss"][0]
-        t_end = m["t_end"]
-        times = [1.0, miss, miss + 3.0, t_end - 0.1]
-        c = av.open(str(OUT / "demo" / clip / "presentation.mp4"))
+    for key, label in (("with", "復帰デモ\nあり"), ("without", "復帰デモ\nなし")):
+        c = av.open(str(OUT / "demo_v2" / spec[key]["clip"]))
         frames = [f.to_ndarray(format="rgb24") for f in c.decode(video=0)]
         c.close()
         tiles = []
-        for t in times:
-            img = Image.fromarray(frames[min(int(round(t * 30)), len(frames) - 1)][120:600, 250:1090])
-            img = img.resize((420, 240))
+        for tt in spec["times"]:
+            img = Image.fromarray(frames[min(int(round(tt * 30)), len(frames) - 1)][120:600, 250:1090]).resize((420, 240))
             dr = ImageDraw.Draw(img)
             dr.rectangle((4, 4, 104, 38), fill=(255, 255, 255))
-            dr.text((10, 6), f"{t:.1f} s", fill=(20, 20, 20), font=font)
+            dr.text((10, 6), f"{tt:.1f} s", fill=(20, 20, 20), font=font)
             tiles.append(img)
-        row = Image.new("RGB", (420 * 4 + 200, 240), (255, 255, 255))
-        ImageDraw.Draw(row).multiline_text((8, 80), label.replace("（", "\n（"), fill=(20, 20, 20), font=ImageFont.truetype(str(FONT), 27), spacing=8)
+        row = Image.new("RGB", (420 * len(tiles) + 200, 240), (255, 255, 255))
+        ImageDraw.Draw(row).multiline_text((8, 80), label, fill=(20, 20, 20), font=ImageFont.truetype(str(FONT), 27), spacing=8)
         for i, im in enumerate(tiles):
             row.paste(im, (200 + 420 * i, 0))
         rows.append(row)
@@ -207,39 +233,7 @@ def fig2(v) -> None:
     out.paste(rows[0], (0, 0))
     out.paste(rows[1], (0, 248))
     out.save(BUILD / "fig2.png")
-
-
-def fig3(v) -> None:
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from matplotlib import font_manager
-    font_manager.fontManager.addfont(str(FONT))
-    plt.rcParams["font.family"] = font_manager.FontProperties(fname=str(FONT)).get_name()
-    ee = _ee()
-    fin = _j(RES / "e_report_final.json")
-    fig, ax = plt.subplots(figsize=(4.6, 3.4))
-    for s, lab, col in (("C", "同期実行", "#2d5f8b"), ("A", "非同期実行（naive）", "#c0392b"), ("E", "非同期実行（RTC）", "#1f6b5c")):
-        S = ee._set_rows("final", s)
-        allr = [r for p in ee.PARTS for r in S[p].values()]
-        seam = [r["seam_jump_mean"] for r in allr if ee._ok(r["seam_jump_mean"])]
-        q = np.percentile(seam, [25, 50, 75])
-        p1 = fin["sets"][s]["P1"]
-        est = [r for p in ("P1", "P2", "P3") for r in S[p].values() if ee.EST(r)]
-        rec = sum(ee.SUCC(r) for r in est)
-        lo, hi = p1["recovery_wilson"]
-        ax.errorbar(q[1], p1["recovery_rate"], xerr=[[q[1] - q[0]], [q[2] - q[1]]],
-                    yerr=[[max(0, p1["recovery_rate"] - lo)], [max(0, hi - p1["recovery_rate"])]], fmt="o", color=col,
-                    capsize=3, label=f"{lab}  P1 {p1['recovered']}/{p1['established']}")
-        ax.plot(q[1], rec / len(est), "o", mfc="none", color=col, ms=8)
-    ax.set_xlabel("チャンク境界での速度の不連続 [m/s]")
-    ax.set_ylabel("復帰成功率（塗り: P1、白抜き: P1〜P3）")
-    ax.set_ylim(-0.03, 0.75)
-    ax.legend(fontsize=7.5, loc="upper left")
-    ax.grid(alpha=0.3)
-    fig.tight_layout()
-    fig.savefig(BUILD / "fig3.png", dpi=220)
-    plt.close(fig)
+    return True
 
 
 def render(v) -> str:
@@ -267,11 +261,14 @@ def goals_or_exit() -> dict:
 def cmd_build(a) -> None:
     fp = goals_or_exit()
     BUILD.mkdir(parents=True, exist_ok=True)
+    for old in ("fig3.png",):                       # 9/29 版の図（段階 3 では使わない）
+        (BUILD / old).unlink(missing_ok=True)
     (BUILD / "goals.json").write_text(json.dumps(fp, ensure_ascii=False, indent=1), encoding="utf-8")
     v = values()
     (BUILD / "values.json").write_text(json.dumps(v, ensure_ascii=False, indent=1), encoding="utf-8")
-    fig2(v)
-    fig3(v)
+    if not fig2(v):
+        (BUILD / "fig2.png").unlink(missing_ok=True)
+        print("図 2 の場面が未設定（configs/demo/video_s3.yaml の fig2）", file=sys.stderr)
     (BUILD / "paper.html").write_text(render(v), encoding="utf-8")
     pdf = BUILD / "paper.pdf"
     subprocess.run([str(EDGE), "--headless", "--disable-gpu", "--no-pdf-header-footer", f"--print-to-pdf={pdf}",
@@ -285,9 +282,9 @@ def pdf_pages(p) -> int:
 
 
 # 原稿の地の文に書いてよい数字（数字が値ではなく名前や固有の決まりの一部であるもの）
-ALLOWED = [r"fig[23]\.png", r"表 1", r"two3", r"Physical AI 応用 1 講座", r"Haiku 4\.5", r"SmolVLM2", r"Apache-2\.0", r"図 [123]", r"P[123]", r"R[12]\+?",
-           r"N1", r"[12] 段目", r"[12] 回目", r"工夫 4", r"3 (色|個)", r"95% 信頼区間", r"1 試行", r"[1-5]\. ", r"7 軸", r"画像 2 枚", r"1 行ずつ",
-           r"× 3 色", r"A4", r"#[0-9a-f]{6}", r"\d+(\.\d+)?(mm|pt|px)", r"viewBox=\"[^\"]*\"", r"\b\d+(\.\d+)?%?\"",
+ALLOWED = [r"fig2\.png", r"表 1", r"95 パーセンタイル", r"two3", r"Physical AI 応用 1 講座", r"Haiku 4\.5", r"SmolVLM2", r"Apache-2\.0", r"図 [12]",
+           r"[12] 回目", r"工夫 [1-6]", r"3 (色|個)", r"95% 信頼区間", r"1 試行", r"[1-6]\. ", r"7 軸", r"画像 2 枚", r"1 行ずつ",
+           r"× 3 色", r"A4", r"RGB-D", r"#[0-9a-f]{6}", r"\d+(\.\d+)?(mm|pt|px)", r"viewBox=\"[^\"]*\"", r"\b\d+(\.\d+)?%?\"",
            r"[xy][12]?=\"[^\"]*\"", r"points=\"[^\"]*\"", r"d=\"[^\"]*\"", r"rotate\([^)]*\)", r"\b(width|height|rx|dx|refX|refY|markerWidth|markerHeight)=\"[^\"]*\"",
            r"opacity:\.\d+", r"stroke-dasharray:[\d ]+", r"stroke-width:[\d.]+", r"font-size:[\d.]+(px|pt)", r"line-height:[\d.]+",
            r"\d+(\.\d+)?(fr|mm)", r"gap: \d+mm", r"margin[^;]*;", r"padding[^;]*;", r"h[123]", r"m1[co]", r"M0,0 L10,5 L0,10 z",
@@ -301,7 +298,9 @@ FORBIDDEN = ["\u584a", "\u3053\u307e", "\u7a2e(?!\u985e)", "\u5e2f", "\u53f0\u67
              "[\u7532\u4e59\u4e19]", "\u672c\u7dda", "\u652f\u7dda", "\u76e3\u7763", "\u6c7a\u88c1",
              "\u63b2\u793a\u677f", "\u6d41\u7528\u5143", "\u5352\u7814", "\u5352\u696d\u7814\u7a76", "C:\\\\VLA",
              "\u5b66\u751f", "\u4e88\u5099\u5b9f\u9a13", "(\\d|\u4e07)\\s*\u624b(?![\u5148\u9996\u9806\u6cd5])",
-             "\u6a21\u578b"]
+             "\u6a21\u578b",
+             # 開発中の記号（決裁の原則 10/07: 本文でも使わない。0147 の 2）
+             "(?<![A-Za-z0-9])[RNP][123](?![0-9])", "R1\\+", "[RN][12]v[23]", "(?<![A-Za-z])E(?:[1-9]|10)(?![0-9])", "(?<![A-Za-z])G[1-6](?![0-9])"]
 
 
 def cmd_check(a) -> None:
@@ -311,6 +310,8 @@ def cmd_check(a) -> None:
     built_goals = BUILD / "goals.json"
     if not built_goals.is_file() or _j(built_goals) != fp:
         problems.append("組み上げたときの目標書の版が今の版と違う（build をやり直す）")
+    if not (BUILD / "fig2.png").is_file():
+        problems.append("図 2 が未作成（configs/demo/video_s3.yaml の fig2）")
     # (1) 原稿に手で書いた数字がない
     for name in ("template.html", "fig1.svg"):
         text = (PAPER / name).read_text(encoding="utf-8")
@@ -327,11 +328,6 @@ def cmd_check(a) -> None:
         n_slots += 1
         if html.unescape(m.group(2)) != v[m.group(1)]:
             problems.append(f"値の食い違い {m.group(1)}: {m.group(2)} != {v[m.group(1)]}")
-    # 基準の値が評価の一覧の文と同じ
-    doc = (ROOT / "scripts" / "50_e_eval.py").read_text(encoding="utf-8")
-    for k, phrase in CRITERIA.items():
-        if phrase not in doc:
-            problems.append(f"基準 {k} が評価の一覧（50_e_eval.py）に見つからない: {phrase}")
     # (3) 使わない語が 0
     plain = re.sub(r"<style>.*?</style>", " ", built, flags=re.S)
     plain = html.unescape(re.sub(r"<[^>]+>", " ", plain))
