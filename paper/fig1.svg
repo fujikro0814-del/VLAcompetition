@@ -10,7 +10,7 @@
   <text x="60" y="34"><tspan class="lt a">上位層</tspan><tspan class="ls" dx="12">サブタスク単位で動作（数秒〜数十秒）</tspan></text>
   <text x="60" y="264"><tspan class="lt b">VLA 層</tspan><tspan class="ls" dx="12">行動は {{policy_hz}} Hz、推論は {{exec_s}} s ごと</tspan></text>
   <text x="60" y="494"><tspan class="lt c">低位制御</tspan><tspan class="ls" dx="12">物理演算の時間刻みごと（{{phys_hz}} Hz）</tspan></text>
-  <text x="60" y="684"><tspan class="lt d">シミュレーション</tspan><tspan class="ls" dx="12">MuJoCo。推論や待機の間も停止しない</tspan></text>
+  <text x="60" y="684"><tspan class="lt d">シミュレーション</tspan><tspan class="ls" dx="12">MuJoCo</tspan></text>
 
   <rect class="bx a" x="60" y="48" width="170" height="52" rx="6"/>
   <text class="bt" x="145" y="70" text-anchor="middle">ユーザの指示（日本語）</text>
