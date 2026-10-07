@@ -239,6 +239,11 @@ def values() -> dict:
     v["nat_gf_xk"], v["nat_gf_xn"] = str(ng["A"]["recovered"]), str(ng["A"]["grasp_failed"])
     v["nat_gf_yk"], v["nat_gf_yn"] = str(ng["B"]["recovered"]), str(ng["B"]["grasp_failed"])
     v["nat_gf_trials"] = str(ng["A"]["trials"])
+    dm = ex["natural_drop_misplace"]["sets"]                    # 方策自身が起こした落下・置き損ね（A あり、B なし）
+    for s, side in (("A", "x"), ("B", "y")):
+        for kind, key in (("drop", "nd"), ("misplace", "nm")):
+            v[f"{key}_{side}_n"], v[f"{key}_{side}_k"] = str(dm[s][kind]["n"]), str(dm[s][kind]["recovered"])
+    v["nd_near_cm"] = f"{float(CFG['eval']['P2']['min_dist_from_box_m']) * 100:g}"
     # E6（目標位置のキュー）
     e6, e6c = _j(S3 / "e6_R1v3_both.json"), _j(S3 / "e6_R1v3_cue_only.json")
     k6 = round(e6["accuracy_majority"] * e6["pairs"])
