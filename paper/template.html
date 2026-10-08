@@ -8,7 +8,7 @@
 :root { --ink:#1d2126; --muted:#555c64; --rule:#c9ced3; --a:#2d5f8b; --a-fill:#e5ecf3; --b:#1f6b5c; --b-fill:#e1eee9;
         --c:#955619; --c-fill:#f3e9dc; --d:#5f646b; --d-fill:#e9eaec; }
 html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-body { font-family: "Yu Mincho", "YuMincho", "游明朝", serif; font-size: 10.5pt; line-height: 1.6; color: #000; margin: 0; }
+body { font-family: "Yu Mincho", "YuMincho", "游明朝", serif; font-size: 10.5pt; line-height: 1.58; color: #000; margin: 0; }   /* 10/08: 1.6 → 1.58（1 ページ目に難しさの 2 行を足しても 8 ページに収める） */
 h1 { font-size: 17pt; font-weight: 400; margin: 0 0 1mm; line-height: 1.3; }
 .sub { color: #000; font-size: 10.5pt; margin-bottom: 3mm; }
 h2 { font-size: 13pt; font-weight: 400; margin: 3.6mm 0 1.2mm; }
@@ -57,6 +57,8 @@ figure.narrow svg { width: 84%; display: block; margin: 0 auto; }
 .hero .kpi p, .hero .easy p { margin: 0 0 0.8mm; }
 .hero .easy ul { margin: 0; }
 .hero .scope { margin: 1.6mm 0 0; }
+.hero .hard { margin: 1.6mm 0 0; }          /* 課題の難しさ（簡単に作れて、難しいことができる） */
+.hero .hard .k { color: var(--a); }
 </style>
 </head>
 <body>
@@ -80,6 +82,7 @@ figure.narrow svg { width: 84%; display: block; margin: 0 auto; }
 </ul>
 </div>
 </div>
+<p class="hard"><span class="k">簡単に作れて、難しいことができる。</span>スクリプトではなく、学習した VLA が動きながら自分で掴み直す。<span style="white-space:nowrap">「全部片付けて」</span>では LLM が色の順を決め、VLA が 3 個を一色ずつ運ぶ（3 個とも入ったのは {{e7_k}}/{{e7_n}}）。</p>
 <p class="scope">効果は学習と同じ種類の把持失敗に限られ、落下・置き損ねからはほとんど復帰しない。行き先は指示文ではなく目標位置の入力で決まっている（4.5 節）。実機では確かめていない。</p>
 </div>
 <figure class="rec narrow">
