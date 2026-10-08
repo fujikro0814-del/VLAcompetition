@@ -540,3 +540,123 @@ def test_summary_helpers(s98):
     assert u == {"decompose_calls": 1, "replan_calls": 2, "input_tokens": 2600, "output_tokens": 150}
     row = s98.grading_rows(meta)[0]
     assert row["truth_box_at_request"] == ["green"] and row["perceived_box"] == ["green"] and row["grade"] is None
+
+
+# ---------------------------------------------------------------- 依頼 8 の直し
+def test_report_check_latin_next_to_japanese():
+    assert "report:forbidden:red" in R4.check_report("redの立方体を入れられませんでした。")
+    assert "report:forbidden:LLM" in R4.check_report("LLMが次の手を選びました。")
+    assert "report:forbidden:Claude" in R4.check_report("赤はClaudeが後に回しました。")
+    assert R4.check_report("赤の立方体を入れられませんでした。") == []
+
+
+def test_broken_cache_is_recorded_and_api_is_called_again():
+    c = ctx()
+    key = R4.cache_key("claude-haiku-5-5", R4.user_message(c))
+    R4.CACHE.mkdir(parents=True, exist_ok=True)
+    (R4.CACHE / f"{key}.json").write_text("{書きかけ", encoding="utf-8")
+    cli = FakeClient()
+    out = R4.replan(c, cli=cli)
+    assert len(cli.calls) == 1 and out["accepted"] and not out["llm"]["from_cache"]
+    assert out["llm"]["errors"][0].startswith("cache_unreadable:")
+    assert json.loads((R4.CACHE / f"{key}.json").read_text(encoding="utf-8"))["key"] == key     # 読めた応答で書き直す
+
+
+def test_empty_order_falls_back_to_stop(monkeypatch):
+    monkeypatch.setattr(R4, "apply", lambda decision, ctx: [])
+    c = ctx()
+    out = R4.replan_step("全部片付けて", c["plan"], c["steps"], c["perception"], 0, "red", 0, cli=FakeClient(), use_cache=False)
+    assert out["decision"]["action"] == "stop" and "empty_order" in out["rejected"] and out["fallback"]
+    assert out["report"] == R4.template_report("stop", c)
+    # 実行器の守り: 続ける手なのに並びが空なら empty_order として止まる（報告なし）
+    ex, _, _ = make_rt({"green", "blue"}, lambda **kw: {"decision": {"action": "next", "color": "green", "order": []},
+                                                         "next_order": [], "report": "緑を先に入れます。", "fallback": False})
+    rec = run(ex)
+    r = rec["replans"][0]
+    assert r["rejected"] == ["empty_order"] and r["applied"] == {"kind": "stop", "fallback": True}
+    assert rec["stopped"]["report"] == "" and rec["stopped"]["by"] == "replan_fallback" and r["intervention_kind"] is None
+
+
+def test_allow_smoke_rejects_x2_band(s98):
+    assert s98.band_check(range(44400, 44404), allow_smoke=True) == ""
+    assert "X2" in s98.band_check(range(44404, 44406), allow_smoke=True)
+    assert "X2" in s98.band_check(range(44420, 44426), allow_smoke=True)
+    assert s98.band_check(range(44424, 44427), allow_smoke=True) == ""
+
+
+def meta_of(rec, run_i=0, truth=None, in_box=None, t_end=150.0, timed_out=False):
+    """実行器の記録から harness/task_loop.py の meta と同じ欄を作る（真値の欄は与える）。"""
+    in_box = in_box or {"red": False, "green": True, "blue": True}
+    return {"run": run_i, "seed": 191400 + run_i, "text": "全部片付けて", "plan": rec["plan"], "steps": rec["steps"],
+            "returns": rec["returns"], "stopped": rec["stopped"], "detected": rec["detected"],
+            "truth_success_t": truth or {"green": 20.0, "blue": 40.0}, "final_in_box": in_box,
+            "all_three_in_box": all(in_box.values()), "t_end": t_end, "timed_out": timed_out, "replans": rec["replans"],
+            "u4": {"interventions": rec["interventions"], "ended": rec["ended"]},
+            "audit": {"g1": {"violations": 0}}}
+
+
+@pytest.fixture(scope="module")
+def m56():
+    return _load(ROOT / "scripts" / "56_intervention_s3.py", "intervention_s3_t")
+
+
+def test_56_counts_u4_records(m56):
+    rec = run(make_rt({"green", "blue"}, lambda **kw: R4.replan_step(**kw, cli=FakeClient(raw()), use_cache=False))[0])
+    assert "replan" in [r["kind"] for r in rec["returns"]]                     # 56 が知らなかった種類
+    r = m56.count_run(meta_of(rec))
+    assert r["interventions"]["replan"] == 1                                    # meta["replans"] から数える
+    assert r["interventions"]["retry"] == 2                                     # 赤の 2 回（1 番目と 4 番目の手順）
+    assert r["interventions"]["scripted_return"] == 0 and r["stopped"]
+    # 戻す動き（replan）が、続ける手を通した立て直しより多い記録は止める
+    bad = meta_of(rec)
+    bad["returns"] = bad["returns"] + [dict(x) for x in bad["returns"] if x["kind"] == "replan"]
+    with pytest.raises(ValueError):
+        m56.count_run(bad)
+    # 段階 3 の記録（replans なし）は今までどおり 0
+    s3 = meta_of(rec)
+    s3.pop("replans")
+    s3["returns"] = [x for x in s3["returns"] if x["kind"] != "replan"]
+    assert m56.count_run(s3)["interventions"]["replan"] == 0
+
+
+def _write_runs(d, metas, lat=True):
+    d.mkdir(parents=True)
+    for i, m in enumerate(metas):
+        (d / f"run_{i:04d}.json").write_text(json.dumps(m, ensure_ascii=False, default=float), encoding="utf-8")
+        if lat:
+            n = (1 if m.get("plan") else 0) + len(m.get("replans") or [])
+            (d / f"run_{i:04d}_runtime.json").write_text(json.dumps({"latency": {"llm": [1.0] * n}}), encoding="utf-8")
+
+
+def _u4_metas():
+    out = []
+    for i, resp in enumerate([raw(), raw("skip", "red", []), raw("finish", "none", []), raw("stop", "none", [])]):
+        rec = run(make_rt({"green", "blue"}, lambda **kw: R4.replan_step(**kw, cli=FakeClient(resp), use_cache=False))[0])
+        out.append(meta_of(rec, i, timed_out=(i == 3), t_end=200.0 if i == 3 else 150.0))
+    rec = run(make_rt({"red", "green", "blue"}, R4.replan_step)[0])               # 失敗なし（立て直しなし）
+    out.append(meta_of(rec, 4, truth={"red": 10.0, "green": 20.0, "blue": 40.0}, in_box={"red": True, "green": True, "blue": True}))
+    return out
+
+
+def test_cross_check_98_and_56_agree(s98, tmp_path):
+    d = tmp_path / "U4"
+    _write_runs(d, _u4_metas())
+    s = s98.summarize_condition(d, (0.10, 0.50))
+    cc = s["cross_check"]
+    assert cc["all_match"], {k: v for k, v in cc["items"].items() if not v["match"]}
+    assert "llm_compute" in cc["items"]
+    assert s["interventions"]["plan_change"] == 3 and s["interventions"]["retry"] >= 4
+    assert s["interventions"]["scripted_return"] == 0 and s["interventions"]["replan_return"] == 2
+    assert s["deviations_timed_out"]["n"] == 1 and s["deviations_timed_out"]["runs"][0]["run"] == 3
+    assert s["success_at_k"]["0"] == 1 and s["all_three_true"] == 1
+
+
+def test_cross_check_mismatch_stops_summary(s98, tmp_path, monkeypatch):
+    metas = _u4_metas()
+    metas[2]["replans"][0]["intervention_kind"] = None                          # finish の試行: 56 の数え方だけが変わる記録
+    _write_runs(tmp_path / "outputs" / "v2eval" / "S4U4T" / "U4", metas)
+    monkeypatch.setattr(s98, "ROOT", tmp_path)
+    monkeypatch.setattr(s98, "OUTD", tmp_path / "outputs" / "s4" / "u4")
+    assert s98.main(["summary", "--experiment", "S4U4T", "--conditions", "U4"]) == 1
+    summ = json.loads((tmp_path / "outputs" / "s4" / "u4" / "summary_S4U4T.json").read_text(encoding="utf-8"))
+    assert not summ["conditions"]["U4"]["cross_check"]["items"]["plan_change"]["match"]

@@ -121,6 +121,11 @@ class ReplanTaskRuntime(TaskRuntime):
         order = [c for c in (out.get("next_order") or [])]
         report = str(out.get("report") or "")
         rec.update(t_decided=t, action=action, report=report, out=out)
+        if action in ("next", "reorder") and not order:      # 続ける手なのに並びが空（replan_step が先に倒すので通常は起きない）
+            rec["rejected"] = ["empty_order"]
+            report = ""                                       # 「続ける」と書いた報告で止まらない（報告なしで止まる）
+            rec["report"] = report
+            out = dict(out, fallback=True)
         if action == "skip":
             self.steps[-1]["skipped"] = True
         if action in CONTINUE_ACTIONS and order:

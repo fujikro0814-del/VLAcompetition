@@ -20,6 +20,11 @@
      「本当のやり直し」（genuine）とする。真値は評価の道具で、実行器は使っていない。
   3. 計画の変更（replan）: 段階 3 の実行器は、起動時の知覚の後に LLM で手順を 1 度だけ作り（executor.py 117〜135 行）、
      途中で作り直す道がない。記録の plan は 1 つ（dict）なので 0。plan が列（複数の計画）なら、その数 − 1 を数える。
+     段階 4 の束 6 (ii)（runtime/executor_u4.py）の記録は plan を dict のまま書き換え、立て直しを meta["replans"] に残す。
+     その行のうち intervention_kind == "plan_change"（next・reorder・skip・finish を通したもの）を 1 件＝1 回として足す
+     （stop に倒したものは今の実行器と同じ止まり方なので数えない）。立て直しの後の戻す動き（returns の kind == "replan"）は
+     計画の変更に含め、1. に重ねて数えない。その数は、続ける手を通した立て直しの数（applied.kind == "continue"）を超えない
+     ことを確かめる（超えたら止める。戻す動きを切った場合・打ち切りで戻す途中だった場合は少なくてよい）。
   4. 判定の上書き（judge_override）: 完了判定（runtime.judge.JudgeV2）以外が手順の完了を決めた回数。段階 3 の実行器では、
      手順が完了になるのは判定が真になった時刻 done_t があるときだけ（executor.py 138〜139・238〜240 行）なので、
      記録で judged_complete が真なのに t_judge が無い手順を数える（段階 3 では 0 のはず）。
@@ -58,7 +63,8 @@ OUT = OUTPUTS / "results" / "intervention_s3.json"
 KINDS = ("scripted_return", "retry", "replan", "judge_override")
 LABELS = {"scripted_return": "決まった戻す動き", "retry": "出し直し（やり直し）", "replan": "計画の変更",
           "judge_override": "判定の上書き"}
-RETURN_KIND = {"placed": "scripted_return", "retry": "retry"}     # executor.py の _begin_return の kind → 介入の種類
+RETURN_KIND = {"placed": "scripted_return", "retry": "retry",    # executor.py の _begin_return の kind → 介入の種類
+               "replan": "replan"}                                # executor_u4.py（束 6 (ii)）の立て直しの後の戻す動き
 BASELINE = {"source": "docs/local/strategy_20261008/final.md 束 6 (i)・diag_upper.md 1-1（work/upper/e7_interventions.json）",
             "interventions_per_run": 1.05, "llm_calls_per_run": 1.0, "success_at_k": {"0": 1, "1": 5, "2": 6}, "n": 20}
 TIME_POINTS_S = (60.0, 90.0, 120.0, 150.0, 200.0)
@@ -109,6 +115,13 @@ def count_run(meta: dict, latency: dict = None) -> dict:
     if kinds["retry"] and kinds["retry"] != len(retries):
         raise ValueError(f"run {meta.get('run')}: 出し直しの数が合わない（returns {kinds['retry']}、attempts {len(retries)}）")
     replan = (len(plan) - 1) if isinstance(plan, list) else 0
+    replans = meta.get("replans") or []
+    plan_change = sum(1 for r in replans if r.get("intervention_kind") == "plan_change")
+    n_continue = sum(1 for r in replans if (r.get("applied") or {}).get("kind") == "continue")
+    if kinds["replan"] > n_continue:
+        raise ValueError(f"run {meta.get('run')}: 立て直しの後の戻す動き {kinds['replan']} 回が、続ける手を通した立て直し "
+                         f"{n_continue} 回より多い")
+    replan += plan_change
     override = sum(1 for s in steps if s.get("judged_complete") and s.get("t_judge") is None)
     counts = {"scripted_return": int(kinds["placed"]), "retry": len(retries), "replan": int(max(0, replan)),
               "judge_override": int(override)}

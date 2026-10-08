@@ -103,7 +103,10 @@ FORBIDDEN = ["\u584a", "\u3053\u307e", "\u7a2e(?!\u985e)", "\u5e2f", "\u53f0\u67
              "\\d\\s*\u5bfe(?!\u5fdc)", "\u5bfe[\u306f\u304c\u3092]", "\u8a2d\u7f6e\u60c5\u5831", "\u30ad\u30e5\u30fc", "\u7279\u6a29\u60c5\u5831",
              "\u504f\u4f4d", "\u89e3\u653e", "\u30d3\u30c3\u30c8\u5358\u4f4d", "\u4ee5\u524d\u306e\u7248"]
 # 報告だけに足す語: 英語の色の名前（利用者向けの文は日本語の色で書く）と、方策・モデルの名の略
-REPORT_EXTRA = ["(?i)\\b(red|green|blue)\\b", "(?i)smolvla", "(?i)\\bvla\\b", "(?i)haiku", "(?i)claude", "(?i)\\bllm\\b"]
+# 英字の前後は (?<![A-Za-z])…(?![A-Za-z]) で区切る（\\b は日本語の前後で効かない。「redの立方体」「LLMが」も弾く）
+REPORT_EXTRA = ["(?i)(?<![A-Za-z])(red|green|blue)(?![A-Za-z])", "(?i)(?<![A-Za-z])smolvla(?![A-Za-z])",
+                "(?i)(?<![A-Za-z])vla(?![A-Za-z])", "(?i)(?<![A-Za-z])haiku(?![A-Za-z])",
+                "(?i)(?<![A-Za-z])claude(?![A-Za-z])", "(?i)(?<![A-Za-z])llm(?![A-Za-z])"]
 _JP = re.compile("[\u3040-\u30ff\u4e00-\u9fff]")
 
 
@@ -290,12 +293,16 @@ def replan(ctx: dict, cli=None, use_cache: bool = True, model: str = DEFAULT_MOD
            "requested_model": model, "temperature": None, "thinking": dict(THINKING)}
     data, rec = None, None
     if use_cache and path.is_file():
-        rec = json.loads(path.read_text(encoding="utf-8"))
-        data, why = parse(rec["raw"])
-        llm.update(from_cache=True, model=rec.get("model"), stop_reason=rec.get("stop_reason"))
+        try:                                               # 壊れたキャッシュ（書きかけ・手で触った）は外に出さず、読み損ねとして残して呼び直す
+            rec = json.loads(path.read_text(encoding="utf-8"))
+            data, why = parse(rec["raw"])
+        except (ValueError, KeyError, TypeError, OSError) as e:
+            rec, data, why = None, None, f"{type(e).__name__}"
         if data is None:                                   # 読めないキャッシュは使わない（書くのは読めた応答だけなので、通常は起きない）
             llm["errors"].append(f"cache_unreadable:{why}")
             rec = None
+        else:
+            llm.update(from_cache=True, model=rec.get("model"), stop_reason=rec.get("stop_reason"))
     if data is None:
         for k in range(1 + API_RETRIES):
             llm["called"] = True
@@ -368,5 +375,10 @@ def replan_step(text: str, plan_order, steps, perception: dict, failed_step: int
     out = replan(ctx, cli=cli, use_cache=use_cache, model=model)
     out["context"] = ctx
     out["next_order"] = apply(out["decision"], ctx)
+    if out["decision"]["action"] in ("next", "reorder") and not out["next_order"]:
+        # 続ける手なのに並びが空（check を通ればここには来ない。守りとして）: empty_order として stop に倒す
+        out.update(decision={"action": SAFE_ACTION, "color": "none", "order": []}, accepted=False,
+                   rejected=list(out.get("rejected") or []) + ["empty_order"], fallback=True,
+                   report=template_report(SAFE_ACTION, ctx), report_source="template")
     out["plan_change"] = out["decision"]["action"] in PLAN_CHANGE_ACTIONS
     return out
