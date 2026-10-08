@@ -104,8 +104,14 @@ def post_check(new_dir: pathlib.Path, name: str, sw) -> dict:
     old_run, new_run = rd(old_dir, "train_run.json"), rd(new_dir, "train_run.json")
     keys = ("log_points", "loss_first", "loss_last", "loss_min", "loss_mean_last_10pct", "gpu_mem_allocated_max_gib")
     cks = sorted(p.name for p in (new_dir / "checkpoints").iterdir() if p.is_dir() and p.name.isdigit())
+    seed = rd(new_dir, tc).get("seed")
+    root = str((rd(new_dir, tc).get("dataset") or {}).get("root", ""))
+    if seed not in SEEDS:                                  # 種は 1000・1001 だけ
+        bad.append(("/seed", None, seed))
+    if name not in pathlib.Path(root).name:               # データセットは名前（R4・N4）のもの
+        bad.append(("/dataset/root", None, root))
     return {"existing_run": sw.EXISTING_RUN[NAMES[name]], "new_run": str(new_dir), "train_config_diffs": diffs,
-            "train_config_unexpected": bad, "train_config_ok": not bad, "exit_code": new_run.get("exit_code"),
+            "train_config_unexpected": bad, "train_config_ok": not bad, "exit_code": new_run.get("exit_code"), "seed": seed,
             "checkpoints": cks, "checkpoints_ok": cks == ["005000", "010000", "015000", "020000"],
             "loss_summary": {k: {"existing": old_run["log_summary"].get(k), "new": new_run["log_summary"].get(k)} for k in keys},
             "judgement_note": "loss が元と同程度かは数字を見て人が決める（閾値は事前に決めていない）"}

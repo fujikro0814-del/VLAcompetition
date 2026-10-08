@@ -81,6 +81,7 @@ def check(r1: dict, n1: dict, r4: list, n4: list, chosen: list, layout_targets) 
         "normal_part_identical": {"ok": sorted(normal_r) == sorted(k for k in keys_n if k in set(normal_r))
                                   and set(normal_r) <= set(keys_n)},
         "same_layouts_and_targets": {"ok": layout_targets(r4, normal_r) == layout_targets(n4, normal_r)},
+        "added_are_slip_only": {"ok": all(c["kind"] in ("B", "C") and kind_of(c["recovery"]["key"]) == c["kind"] for c in chosen)},
         "twins_are_normal_on_same_layout": {"ok": all(kind_of(c["twin"]["key"]) == "n" and
                                                       c["recovery"]["key"].split("_")[1:3] == c["twin"]["key"].split("_")[1:3]
                                                       for c in chosen)},
@@ -134,6 +135,22 @@ def cmd_build(a) -> int:
                                                            for k, v in src.items()}},
                                                  ensure_ascii=False, indent=1), encoding="utf-8")
     return 0
+
+
+def reverify(man: dict, src: dict, data: dict, layout_targets) -> dict:
+    """書いた R4・N4 のマニフェストのファイルを読み直して確かめる（関門 D の d5 が使う。manifest.json の記録を信じない）:
+    ファイルの SHA-256 が build のときと同じ、元の R1v3・N1v3 の SHA-256 が掲示の値、中身が R1v3・N1v3 ＋ data.json の
+    chosen から組み立て直したものと順まで同じ、そのうえで check の全項目。"""
+    files = {k: json.loads((ROOT / m["manifest"]).read_bytes().decode("utf-8")) for k, m in man["manifests"].items()}
+    sha_now = {k: sha256_bytes((ROOT / m["manifest"]).read_bytes()) for k, m in man["manifests"].items()}
+    r4, n4 = compose(src["R1"]["manifest"], src["N1"]["manifest"], data["chosen"])
+    chk = check(src["R1"]["manifest"], src["N1"]["manifest"], files["R4"]["entries"], files["N4"]["entries"], data["chosen"],
+                layout_targets)
+    items = dict(chk["items"])
+    items["files_same_sha_as_built"] = {"ok": all(sha_now[k] == man["manifests"][k]["sha256"] for k in sha_now)}
+    items["base_sha_as_posted"] = {"ok": all(src[k]["sha256"] == EXPECTED_SHA[k] for k in ("R1", "N1"))}
+    items["entries_equal_recomposed"] = {"ok": files["R4"]["entries"] == r4 and files["N4"]["entries"] == n4}
+    return {"items": items, "ok": all(v["ok"] for v in items.values()), "sha256": sha_now}
 
 
 def cue_args_like_v3(v3: dict) -> list:

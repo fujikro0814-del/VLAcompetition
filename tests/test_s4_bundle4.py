@@ -232,8 +232,8 @@ def test_d3_images_d4_bitwise_d5_and_conclusion(tmp_path, monkeypatch):
     assert G.item_d4([(a, b)] * 5)["status"] == "pass" and G.item_d4([(a, tmp_path / "c.npz")] * 5)["status"] == "fail"
     assert G.item_d4([])["status"] == "要確認"
     ok_items = {k: {"ok": True} for k in ("normal_part_identical", "same_layouts_and_targets", "new_counts")}
-    assert G.item_d5({"check": {"items": ok_items}})["status"] == "pass"
-    assert G.item_d5({"check": {"items": dict(ok_items, new_counts={"ok": False})}})["status"] == "fail"
+    assert G.item_d5({"items": ok_items})["status"] == "pass"
+    assert G.item_d5({"items": dict(ok_items, new_counts={"ok": False})})["status"] == "fail"
     items = {"d1": {"status": "対象外"}, "d2": {"status": "pass"}, "d3": {"status": "pass"}, "d4": {"status": "pass"}, "d5": {"status": "pass"}}
     assert G.conclude(items) == {"verdict": "学習に進む", "pass": True}
     assert G.conclude(dict(items, d3={"status": "要確認"}))["pass"] is False
@@ -314,3 +314,135 @@ def test_train_post_check_allows_only_seed_paths_and_dataset(tmp_path, monkeypat
     assert res["train_config_ok"] and res["checkpoints_ok"] and res["exit_code"] == 0
     mk(tmp_path / "new2", dict(new_tc, steps=30000))
     assert not T.post_check(tmp_path / "new2", "R4", sw)["train_config_ok"]
+    mk(tmp_path / "new3", dict(new_tc, seed=1002))                                    # 種 1000・1001 のほかは通さない
+    assert not T.post_check(tmp_path / "new3", "R4", sw)["train_config_ok"]
+    mk(tmp_path / "new4", new_tc)                                                     # N4 の学習なのに R4 のデータ
+    assert not T.post_check(tmp_path / "new4", "N4", sw)["train_config_ok"]
+
+
+def test_train_cli_refuses_other_seeds():
+    for argv in (["R4", "--seed", "1002"], ["N4", "--seed", "999"], ["R1v3", "--seed", "1000"]):
+        with pytest.raises(SystemExit) as e:
+            T.main(argv)
+        assert e.value.code == 2                                                       # argparse が拒む（学習も dry-run もしない）
+
+
+# ---------------------------------------------------------------- 直し（統合のときの点検）で足した検査
+def test_ledger_reserved_and_planned_rows_block_but_not_the_band_itself():
+    led = LEDGER + "| 44620 | 44625 | 予約 | 段階4 | あり | 予約の行 |\n| 44750 | 44751 | 予定 | 段階4 | あり | 予定の行 |\n"
+    used = D.ledger_used(led)
+    assert (44400, 44799) not in used and (44620, 44625) in used and (44750, 44751) in used
+    assert D.band_problems([44621], led) and D.band_problems([44750], led) and not D.band_problems([44700], led)
+    # 掲示板 0164 の smoke（44500〜44503・44510〜44512・44520〜44522）と、決めた帯（候補・予備・smoke）の間に重なりがない
+    smoke_0164 = set(range(44500, 44504)) | set(range(44510, 44513)) | set(range(44520, 44523))
+    mine = set(range(44600, 44684)) | set(range(44700, 44780))
+    assert not smoke_0164 & mine and not D.band_problems(sorted(mine))
+
+
+def test_stage3_identity_rules():
+    from recovla.common import code_version
+    cfg_now = {"inject": {"B": 1}, "expert": {"v": 3}, "scene": {}, "sim": {}}
+    v3 = {"rig": "v3", "config_used": dict(cfg_now),
+          "code_version": {"git_commit": "abc", "code_sha256": code_version.code_version()["code_sha256"]}}
+    seen = []
+
+    def clean(c):
+        seen.append(c)
+        return ""
+    r = D.stage3_identity(v3, git_diff=clean, cfg_now=cfg_now)
+    assert r["ok"] and seen == ["abc"]
+    assert not D.stage3_identity(v3, git_diff=lambda c: "src/recovla/expert/inject.py\n", cfg_now=cfg_now)["ok"]  # 誘発が変わった
+    assert not D.stage3_identity(v3, git_diff=lambda c: None, cfg_now=cfg_now)["ok"]                            # git で確かめられない
+    assert not D.stage3_identity(v3, git_diff=clean, cfg_now=dict(cfg_now, inject={"B": 2}))["ok"]               # 誘発の設定が違う
+    assert not D.stage3_identity(dict(v3, rig="v2"), git_diff=clean, cfg_now=cfg_now)["ok"]
+    bad = dict(v3, code_version={"git_commit": "abc", "code_sha256": "0" * 64})
+    assert not D.stage3_identity(bad, git_diff=clean, cfg_now=cfg_now)["ok"]
+
+
+@pytest.mark.skipif(not (ROOT / "outputs" / "f" / "data_v3.json").is_file(), reason="段階 3 の data_v3.json がない（作者の PC だけ）")
+def test_stage3_identity_on_this_pc():
+    r = D.stage3_identity()
+    assert r["ok"], r
+
+
+def test_worker_history_and_regenerate_replays_same_worker_order(tmp_path, monkeypatch):
+    monkeypatch.setattr(G.config, "path", lambda p: pathlib.Path(p))
+    run = tmp_path / "S4B4_B_empty"
+    run.mkdir()
+    rows = []
+    for i, (kind, seed, pid, ok) in enumerate((("B", 1, 11, True), ("B", 2, 22, True), ("B", 3, 11, False),
+                                               ("B", 4, 11, True), ("n", 1, 22, True))):
+        att = [{"name": f"{kind}_{seed}_red_r{r}"} for r in range(2 if seed == 4 else 1)]
+        rows.append({"kind": kind, "layout_seed": seed, "color": "red", "layout_kind": "empty", "success": ok,
+                     "attempts": att, "worker_pid": pid})
+    (run / "generation.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    prev, row = G.worker_history(run, "B_4_red_r1")
+    assert [r["layout_seed"] for r in prev] == [1, 3] and row["layout_seed"] == 4      # 同じ働き手（11）の前の 2 本（失敗も含む）
+    assert G.worker_history(run, "B_2_red_r0")[0] == []                                # 働き手の最初の仕事
+    with pytest.raises(ValueError):
+        G.worker_history(run, "B_3_red_r0")                                            # 保存していない（失敗）
+
+    calls, rigs = [], []
+
+    class FakeG:
+        EpisodeSpec = staticmethod(lambda s, c, lk, k: (k, s, c, lk))
+
+        @staticmethod
+        def run_spec(rig, spec, run_dir, render):
+            calls.append((id(rig), spec, pathlib.Path(run_dir).name, render))
+            name = f"{spec[0]}_{spec[1]}_{spec[2]}_r{1 if spec[1] == 4 else 0}"
+            d = pathlib.Path(run_dir) / name
+            d.mkdir(parents=True, exist_ok=True)
+            np.savez(d / "data.npz", x=np.arange(3))
+            return {"success": True, "attempts": [{"name": name}]}
+
+    class FakeRig:
+        def __init__(self):
+            rigs.append(self)
+            self.closed = False
+
+        def close(self):
+            self.closed = True
+
+    picks = [{"kind": "B", "recovery": {"run": str(run), "key": "B_4_red_r1"}},
+             {"kind": "B", "recovery": {"run": str(run), "key": "B_2_red_r0"}}]
+    out = G.regenerate(picks, tmp_path / "regen", make_rig=FakeRig, G=FakeG)
+    assert len(rigs) == 2 and all(r.closed for r in rigs)                              # 本ごとに新しい世界
+    assert [(c[1][1], c[2]) for c in calls] == [(1, "_history"), (3, "_history"), (4, "B_4_red_r1"), (2, "B_2_red_r0")]
+    assert calls[0][0] == calls[1][0] == calls[2][0] != calls[3][0] and all(c[3] for c in calls)   # 同じ世界で順に、描画あり
+    assert [o["history"] for o in out] == [2, 0] and all(o["same_saved_attempt"] for o in out)
+    # 元と同じ配列なら pass、保存した試みの回が違えば一致しない
+    for o in out:
+        (pathlib.Path(o["original"]).parent).mkdir(parents=True, exist_ok=True)
+        np.savez(o["original"], x=np.arange(3))
+    five = (out * 3)[:5]
+    assert G.item_d4(five)["status"] == "pass"
+    assert G.item_d4([dict(five[0], same_saved_attempt=False)] + five[1:])["status"] == "fail"
+
+
+def test_manifest_reverify_reads_files(tmp_path, monkeypatch):
+    from recovla.data import convert as C
+    r1, n1 = _base_manifests()
+    ch = _chosen()
+    r4, n4 = M.compose(r1, n1, ch)
+    monkeypatch.setattr(M, "ROOT", tmp_path)
+    man = {"manifests": {}}
+    for name, ent in (("R4", r4), ("N4", n4)):
+        C.write_manifest(tmp_path / f"{name}.json", name, ent, "rule")
+        man["manifests"][name] = {"manifest": f"{name}.json", "sha256": M.sha256_bytes((tmp_path / f"{name}.json").read_bytes())}
+    src = {"R1": {"manifest": r1, "sha256": M.EXPECTED_SHA["R1"]}, "N1": {"manifest": n1, "sha256": M.EXPECTED_SHA["N1"]}}
+    res = M.reverify(man, src, {"chosen": ch}, F30.layout_targets)
+    assert res["ok"], res
+    assert G.item_d5(res)["status"] == "pass"
+    # ファイルを後から書き換えた（N4 の相手を 1 本だけ別の配置に）→ SHA も対称も落ちる
+    m = json.loads((tmp_path / "N4.json").read_text(encoding="utf-8"))
+    m["entries"][-1] = {"run": "x", "key": "n_44999_green_r0"}
+    (tmp_path / "N4.json").write_text(json.dumps(m), encoding="utf-8")
+    res = M.reverify(man, src, {"chosen": ch}, F30.layout_targets)
+    assert not res["ok"] and not res["items"]["files_same_sha_as_built"]["ok"] and not res["items"]["same_layouts_and_targets"]["ok"]
+    assert G.item_d5(res)["status"] == "fail" and G.item_d5({})["status"] == "fail"
+    # 元の R1v3 が掲示の値と違えば落ちる
+    src_bad = dict(src, R1=dict(src["R1"], sha256="0" * 64))
+    assert not M.reverify(man, src_bad, {"chosen": ch}, F30.layout_targets)["items"]["base_sha_as_posted"]["ok"]
+    # 掴み損ね（A）を足した chosen は通さない
+    assert not M.check(r1, n1, *M.compose(r1, n1, [dict(ch[0], kind="A")]), [dict(ch[0], kind="A")], F30.layout_targets)["ok"]

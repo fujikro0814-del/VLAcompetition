@@ -19,6 +19,9 @@ configs/s4_gates.json の bundle4_gates・candidate_selection の slip_rule）�
   - 同じ配置の通常デモ（N 用の相手）: 復帰の候補と同じ（種、色、配置の種類）で種類 n を作る。復帰と相手の両方が（作り直しを
     含めて）成功した候補を、枠ごとに候補の順に必要数だけ採る（30_f.py の cmd_gen_data と同じ。片方が失敗したら両方から外す）。
   - 止める決まり: 種類ごとの捨てた割合が 30_f.py の DROPPED_STOP（10%）を超えたら、verify が止めて諮る（決裁 0042 と同じ）。
+  - 同じ仕組みの確かめ（stage3_identity）: 生成の前に、data_v3.json に記録した設定（inject・expert・scene・sim）とコードの
+    SHA-256 の束が今と同じで、記録したコミットから生成・誘発・世界・センサ・設定のファイルが変わっていないことを確かめる
+    （違えば gen は止まる。--dry-run は結果を出すだけ）。
 種の帯（学習用の smoke・データの帯 44400〜44799 の中。回す前に決めた。docs\\stage4\\bundle4_protocol.md 第 2 節）:
   B の候補 44600〜44659（60）、C の候補 44700〜44739（40）、足りないときの予備 B 44660〜44679・C 44740〜44779、
   smoke 44680〜44683。docs\\種の台帳.md の「使用済み」の行、X2 の 44404〜44423、掲示板 0164 の smoke（44500〜44522、
@@ -67,12 +70,16 @@ def load_f30():
 
 # ---------------------------------------------------------------- 帯
 def ledger_used(text: str) -> list:
-    """台帳の表の「| 下 | 上 | 使用済み |」の行から、使用済みの範囲を読む。"""
+    """台帳の照合用の表の「| 下 | 上 | 状態 |」の行から、使えない範囲を読む。使用済み・予約は全部、予定は帯そのもの
+    （44400〜44799 の行）を除いて数える（帯の中に後から足された予定・予約の行も避ける）。"""
     out = []
     for ln in text.splitlines():
-        m = re.match(r"^\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*使用済み\s*\|", ln)
+        m = re.match(r"^\|\s*(\d+)\s*\|\s*(\d+)\s*\|\s*(使用済み|予約|予定)\s*\|", ln)
         if m:
-            out.append((int(m.group(1)), int(m.group(2))))
+            lo, hi = int(m.group(1)), int(m.group(2))
+            if m.group(3) == "予定" and (lo, hi) == DATA_BAND:
+                continue
+            out.append((lo, hi))
     return out
 
 
@@ -89,6 +96,44 @@ def band_problems(seeds, ledger_text: str = None) -> list:
                 prob.append(f"種 {s} が使用済み・予約の範囲 {lo}〜{hi} と重なる")
                 break
     return prob
+
+
+# ---------------------------------------------------------------- 段階 3 と同じ生成の仕組みか
+# 生成・誘発・世界・センサ・設定の場所。段階 3 の R1v3 のデータを作ったコミット（data_v3.json の code_version.git_commit）から、
+# ここにある既存のファイルが 1 つでも変わっていたら止める（新しく足したファイルは、既存のファイルが読まない限り効かないので数えない）
+STAGE3_PATHS = ("src/recovla/expert", "src/recovla/harness", "src/recovla/sim", "src/recovla/record", "src/recovla/common",
+                "src/recovla/data", "configs/default.yaml", "configs/g0.yaml", "configs/expert_v3.yaml", "configs/sensor_v1.yaml",
+                "configs/runtime_v2.yaml", "configs/runtime_v2_color.yaml", "configs/runtime_v2_derived.yaml",
+                "configs/runtime_v2_judge.yaml", "assets")
+
+
+def stage3_identity(v3: dict = None, git_diff=None, cfg_now: dict = None) -> dict:
+    """今の生成の仕組みが、段階 3 の R1v3 のデータ（outputs\\f\\data_v3.json）を作ったときと同じか。
+    (1) 記録した設定（inject・expert・scene・sim）が今の値と同じ、(2) 記録したファイルの SHA-256 の束（code_sha256）が同じ、
+    (3) 記録したコミットからの git の差分で、上の場所の既存のファイルが変わっていない（作業場所の書きかけも含む）。"""
+    from recovla.common import code_version
+    if v3 is None:
+        p = OUTPUTS / "f" / "data_v3.json"
+        if not p.is_file():
+            return {"ok": False, "why": "outputs\\f\\data_v3.json がない"}
+        v3 = json.loads(p.read_text(encoding="utf-8"))
+    if cfg_now is None:
+        from recovla.expert import generate as G
+        cfg_now = {"inject": CFG["inject"], "expert": (G.rig_config(RIG) or CFG)["expert"], "scene": CFG["scene"], "sim": CFG["sim"]}
+    used = v3.get("config_used") or {}
+    cfg_same = {k: used.get(k) == v for k, v in cfg_now.items()}
+    rec = v3.get("code_version") or {}
+    code_same = rec.get("code_sha256") == code_version.code_version()["code_sha256"]
+    commit = rec.get("git_commit")
+    if git_diff is None:
+        def git_diff(c):
+            return code_version._git(ROOT, "diff", "--name-only", "--diff-filter=MDRTC", c, "--", *STAGE3_PATHS)
+    out = git_diff(commit) if commit else None
+    changed = None if out is None else [ln.strip() for ln in out.splitlines() if ln.strip()]
+    ok = v3.get("rig") == RIG and all(cfg_same.values()) and code_same and changed == []
+    return {"ok": ok, "stage3_commit": commit, "rig": v3.get("rig"), "config_same": cfg_same, "code_sha256_same": code_same,
+            "changed_files_since_stage3": changed,
+            "why": None if ok else "段階 3 の R1v3 のデータを作ったときと、生成の仕組み（設定・コード）が違う（または git で確かめられない）"}
 
 
 # ---------------------------------------------------------------- 指定
@@ -313,16 +358,15 @@ def cmd_gen(a) -> int:
     if prob:
         print("止める（帯）: " + " / ".join(prob[:5]), file=sys.stderr)
         return 3
-    if not a.dry_run:
-        v3 = OUTPUTS / "f" / "data_v3.json"
-        if v3.is_file() and json.loads(v3.read_text(encoding="utf-8")).get("rig") not in (None, RIG):
-            print(f"段階 3 の R1v3 のデータの rig が {RIG} でない（outputs\\f\\data_v3.json）。止める", file=sys.stderr)
-            return 3
+    ident = stage3_identity()
+    if not ident["ok"] and not a.dry_run:
+        print("止める（段階 3 と同じ生成の仕組みでない）: " + json.dumps(ident, ensure_ascii=False), file=sys.stderr)
+        return 3
     res = run_chunks(chunks, state_path, GEN, G.generate, G.EpisodeSpec, a.workers, a.dry_run,
                      prefix="S4SMOKE_B4" if a.smoke else "S4B4")
     est = estimate_hours(res["specs_to_run"], a.workers)
-    print(json.dumps(dict(res, estimate=est, dry_run=a.dry_run), ensure_ascii=False, indent=1))
-    return 0
+    print(json.dumps(dict(res, estimate=est, stage3_identity=ident, dry_run=a.dry_run), ensure_ascii=False, indent=1))
+    return 0 if ident["ok"] else 3
 
 
 def estimate_hours(n_specs: int, workers: int) -> dict:
@@ -356,6 +400,7 @@ def cmd_verify(a) -> int:
             if not ((p / "meta.json").is_file() and (p / "data.npz").is_file()):
                 missing.append(str(p))
     out = {"written": time.strftime("%Y-%m-%d %H:%M:%S"), "smoke": a.smoke, "need": plan["need"], **res,
+           "stage3_identity": stage3_identity(),
            "missing_files": missing, "ok": res["count_ok"] and not res["stop_drop_rule"] and not missing,
            "drop_stop_rule": f"種類ごとの捨てた割合が {f30.DROPPED_STOP:.0%} を超えたら止めて諮る（30_f.py・決裁 0042）"}
     _write(B4 / ("data_smoke.json" if a.smoke else "data.json"), out)

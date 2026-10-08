@@ -19,9 +19,12 @@
   d3 格子の外の先客を描いた画像 10 枚を目で確かめる
      → 滑りの版: 新しい復帰デモ（B・C）の記録の最初のこま（俯瞰）10 枚を書き出す。作者が見て --images-ok を付けるまで「要確認」。
   d4 層 (i)（方策を通さない部分）の回し直し 5 本がビット一致
-     → 新しい復帰デモ 5 本（B 3・C 2、data.json の chosen の先頭から）を、同じ指定・同じ作り直しの回数で作り直し、data.npz の
-       全部の配列（画像は含まない）がビット一致すること。
-  d5 R と N で通常デモの集合が同じ → 97_s4_b4_manifest.py build の検査（normal_part_identical・same_layouts_and_targets）。
+     → 新しい復帰デモ 5 本（B 3・C 2、data.json の chosen の先頭から）を、元の生成と同じ並びで作り直す: 本ごとに新しい世界で、
+       同じ働き手が前に回した指定（generation.jsonl の同じ worker_pid の前の行）を作り直しを含めて順に回してから、その本の指定を
+       作り直しを含めて回す（世界の使い回しで始めの指の開きが変わるため。docs\\stage4\\ops.md 5-1）。同じ回の試みが保存され、
+       data.npz の全部の配列（画像は含まない）が型・形・バイト列まで一致すること。
+  d5 R と N で通常デモの集合が同じ → R4・N4 のマニフェストのファイルを読み直し、97_s4_b4_manifest.py の reverify（build の
+     検査の全項目＋SHA-256＋R1v3・N1v3 と data.json から組み立て直したものとの一致）。manifest.json の記録は信じない。
 読むもの: outputs\\s4\\b4\\data.json・manifest.json、R4・N4・R1v3 のマニフェスト、エピソードの meta.json・data.npz・overhead\\000000.png、
   --eval-dir の trial_*.json・.npz。書くもの: outputs\\s4\\b4\\gateD.json・gateD_images\\・gateD_regen\\（--regen）。
 """
@@ -146,42 +149,92 @@ def regen_picks(chosen: list) -> list:
     return out
 
 
-def regenerate(picks: list, out_root: pathlib.Path) -> list:
-    """同じ指定・同じ作り直しの回数で作り直す。元の生成と同じく描画ありで回す（v2 の生成器は状態をセンサの値に置き換えるので、
-    描画の有無で配列が変わらないことをここでは前提にしない）。"""
-    from recovla.expert import generate as G
-    from recovla.harness.gen_v2 import SensedDrivenRig
-    rig = SensedDrivenRig(G.rig_config("v3"))
-    out_root.mkdir(parents=True, exist_ok=True)
-    pairs = []
-    try:
-        for c in picks:
-            key = c["recovery"]["key"]
-            kind, seed, color, r = key.split("_")
-            spec = G.EpisodeSpec(int(seed), color, c["layout_kind"], kind)
-            G.run_attempt(rig, spec, int(r[1:]), out_root, render=True)
-            pairs.append((config.path(c["recovery"]["run"]) / key / "data.npz", out_root / key / "data.npz"))
-    finally:
-        rig.close()
-    return pairs
+def worker_history(run_dir: pathlib.Path, key: str) -> tuple:
+    """(同じ働き手が key の指定より前に処理した指定の行, key の指定の行)。
+
+    生成（recovla.expert.generate.generate）は働き手ごとに 1 つの世界を作り、その働き手の指定を順に使い回して回す。
+    世界の reset は前の試みが残したハンドの力の上限のまま落ち着かせるので（docs/stage4/ops.md 5-1 の (A)）、保存した
+    エピソードの始めの状態は、同じ働き手が前に回した試みに依る。generation.jsonl は投入の順（Pool.imap）に並び、
+    各働き手は投入の順に仕事を取るので、同じ worker_pid の前の行が、その働き手が前に回した指定の全部になる。"""
+    rows = [json.loads(ln) for ln in (run_dir / "generation.jsonl").read_text(encoding="utf-8").splitlines() if ln.strip()]
+    idx = next((i for i, r in enumerate(rows) if r.get("success") and r["attempts"][-1]["name"] == key), None)
+    if idx is None:
+        raise ValueError(f"{key} が {run_dir}\\generation.jsonl に成功として載っていない")
+    pid = rows[idx].get("worker_pid")
+    if pid is None:
+        raise ValueError(f"{run_dir}\\generation.jsonl に worker_pid がない（働き手の順を組み立て直せない）")
+    return [r for r in rows[:idx] if r.get("worker_pid") == pid], rows[idx]
+
+
+def spec_of(row: dict, G):
+    if row["kind"] == "h":
+        raise ValueError("引き継ぎ（kind h）の行は作り直せない（束 4 の生成には出ない）")
+    return G.EpisodeSpec(int(row["layout_seed"]), row["color"], row["layout_kind"], row["kind"])
+
+
+def regenerate(picks: list, out_root: pathlib.Path, make_rig=None, G=None) -> list:
+    """5 本を、元の生成と同じ並びで作り直す: 本ごとに新しい世界（生成の働き手の初めと同じ）を作り、同じ働き手が前に回した
+    指定を作り直しを含めて同じ順に回してから（outputs\\s4\\b4\\gateD_regen\\<日時>\\<名前>\\_history へ）、その本の指定を
+    作り直しを含めて回す（run_spec。描画あり＝元と同じ）。make_rig・G は差し替えられる（テスト）。"""
+    if G is None:
+        from recovla.expert import generate as G
+    if make_rig is None:
+        from recovla.harness.gen_v2 import SensedDrivenRig
+
+        def make_rig():
+            return SensedDrivenRig(G.rig_config("v3"))
+    out = []
+    for c in picks:
+        key = c["recovery"]["key"]
+        run_dir = config.path(c["recovery"]["run"])
+        prev, row = worker_history(run_dir, key)
+        here = out_root / key
+        (here / "_history").mkdir(parents=True, exist_ok=True)
+        rig = make_rig()
+        t0 = time.perf_counter()
+        try:
+            for r in prev:
+                G.run_spec(rig, spec_of(r, G), str(here / "_history"), True)
+            res = G.run_spec(rig, spec_of(row, G), str(here), True)
+        finally:
+            rig.close()
+        out.append({"original": run_dir / key / "data.npz", "regen": here / key / "data.npz", "history": len(prev),
+                    "same_saved_attempt": bool(res["success"]) and res["attempts"][-1]["name"] == key,
+                    "wall_s": round(time.perf_counter() - t0, 1)})
+    return out
 
 
 def item_d4(pairs: list) -> dict:
+    """pairs: regenerate の出力（または (元, 作り直し) の組）。5 本とも、同じ回の試みが保存され、data.npz の全部の配列が
+    型・形・バイト列まで一致すれば pass。"""
     if not pairs:
         return {"status": "要確認", "why": "回し直していない（--regen を付けて回す）", "rows": []}
     rows = []
-    for a, b in pairs:
+    for p in pairs:
+        p = p if isinstance(p, dict) else {"original": p[0], "regen": p[1], "same_saved_attempt": True}
+        a, b = pathlib.Path(p["original"]), pathlib.Path(p["regen"])
         r = compare_npz(a, b) if b.is_file() else {"identical": False, "missing": str(b)}
-        rows.append({"original": str(a), "regen": str(b), **r})
+        r["identical"] = bool(r["identical"] and p.get("same_saved_attempt"))
+        rows.append({**{k: (str(v) if isinstance(v, pathlib.Path) else v) for k, v in p.items()}, **r})
     ok = all(r["identical"] for r in rows) and len(rows) == sum(N_REGEN.values())
     return {"status": "pass" if ok else "fail", "why": f"{sum(r['identical'] for r in rows)}/{len(rows)} 本がビット一致", "rows": rows}
 
 
 # ---------------------------------------------------------------- d5・全体
-def item_d5(manifest_rec: dict) -> dict:
-    it = (manifest_rec.get("check") or {}).get("items") or {}
-    ok = bool(it) and all(it.get(k, {}).get("ok") for k in ("normal_part_identical", "same_layouts_and_targets", "new_counts"))
-    return {"status": "pass" if ok else "fail", "why": "97_s4_b4_manifest.py build の検査", "items": it}
+def item_d5(reverified: dict) -> dict:
+    """reverified: 97_s4_b4_manifest.py の reverify の出力（書いたマニフェストのファイルを読み直した検査）。全項目が通れば pass。"""
+    it = (reverified or {}).get("items") or {}
+    ok = bool(it) and all(v.get("ok") for v in it.values())
+    return {"status": "pass" if ok else "fail", "why": "R4・N4 のマニフェストのファイルを読み直した検査（97_s4_b4_manifest.py reverify。"
+            "通常デモの集合・同じ配置と目標・本数・SHA-256・組み立て直しとの一致）", "items": it}
+
+
+def load_manifest_tool():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("s4_b4_manifest_for_gateD", ROOT / "scripts" / "97_s4_b4_manifest.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
 
 
 def conclude(items: dict) -> dict:
@@ -198,8 +251,12 @@ def conclude(items: dict) -> dict:
 def cmd_check(a) -> int:
     data = json.loads((B4 / "data.json").read_text(encoding="utf-8"))
     man = json.loads((B4 / "manifest.json").read_text(encoding="utf-8"))
+    mt = load_manifest_tool()
+    f30 = mt.load_f30()
+    _, src = mt._sources()
+    reverified = mt.reverify(man, src, data, f30.layout_targets)
     r4 = json.loads((ROOT / man["manifests"]["R4"]["manifest"]).read_text(encoding="utf-8"))
-    r1 = json.loads((ROOT / man["base"]["R1"]["path"]).read_text(encoding="utf-8"))
+    r1 = src["R1"]["manifest"]
     eval_xy = eval_drop_states(config.path(a.eval_dir))
     items = {
         "d1_start_state_coverage": {"status": "対象外", "why": "開始状態の要因の項目。滑りのデータは開始状態を変えない（gate1_sheet.md）"},
@@ -208,7 +265,7 @@ def cmd_check(a) -> int:
         "d3_images_10": item_d3(data["chosen"], B4 / "gateD_images", a.images_ok),
         "d4_layer_i_regen_5": item_d4(regenerate(regen_picks(data["chosen"]), B4 / "gateD_regen" / time.strftime("%Y%m%d-%H%M%S"))
                                       if a.regen else []),
-        "d5_same_normal_set": item_d5(man),
+        "d5_same_normal_set": item_d5(reverified),
     }
     res = {"written": time.strftime("%Y-%m-%d %H:%M:%S"), "gate": "bundle4_gates.D", "eval_dir": a.eval_dir, "items": items,
            **conclude(items)}
