@@ -33,11 +33,12 @@ from fractions import Fraction
 GATES_SCHEMA = "recovery_vla.s4_gates/1"
 INPUT_SCHEMA = "recovery_vla.s4_gate1_input/1"
 RESULT_SCHEMA = "recovery_vla.s4_gate1_result/1"
-# 掲示板 0162 の表の SHA-256（改行を LF にした中身。Windows の作業コピーは CRLF なので両方を出して比べる）。
-# 改訂 3（ブロック 13）で bands.allocations の bundle6_u4 の行だけを変えた版。関門の数値・規則の文は 0153 の版と同じ。
+# 掲示板 0165 の表の SHA-256（改行を LF にした中身。Windows の作業コピーは CRLF なので両方を出して比べる）。
+# 改訂 4 で bands.allocations に test2_misplace の行を 1 つ足しただけの版。関門の数値・規則の文は 0153・0162 の版と同じ。
+# 掲示板 0162 の値（改訂 3。bundle6_u4 の行だけを変えた版）: dcf0dd4c1b2a4f906936bf478f012d3aa6e9a51a81aeb12c6cdcbcf35f33362d
 # 掲示板 0153 の値（改訂 3 の前）: cf2e8c96a205bf10126bdf647bdbf2e8b9d5a315ebbe881c03bafac82b12940d
-POSTED_SHA256 = "dcf0dd4c1b2a4f906936bf478f012d3aa6e9a51a81aeb12c6cdcbcf35f33362d"
-POSTED_BOARD = "0162"
+POSTED_SHA256 = "7f2f651cafa9cf97b5548324d3fb8ea0bec5e891cca9c8859c7dd9c0347646e9"
+POSTED_BOARD = "0165"
 PASS, FAIL, UNDET = "pass", "fail", "undetermined"
 JA = {PASS: "合格", FAIL: "不合格", UNDET: "判定できない"}
 HIT = {PASS: "当たる", FAIL: "当たらない", UNDET: "判定できない"}       # 分岐の規則（when）の読み方

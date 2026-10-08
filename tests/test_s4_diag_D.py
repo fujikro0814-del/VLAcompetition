@@ -39,11 +39,15 @@ def gates():
 
 # ---------------------------------------------------------------- 計画
 def test_sources_match_latest_board(mod, plan):
-    """最新の掲示（掲示板 0162。改訂 3）の SHA-256 が作業コピーの目標書・s4_gates.json と一致する。0153 の値は記録として残る。"""
-    assert mod.BOARD_LATEST[0] == "0162"
+    """最新の掲示（掲示板 0165。改訂 4）の SHA-256 が作業コピーの目標書・s4_gates.json と一致する。0153・0162 の値は記録として残る。"""
+    assert mod.BOARD_LATEST[0] == "0165"
+    assert mod.BOARD_LATEST[1] is mod.BOARD_0165_SHA
     assert plan["sources"]["matches_board_latest"] is True
     assert plan["sources"]["matches_board_0153"] is False           # 改訂 3 で両方とも変わった
     assert mod.BOARD_0153_SHA["configs/s4_gates.json"].startswith("cf2e8c96")
+    assert mod.BOARD_0162_SHA["docs/目標書_段階4.md"].startswith("694338887a7a")      # 改訂 3 の値（記録として残す）
+    assert mod.BOARD_0162_SHA["configs/s4_gates.json"].startswith("dcf0dd4c1b2a")
+    assert mod.BOARD_0165_SHA["configs/s4_gates.json"].startswith("7f2f651c")
 
 
 def test_conditions_match_charter(plan):

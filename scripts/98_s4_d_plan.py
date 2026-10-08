@@ -19,7 +19,7 @@
                 移植は 1 条件 1 仕事で、包みが子に --max-new <塊> を渡して種の塊ごとに交互に回す。
 
 サブコマンドと、読むもの・書くもの:
-  plan        読む: configs\\s4_gates.json（帯・制限時間・計算量の倍率）、docs\\目標書_段階4.md（SHA-256 を掲示板 0153 と最新の掲示 0162 と照らすだけ）、
+  plan        読む: configs\\s4_gates.json（帯・制限時間・計算量の倍率）、docs\\目標書_段階4.md（SHA-256 を掲示板 0153 と最新の掲示 0165 と照らすだけ）、
               outputs\\v2eval\\S4K\\K1・K2\\run.json（物差し K の実測の速さ）、診断のスクリプト（あるかどうかと SHA-256 だけ）。
               書く: outputs\\s4\\bundle1_plan_queue.json（名前の queue は 97_s4_ledger_check.py に種を使用と数えさせないため。
               PLAN_PATH の注）、標準出力に表。
@@ -110,7 +110,11 @@ BOARD_0153_SHA = {"docs/目標書_段階4.md": "afa069552fbcea7573706e59be3678b8
 # こちらと一致するのが正しい（0153 との照合は false になる）。束 1 の計画（bundle1_plan_queue.json）は作り直さない
 BOARD_0162_SHA = {"docs/目標書_段階4.md": "694338887a7a57ec7ffbfc91754f695a94b98b64ad76e022b945e1855da5cbe2",
                   "configs/s4_gates.json": "dcf0dd4c1b2a4f906936bf478f012d3aa6e9a51a81aeb12c6cdcbcf35f33362d"}
-BOARD_LATEST = ("0162", BOARD_0162_SHA)
+# 掲示板 0165 に掲示した SHA-256（改訂 4。s4_gates.json は bands.allocations に test2_misplace を 1 行足しただけ）。
+# これから作る計画はこちらと一致するのが正しい（0153・0162 の値は記録として残す）
+BOARD_0165_SHA = {"docs/目標書_段階4.md": "50f6ca03577e06a226273c42e29105e66cd19968c86611105fada5fdc6fa850e",
+                  "configs/s4_gates.json": "7f2f651cafa9cf97b5548324d3fb8ea0bec5e891cca9c8859c7dd9c0347646e9"}
+BOARD_LATEST = ("0165", BOARD_0165_SHA)
 FINAL_STATUS = {"done": 0, "stopped": 1, "interrupted": 1, "memory_timeout": 1, "error": 2}    # 96_s4_ops.FINAL_STATUS と同じ
 DEFAULT_FACTORS = {"A_nat": 1.215, "A_P1": 1.432, "B_P1": 1.795, "A_P2": 1.803, "A_P3": 1.954}   # s4_gates budget_notes.factor_60_over_30
 

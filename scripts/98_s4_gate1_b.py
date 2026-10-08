@@ -8,7 +8,7 @@
   - recovla.diag・recovla.eval（gate1・time_scoring）・98_s4_d_* を読み込まない。ファイルの列挙・記録の読み方・中央値・検定は自前。
     読み込むのは numpy・scipy と、定数の recovla.sim.frames（CUBE_REST_Z）だけ。
   - 定義は目標書 8-1・8-2・8-3・8-4、s4_gates.json の metrics、掲示板 0154・0155、docs/stage4/bundle1_defs/ の掲示の文から書いた。
-  - 規則の数値は目標書 8-2 の表から写した定数（下の RULES）。s4_gates.json の SHA-256（改行 LF）が掲示板 0162 の値と同じときだけ使う。
+  - 規則の数値は目標書 8-2 の表から写した定数（下の RULES）。s4_gates.json の SHA-256（改行 LF）が最新の掲示（掲示板 0165。改訂 4）の値と同じときだけ使う。
   - 判定できない条件の扱い: 値がない・分母が 0 は「判定できない」（None）。all_of は 1 つでも偽なら偽、そうでなく 1 つでも None なら None。
 書くもの: tally は --out の JSON（指標・判定・結論・E7 の本数の提案・列挙の点検）。compare は A と B の照らし合わせ（--out）。
 終了コード: 0 済み / 1 列挙の点検または照らし合わせで食い違い / 2 読めない。
@@ -33,7 +33,8 @@ from recovla.sim.frames import CUBE_REST_Z  # noqa: E402  定数だけ
 V2 = ROOT / "outputs" / "v2eval"
 S4 = ROOT / "outputs" / "s4"
 GATES = ROOT / "configs" / "s4_gates.json"
-POSTED_LF_SHA = "dcf0dd4c1b2a4f906936bf478f012d3aa6e9a51a81aeb12c6cdcbcf35f33362d"   # 掲示板 0162
+# 掲示板 0165（改訂 4。test2_misplace の行を足しただけで、関門の数値・規則は 0162 の版と同じ）。0162 の値は dcf0dd4c…
+POSTED_LF_SHA = "7f2f651cafa9cf97b5548324d3fb8ea0bec5e891cca9c8859c7dd9c0347646e9"
 COLORS = ("red", "green", "blue")
 HS = (10, 20, 30, 40)
 
@@ -690,7 +691,7 @@ def cmd_tally(a) -> int:
     raw = GATES.read_bytes()
     lf = hashlib.sha256(raw.replace(b"\r\n", b"\n")).hexdigest()
     if lf != POSTED_LF_SHA:
-        print(f"s4_gates.json の SHA-256 が掲示板 0162 の値と違う（{lf}）。規則の写しを使えない", file=sys.stderr)
+        print(f"s4_gates.json の SHA-256 が掲示板 0165 の値と違う（{lf}）。規則の写しを使えない", file=sys.stderr)
         return 2
     gates = json.loads(raw.decode("utf-8"))
     problems = []
