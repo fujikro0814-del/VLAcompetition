@@ -73,6 +73,8 @@
 ```
 
 - 束 1 が終わったら、解析の前に全条件で回す（記録を読むだけ）。計画（`docs\stage4\bundle1_defs\bundle1_plan_queue.json`）の各条件のフォルダで、run.json と G_AUDIT（met=true）、本数と種の集合、試行の diag とフォルダ名、制限時間が 1 種類、env_segments が 1 つ、git の HEAD と各 SHA-256（HEAD が違えば子が読み込むファイルの中身を git で照らす）、96 の score との件数の一致を確かめる。
+- 版の照らし合わせ（HEAD が違うとき）で見る設定のファイルは、子が読み込むものだけ（`CHILD_CONFIGS`: default・g0・sensor_v1・runtime_v2 の 4 つ・expert_v3 の yaml、latency_v1.json、s4_gates.json）。`configs/demo/**`（動画の場面）と学習の種の `s4_seed_*.yaml` は数えない。
+- 条件をまたぐ 2 項目（0155 の 2-6・2-7）: 種の台帳の照合の parse_errors が 0（97 の build_report をその場で呼ぶ。`--ledger-json` で記録より新しい結果を渡してもよい）。`src/recovla/eval/gate1.py` の入力（`outputs\s4\gate1_input.json`、98_s4_gate1.py --make-input）のうち試行の json から数えられる件数（R の natural_success_30・n_trials、T の all_three_true、C の recovery_R・recovery_N・paired）を、点検の列挙で照らす。入力がまだ無ければ not_available（`--require-gate1` で欠け）。npz の解析が要る値は照らせない（not_compared）。標準出力には件数を出さず、食い違った項目の名前だけを出す。
 - 1 つでも欠ければ終了コード 1 で、欠けた条件ごとに呼び直すコマンドを出す。満たさない条件の結果は報告に使わない。
 
 ### 1-4 監視役（wait）

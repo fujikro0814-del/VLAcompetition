@@ -2,7 +2,8 @@
 
 使い方（作業場所 C:\\PAI\\recovery_vla。束 1 が終わってから、解析の前に全条件で回す。GPU・シミュレーションは使わない）:
     .venv\\Scripts\\python.exe scripts\\98_s4_d_audit.py [--plan docs\\stage4\\bundle1_defs\\bundle1_plan_queue.json] ^
-        [--out outputs\\s4\\audit\\bundle1_audit.json] [--only RTC_naive E7_EH ...] [--no-git]
+        [--out outputs\\s4\\audit\\bundle1_audit.json] [--only RTC_naive E7_EH ...] [--no-git] ^
+        [--ledger-json <97 の結果> | --no-ledger] [--gate1-input outputs\\s4\\gate1_input.json] [--require-gate1]
   計画（bundle1_plan_queue.json の conditions。enabled が偽のもの＝EX は、フォルダがあるときだけ点検する）と、各条件の
   フォルダ（conditions の out_dir）を照らす。1 つでも欠ければ終了コード 1、欠けた条件ごとに「96 を呼び直す」コマンドを出す。
   満たさない条件の結果は報告に使わない（0155 の 2 節）。
@@ -17,18 +18,32 @@
   5 env_segments       run.json の env_segments が 1 つ、試行の env（ドライバ・torch・CUDA・OS）も 1 種類。2 つ以上なら区切りごとの
                        試行の番号を出す（区切りごとに分けて出す。目標書_段階4.md 11 節 5）
   6 versions           試行の diag の *_sha256（96・診断のモジュール・包み・定義の SHA-256）がそれぞれ 1 種類。git の HEAD が 2 つ以上
-                       なら、それぞれの HEAD で「子が読み込むファイル」（下の CHILD_SCRIPTS と src/recovla・configs の全部）の中身の
-                       SHA-256 を git show から計算して比べ、既存のファイルが 1 つも違わなければ同じ版とみなす（0155 の 2-5。後から
-                       足されただけのファイルは、既存のファイルが変わらない限り子が読めないので数えない）。--no-git では HEAD が
-                       2 つ以上なら欠けとする
+                       なら、それぞれの HEAD で「子が読み込むファイル」（下の CHILD_SCRIPTS、src/recovla の全部、CHILD_CONFIGS の
+                       設定のファイル）の中身の SHA-256 を git show から計算して比べ、既存のファイルが 1 つも違わなければ同じ版と
+                       みなす（0155 の 2-5。後から足されただけのファイルは、既存のファイルが変わらない限り子が読めないので数えない）。
+                       configs は子が読み込むものだけ（configs/demo/**（動画の場面）と学習の種の設定 s4_seed_*.yaml は読まない）。
+                       --no-git では HEAD が 2 つ以上なら欠けとする
   7 double_count       このスクリプトで数えた件数（run: 30・60 s の成功と分母。誘発は t_established < T の試行が分母。
                        task: all_three_in_box と timed_out）と、96_s4_resume.py の score_condition（別の列挙・別の実装）が一致する
   X2（outputs\\s4\\x2）は 96 の条件でないので、gen_summary.json・summary.json があること、種の集合（gen の used_seeds・
   eval の episodes の seed）、env_segments が 1 つ、script_sha256 があることだけを見る（1・4 は対象外）。
   参考（欠けにしない）: resume_log.json の回ごとの git_dirty_n（作業場所に未コミットの変更があったか）。
 
-書くもの: --out の JSON（条件ごとの項目・詳細・呼び直すコマンド）。標準出力に表。
-終了コード: 0 全部そろった、1 欠けがある、2 計画が読めない・引数の誤り。
+条件をまたぐ項目（0155 の 2 節の 6・7。結果の JSON の ledger・gate1_cross_check）:
+  6 ledger             種の台帳の照合（scripts/97_s4_ledger_check.py の build_report をこの場で呼ぶ。--ledger-json で既にある
+                       結果を渡してもよいが、点検する記録のどれよりも新しいこと）で parse_errors（読めず種も拾えない記録）が 0。
+                       台帳のほかの問題の件数は並べるだけ（台帳役が直す）。--no-ledger で飛ばす（結果に skipped と書く）
+  7 gate1_cross_check  src/recovla/eval/gate1.py が判定に使う入力（98_s4_gate1.py --make-input の JSON。既定
+                       outputs\\s4\\gate1_input.json）のうち、試行の json から数えられる件数を、このスクリプトの列挙と数え方で
+                       照らす: 関門 R の natural_success_30・n_trials（設定ごと）、関門 T の all_three_true の k・n（腕ごと）、
+                       関門 C の recovery_R・recovery_N の k・n と paired の pairs・r_only・n_only（版と L ごと。対の鍵は種と目標の色）。
+                       npz の解析が要る値（R の半径・移動の比・速度の跳び・影・X2、T の first_close_lift、S・XPL の plus_y_shift、
+                       K の d0）は、ここでは照らせない（not_compared に並べる）。入力がまだ無ければ status=not_available
+                       （終了コードに入れない。--require-gate1 で欠けにする）。標準出力には食い違った項目の名前だけを出し、
+                       件数は出さない（結果を見る前の点検のため。件数は JSON にだけ書く）
+
+書くもの: --out の JSON（条件ごとの項目・詳細・呼び直すコマンド、ledger、gate1_cross_check）。標準出力に表。
+終了コード: 0 全部そろった、1 欠けがある（条件、台帳の parse_errors、照らした gate1 の食い違い）、2 計画が読めない・引数の誤り。
 """
 import argparse
 import hashlib
@@ -48,8 +63,17 @@ ENV_KEYS = ("driver", "torch", "torch_cuda", "os_build")         # 96_s4_resume.
 EPS = 1e-9
 _TRIAL = re.compile(r"trial_(\d+)\.json")                         # 96 の score・time_scoring・diag とは別の列挙
 _RUN = re.compile(r"run_(\d+)\.json")
-# 子（96 の写しを読み込む包み）が読み込むスクリプト。src/recovla と configs は全部を照らす
+# 子（96 の写しを読み込む包み）が読み込むスクリプト。src/recovla は全部を照らす
 CHILD_SCRIPTS = ("scripts/96_s4_resume.py", "scripts/96_s4_ops.py", "scripts/82_v2_eval.py", "scripts/41_results.py")
+# 子が読み込む設定のファイル（明示の一覧）。default.yaml: recovla.common.config.load（全部の子）。g0.yaml: record・
+# eval.closed_loop。sensor_v1・runtime_v2*.yaml: config.load_v2・harness.world。expert_v3.yaml: expert.generate の v3
+# （X2 の生成）。latency_v1.json: harness.robot_io。s4_gates.json: 98_s4_d_* の帯の確認。
+# configs/demo/**（動画・説明資料の場面）と s4_seed_*.yaml（学習の種）は子が読まないので入れない
+CHILD_CONFIGS = ("configs/default.yaml", "configs/g0.yaml", "configs/sensor_v1.yaml", "configs/runtime_v2.yaml",
+                 "configs/runtime_v2_color.yaml", "configs/runtime_v2_derived.yaml", "configs/runtime_v2_judge.yaml",
+                 "configs/expert_v3.yaml", "configs/latency_v1.json", "configs/s4_gates.json")
+LEDGER = pathlib.Path("docs") / "種の台帳.md"
+GATE1_INPUT = pathlib.Path("outputs") / "s4" / "gate1_input.json"
 FAMILY_SCRIPT = {"RTC": "scripts/98_s4_d_rtc.py", "E7": "scripts/98_s4_d_e7.py", "ST": "scripts/98_s4_d_start.py",
                  "XPL": "scripts/98_s4_d_start.py", "RC": "scripts/98_s4_d_recovery.py", "X2": "scripts/98_s4_x2.py"}
 CHECKS = ("run_json", "g_audit", "trials", "diag", "time_limits", "env_segments", "versions", "double_count")
@@ -277,8 +301,8 @@ def _git(root: pathlib.Path, *args) -> bytes:
 
 def child_files_sha(root: pathlib.Path, head: str, fam: str) -> dict:
     """HEAD での「子が読み込むファイル」の中身（git の blob）の SHA-256。{パス: SHA-256}。"""
-    paths = set(CHILD_SCRIPTS) | ({FAMILY_SCRIPT[fam]} if fam in FAMILY_SCRIPT else set())
-    tree = _git(root, "ls-tree", "-r", "--name-only", head, "--", "src/recovla", "configs").decode("utf-8").splitlines()
+    paths = set(CHILD_SCRIPTS) | set(CHILD_CONFIGS) | ({FAMILY_SCRIPT[fam]} if fam in FAMILY_SCRIPT else set())
+    tree = _git(root, "ls-tree", "-r", "--name-only", head, "--", "src/recovla").decode("utf-8").splitlines()
     paths |= {p for p in tree if p.strip()}
     out = {}
     for p in sorted(paths):
@@ -393,6 +417,160 @@ def check_double(cond: dict, d: pathlib.Path, recs: dict, r96) -> dict:
     return _ok(mine == theirs, {"mine": mine, "score_96": theirs})
 
 
+def _diff_keys(a, b, pre="") -> list:
+    """2 つの辞書で値の違う鍵の名前（値は出さない。標準出力に件数を出さないため）。"""
+    if isinstance(a, dict) and isinstance(b, dict):
+        out = []
+        for k in sorted(set(a) | set(b), key=str):
+            out += _diff_keys(a.get(k), b.get(k), f"{pre}.{k}" if pre else str(k))
+        return out
+    return [] if a == b else [pre or "(全体)"]
+
+
+# ---------------------------------------------------------------- 6 種の台帳の照合（条件をまたぐ）
+def load_script(name: str, modname: str):
+    spec = importlib.util.spec_from_file_location(modname, ROOT / "scripts" / name)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+def _newest_record_mtime(dirs: list) -> float:
+    t = 0.0
+    for d in dirs:
+        if d.is_dir():
+            for p in d.iterdir():
+                if p.is_file() and p.suffix.lower() == ".json":
+                    t = max(t, p.stat().st_mtime)
+    return t
+
+
+def check_ledger(root: pathlib.Path, ledger_json, dirs: list) -> dict:
+    """0155 の 2-6: 種の台帳の照合で parse_errors が 0。ledger_json が無ければ 97 の build_report をこの場で呼ぶ（書かない）。"""
+    if ledger_json:
+        p = pathlib.Path(ledger_json)
+        try:
+            rep = _read_json(p)
+        except Exception as e:                       # noqa: BLE001
+            return {"ok": False, "source": str(p), "detail": f"台帳の照合の結果が読めない: {type(e).__name__}"}
+        if p.stat().st_mtime < _newest_record_mtime(dirs):
+            return {"ok": False, "source": str(p), "detail": "台帳の照合の結果が、点検する記録より古い（97 を回し直す）"}
+        src = str(p)
+    else:
+        ledger = root / LEDGER
+        if not ledger.is_file():
+            return {"ok": False, "source": None, "detail": f"台帳が無い: {ledger}"}
+        try:
+            m = load_script("97_s4_ledger_check.py", "s4_ledger_for_audit")
+            rep, _, _ = m.build_report(root, ledger, [])
+        except Exception as e:                       # noqa: BLE001
+            return {"ok": False, "source": "97_s4_ledger_check.build_report", "detail": f"照合が回らない: {type(e).__name__}: {e}"}
+        src = "97_s4_ledger_check.build_report（この場で）"
+    probs = rep.get("problems") or {}
+    unread = probs.get("unreadable_records")
+    n_parse = len(unread) if isinstance(unread, list) else (rep.get("summary") or {}).get("parse_errors")
+    others = {k: len(v) for k, v in probs.items() if k != "unreadable_records" and isinstance(v, list)}
+    return {"ok": n_parse == 0, "source": src, "parse_errors": n_parse,
+            "parse_error_paths": [e.get("path") for e in (unread or [])][:20],
+            "other_problems": others, "ledger_sha256": (rep.get("ledger") or {}).get("sha256"),
+            "note": "0155 の 2-6 は parse_errors が 0 であること。ほかの問題の件数は並べるだけ（台帳役が直す）"}
+
+
+# ---------------------------------------------------------------- 7 gate1.py の入力との照らし合わせ（条件をまたぐ）
+def compact(recs: dict) -> list:
+    """照らし合わせに要る欄だけの写し（メモリを抑える）。"""
+    out = []
+    for _, m in recs.values():
+        ind = m.get("induce") or {}
+        out.append({"seed": m.get("seed"), "target": m.get("target"), "success": m.get("success"), "t_success": m.get("t_success"),
+                    "all_three_in_box": m.get("all_three_in_box"),
+                    "induce": {"kind": ind.get("kind"), "established": ind.get("established"), "t_established": ind.get("t_established")}})
+    return out
+
+
+def _est_before(m: dict, L: float) -> bool:
+    ind = m.get("induce") or {}
+    te = ind.get("t_established")
+    return bool(ind.get("kind") and ind.get("established") and te is not None and float(te) < L - EPS)
+
+
+def _succ_by(m: dict, L: float) -> bool:
+    ts = m.get("t_success")
+    return bool(m.get("success") and ts is not None and float(ts) <= L + EPS)
+
+
+def gate1_cross_check(gin: dict, plan_conds: list, kept: dict) -> dict:
+    """gate1.py の入力の、試行の json から数えられる件数を、このスクリプトの数え方で照らす。kept: {条件の id: compact の並び}。"""
+    by_id = {c["id"]: c for c in plan_conds}
+    rows, not_compared = [], []
+
+    def add(item, mine, theirs, why=None):
+        rows.append({"item": item, "ok": mine is not None and mine == theirs, "mine": mine, "gate1_input": theirs,
+                     **({"note": why} if why else {})})
+
+    R = gin.get("R") if isinstance(gin.get("R"), dict) else None
+    if R is not None:
+        for name, s in (R.get("settings") or {}).items():
+            cid = f"RTC_{name}"
+            recs = kept.get(cid)
+            if recs is None:
+                add(f"R.{name}", None, {"natural_success_30": s.get("natural_success_30"), "n_trials": s.get("n_trials")},
+                    f"条件 {cid} の記録を点検していない")
+                continue
+            mine = {"natural_success_30": sum(_succ_by(m, 30.0) for m in recs), "n_trials": len(recs)}
+            add(f"R.{name}", mine, {"natural_success_30": s.get("natural_success_30"), "n_trials": s.get("n_trials")})
+        not_compared += [f"R.{k}" for k in ("radial_gap_mm", "move_ratio", "seam_jump_mps")]
+        not_compared += [k for k in ("shadow_plan_shorter_mm", "x2_shortfall_mm") if k in R]
+    T = gin.get("T") if isinstance(gin.get("T"), dict) else None
+    if T is not None:
+        e7 = {pathlib.PureWindowsPath(c["out_dir"]).name: c["id"] for c in plan_conds if family(c) == "E7"}
+        for arm, a in (T.get("arms") or {}).items():
+            theirs = (a or {}).get("all_three_true")
+            cid = e7.get(arm)
+            recs = kept.get(cid) if cid else None
+            if recs is None:
+                add(f"T.{arm}.all_three_true", None, theirs, f"腕 {arm} の条件（{cid}）の記録を点検していない")
+                continue
+            add(f"T.{arm}.all_three_true", {"k": sum(bool(m.get("all_three_in_box")) for m in recs), "n": len(recs)},
+                {"k": (theirs or {}).get("k"), "n": (theirs or {}).get("n")})
+        not_compared.append("T.*.first_close_lift（npz の解析）")
+    C = gin.get("C") if isinstance(gin.get("C"), dict) else None
+    if C is not None:
+        for variant, ent in C.items():
+            rc = [c for c in plan_conds if family(c) == "RC" and c.get("variant") == variant]
+            rid = next((c["id"] for c in rc if str(c.get("model", "")).startswith("R")), None)
+            nid = next((c["id"] for c in rc if str(c.get("model", "")).startswith("N")), None)
+            rr, nn = kept.get(rid), kept.get(nid)
+            for L, x in ((ent or {}).get("by_L") or {}).items():
+                Lf = float(L)
+                theirs = {"recovery_R": x.get("recovery_R"), "recovery_N": x.get("recovery_N"), "paired": x.get("paired")}
+                if rr is None or nn is None:
+                    add(f"C.{variant}.{L}", None, theirs, f"条件 {rid}・{nid} の記録を点検していない")
+                    continue
+                mine = {}
+                for key, recs in (("recovery_R", rr), ("recovery_N", nn)):
+                    den = [m for m in recs if _est_before(m, Lf)]
+                    mine[key] = {"k": sum(_succ_by(m, Lf) for m in den), "n": len(den)}
+                br = {(m["seed"], m.get("target")): m for m in rr}
+                bn = {(m["seed"], m.get("target")): m for m in nn}
+                keys = [k for k in br if k in bn and _est_before(br[k], Lf) and _est_before(bn[k], Lf)]
+                ro = sum(_succ_by(br[k], Lf) and not _succ_by(bn[k], Lf) for k in keys)
+                no = sum(_succ_by(bn[k], Lf) and not _succ_by(br[k], Lf) for k in keys)
+                mine["paired"] = {"pairs": len(keys), "r_only": ro, "n_only": no}
+                theirs = {"recovery_R": {k: (x.get("recovery_R") or {}).get(k) for k in ("k", "n")},
+                          "recovery_N": {k: (x.get("recovery_N") or {}).get(k) for k in ("k", "n")},
+                          "paired": {k: (x.get("paired") or {}).get(k) for k in ("pairs", "r_only", "n_only")}}
+                add(f"C.{variant}.{L}", mine, theirs)
+    for key, why in (("S", "plus_y_shift（npz の解析）"), ("XPL", "plus_y_shift（npz の解析）"), ("K", "d0（K の回し直しの記録）")):
+        if key in gin:
+            not_compared.append(f"{key}: {why}")
+    missing = [g for g in ("R", "T", "C") if g not in gin]
+    return {"status": "done", "ok": bool(rows) and all(r["ok"] for r in rows) and not missing, "rows": rows,
+            "gates_missing_in_input": missing, "not_compared": not_compared,
+            "mismatch": [{"item": r["item"], "keys": _diff_keys(r["mine"], r["gate1_input"]) if r["mine"] is not None
+                          else [r.get("note")]} for r in rows if not r["ok"]]}
+
+
 # ---------------------------------------------------------------- X2
 def audit_x2(cond: dict, d: pathlib.Path) -> dict:
     gen = cond["id"] == "X2_gen"
@@ -422,7 +600,7 @@ def audit_x2(cond: dict, d: pathlib.Path) -> dict:
 
 
 # ---------------------------------------------------------------- 本体
-def audit_condition(cond: dict, plan: dict, root: pathlib.Path, use_git: bool, r96) -> dict:
+def audit_condition(cond: dict, plan: dict, root: pathlib.Path, use_git: bool, r96, kept: dict = None) -> dict:
     d = root / pathlib.Path(cond["out_dir"].replace("\\", "/"))
     row = {"id": cond["id"], "dir": str(d), "kind": cond["kind"], "enabled": bool(cond.get("enabled", True))}
     if cond["kind"] == "x2":
@@ -437,6 +615,8 @@ def audit_condition(cond: dict, plan: dict, root: pathlib.Path, use_git: bool, r
                   "env_segments": check_env(recs, run_json), "versions": check_versions(cond, recs, root, use_git),
                   "double_count": check_double(cond, d, recs, r96)}
         row["git_dirty_n"] = _git_dirty(d)
+        if kept is not None:
+            kept[cond["id"]] = compact(recs)
     row["checks"] = checks
     row["ok"] = all(c["ok"] for c in checks.values())
     row["recall"] = None if row["ok"] else recall_command(cond, plan)
@@ -467,6 +647,10 @@ def main(argv=None) -> int:
     ap.add_argument("--only", nargs="+", default=None, help="点検する条件の id（計画の conditions の id）")
     ap.add_argument("--out", default=None, help="結果の JSON（既定 outputs\\s4\\audit\\bundle1_audit.json）")
     ap.add_argument("--no-git", action="store_true", help="git で HEAD の間のファイルを照らさない（HEAD が 2 つ以上なら欠け）")
+    ap.add_argument("--ledger-json", default=None, help="既にある 97_s4_ledger_check.py の結果（無ければこの場で照合する）")
+    ap.add_argument("--no-ledger", action="store_true", help="種の台帳の照合（0155 の 2-6）を飛ばす（結果に skipped と書く）")
+    ap.add_argument("--gate1-input", default=None, help="gate1.py の入力（既定 outputs\\s4\\gate1_input.json。無ければ not_available）")
+    ap.add_argument("--require-gate1", action="store_true", help="gate1.py の入力が無いときも欠けにする")
     a = ap.parse_args(argv)
     root = pathlib.Path(a.root) if a.root else ROOT
     plan_p = pathlib.Path(a.plan) if a.plan else root / PLAN
@@ -487,24 +671,51 @@ def main(argv=None) -> int:
     except Exception as e:                           # noqa: BLE001
         print(f"96_s4_resume.py を読み込めない（double_count は欠けにする）: {type(e).__name__}: {e}", file=sys.stderr)
         r96 = None
-    rows = []
+    rows, kept, dirs = [], {}, []
     for c in conds:
         d = root / pathlib.Path(c["out_dir"].replace("\\", "/"))
         if not c.get("enabled", True) and not d.exists():
             continue                                 # 条件つきの腕（EX）で、回していないもの
-        rows.append(audit_condition(c, plan, root, not a.no_git, r96))
+        rows.append(audit_condition(c, plan, root, not a.no_git, r96, kept))
+        dirs.append(d)
     bad = [r for r in rows if not r["ok"]]
+    # 6 種の台帳の照合（条件をまたぐ）
+    if a.no_ledger:
+        ledger = {"ok": None, "skipped": True, "detail": "--no-ledger"}
+    else:
+        ledger = check_ledger(root, a.ledger_json, dirs)
+    # 7 gate1.py の入力との照らし合わせ（条件をまたぐ）
+    gp = pathlib.Path(a.gate1_input) if a.gate1_input else root / GATE1_INPUT
+    if not gp.is_file():
+        g1 = {"status": "not_available", "ok": None, "path": str(gp),
+              "detail": "gate1.py の入力がまだ無い（98_s4_gate1.py --make-input で組んでから、この点検を回し直す）"}
+    else:
+        try:
+            raw = gp.read_bytes()
+            g1 = gate1_cross_check(json.loads(raw.decode("utf-8-sig")), plan["conditions"], kept)
+            g1.update(path=str(gp), sha256=hashlib.sha256(raw).hexdigest())
+        except Exception as e:                       # noqa: BLE001
+            g1 = {"status": "error", "ok": False, "path": str(gp), "detail": f"{type(e).__name__}: {e}"}
+    g1_bad = g1["ok"] is False or (a.require_gate1 and g1["ok"] is not True)
+    all_ok = not bad and ledger["ok"] is not False and not g1_bad
     out = {"written": time.strftime("%Y-%m-%d %H:%M:%S"), "plan": str(plan_p), "root": str(root),
            "rule": "掲示板 0155 の 2 節。満たさない条件の結果は報告に使わない。欠けた条件は recall のコマンドで 96 を呼び直す",
-           "n_conditions": len(rows), "n_bad": len(bad), "ok": not bad, "conditions": rows}
+           "n_conditions": len(rows), "n_bad": len(bad), "ok": all_ok, "conditions_ok": not bad,
+           "ledger": ledger, "gate1_cross_check": g1, "conditions": rows}
     text = json.dumps(out, ensure_ascii=False, indent=1, default=str)
     op = pathlib.Path(a.out) if a.out else root / OUT
     op.parent.mkdir(parents=True, exist_ok=True)
     op.write_text(text, encoding="utf-8")
     print(table(rows))
     for r in bad:
-        why = [f"{c}: {json.dumps(x.get('detail'), ensure_ascii=False, default=str)[:300]}"
-               for c, x in r["checks"].items() if not x["ok"]]
+        why = []
+        for c, x in r["checks"].items():
+            if x["ok"]:
+                continue
+            det = x.get("detail")
+            if c == "double_count" and isinstance(det, dict) and "mine" in det and "score_96" in det:
+                det = {"食い違う項目": _diff_keys(det["mine"], det["score_96"])}     # 件数は出さない（JSON にだけ）
+            why.append(f"{c}: {json.dumps(det, ensure_ascii=False, default=str)[:300]}")
         print(f"\n[audit] {r['id']}（{r['dir']}）が欠けている")
         for w in why:
             print(f"  - {w}")
@@ -512,8 +723,19 @@ def main(argv=None) -> int:
             print(f"  呼び直す: {r['recall']['cmd']}")
             if r["recall"].get("note"):
                 print(f"  注: {r['recall']['note']}")
+    if ledger.get("skipped"):
+        print("\n[audit] 種の台帳の照合（0155 の 2-6）: 飛ばした（--no-ledger）")
+    else:
+        print(f"\n[audit] 種の台帳の照合（0155 の 2-6）: {'parse_errors 0' if ledger['ok'] else '欠け'}"
+              f"（{ledger.get('detail') or ledger.get('parse_errors')}。ほかの問題: {ledger.get('other_problems')}）")
+    if g1["status"] == "done":
+        print(f"[audit] gate1.py の入力との照らし合わせ（0155 の 2-7）: {len(g1['rows'])} 項目、"
+              f"{'一致' if g1['ok'] else '食い違い・欠けあり'}。食い違い: {json.dumps(g1['mismatch'], ensure_ascii=False)[:600]}。"
+              f"照らせない値: {len(g1['not_compared'])} 件")
+    else:
+        print(f"[audit] gate1.py の入力との照らし合わせ（0155 の 2-7）: {g1['status']}（{g1.get('detail')}）")
     print(f"\n[audit] {len(rows) - len(bad)}/{len(rows)} 条件がそろった。書いた: {op}")
-    return 1 if bad else 0
+    return 0 if all_ok else 1
 
 
 if __name__ == "__main__":

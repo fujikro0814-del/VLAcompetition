@@ -12,7 +12,9 @@ mujoco（と cv2）の代わりの空の模型を sys.modules に入れて読み
 import contextlib
 import importlib.util
 import json
+import os
 import pathlib
+import shutil
 import subprocess
 import sys
 from unittest import mock
@@ -411,9 +413,12 @@ def _build(root: pathlib.Path, plan: dict, head="h1"):
     return pp
 
 
-def _run_audit(audit, root, *extra):
+def _run_audit(audit, root, *extra, ledger=False):
     out = root / "audit.json"
-    code = audit.main(["--plan", str(root / "plan.json"), "--root", str(root), "--out", str(out), *extra])
+    args = ["--plan", str(root / "plan.json"), "--root", str(root), "--out", str(out), *extra]
+    if not ledger:
+        args.append("--no-ledger")                                       # 台帳の照合は別のテストで試す
+    code = audit.main(args)
     return code, json.loads(out.read_text(encoding="utf-8"))
 
 
@@ -502,21 +507,33 @@ def test_audit_limits_env_and_sha(audit, tmp_path):
     assert not ver["ok"] and len(ver["detail"]["sha256"]["r96_sha256"]) == 2
 
 
+# git: 作業場所の .tools の git があればそれを、無ければ PATH の git（98_s4_d_audit._git と同じ順）
+_GIT_EXE = ROOT / ".tools" / "git" / "cmd" / "git.exe"
+GIT = str(_GIT_EXE) if _GIT_EXE.is_file() else shutil.which("git")
+needs_git = pytest.mark.skipif(GIT is None, reason="git が無い")
+
+
+@pytest.fixture
+def git_on_path(monkeypatch):
+    """点検の _git は tmp の作業場所に .tools の git が無いので PATH の git を使う。見つけた git を PATH の先頭に置く。"""
+    monkeypatch.setenv("PATH", str(pathlib.Path(GIT).parent) + os.pathsep + os.environ.get("PATH", ""))
+
+
 def _git(root, *a):
-    subprocess.run(["git", "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@example.invalid", *a], check=True,
+    subprocess.run([GIT, "-C", str(root), "-c", "user.name=t", "-c", "user.email=t@example.invalid", *a], check=True,
                    capture_output=True)
-    return subprocess.run(["git", "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+    return subprocess.run([GIT, "-C", str(root), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
 
 
-@pytest.mark.skipif(subprocess.run(["git", "--version"], capture_output=True).returncode != 0, reason="git が無い")
-def test_audit_heads_compare_child_files(audit, tmp_path):
+@needs_git
+def test_audit_heads_compare_child_files(audit, tmp_path, git_on_path):
     root = tmp_path
     (root / "src/recovla").mkdir(parents=True)
     (root / "scripts").mkdir()
     (root / "docs").mkdir()
     (root / "src/recovla/a.py").write_text("x = 1\n", encoding="utf-8")
     (root / "scripts/96_s4_resume.py").write_text("y = 1\n", encoding="utf-8")
-    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run([GIT, "init", "-q", str(root)], check=True)
     h1 = (_git(root, "add", "-A"), _git(root, "commit", "-q", "-m", "1"))[1]
     (root / "docs/note.md").write_text("掲示板\n", encoding="utf-8")                 # 子が読まないファイルだけ
     (root / "src/recovla/new_tool.py").write_text("z = 1\n", encoding="utf-8")      # 後から足しただけ
@@ -543,6 +560,85 @@ def test_audit_heads_compare_child_files(audit, tmp_path):
     assert code == 1 and not _cond(res, "E7_EH")["checks"]["versions"]["ok"]
     code, res = _run_audit(audit, root, "--no-git")
     assert code == 1
+
+
+@needs_git
+def test_audit_child_configs_exclude_demo(audit, tmp_path, git_on_path):
+    """versions の照らし合わせは、子が読み込む設定のファイル（CHILD_CONFIGS）だけを見る。configs/demo の変更は数えない。"""
+    root = tmp_path
+    for rel, text in (("src/recovla/a.py", "x = 1\n"), ("configs/default.yaml", "a: 1\n"), ("configs/demo/video.yaml", "v: 1\n")):
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
+        (root / rel).write_text(text, encoding="utf-8")
+    subprocess.run([GIT, "init", "-q", str(root)], check=True)
+    h1 = (_git(root, "add", "-A"), _git(root, "commit", "-q", "-m", "1"))[1]
+    (root / "configs/demo/video.yaml").write_text("v: 2\n", encoding="utf-8")       # 動画の場面だけ
+    h2 = (_git(root, "add", "-A"), _git(root, "commit", "-q", "-m", "2"))[1]
+    (root / "configs/default.yaml").write_text("a: 2\n", encoding="utf-8")           # 子が読む設定
+    h3 = (_git(root, "add", "-A"), _git(root, "commit", "-q", "-m", "3"))[1]
+    assert "configs/demo/video.yaml" not in audit.CHILD_CONFIGS
+    assert audit.compare_heads(root, [h1, h2], "E7")["changed"] == []
+    assert audit.compare_heads(root, [h1, h3], "E7")["changed"] == ["configs/default.yaml"]
+
+
+def test_audit_ledger_parse_errors(audit, tmp_path, capsys):
+    """0155 の 2-6: 台帳の照合の parse_errors が 0 でなければ欠け。点検する記録より古い結果は使わない。"""
+    _build(tmp_path, _plan())
+    lj = tmp_path / "ledger_check.json"
+    lj.write_text(json.dumps({"problems": {"unreadable_records": [{"path": "outputs/x/trial_0000.json", "error": "e"}],
+                                           "not_in_ledger": []}, "summary": {"parse_errors": 1}}), encoding="utf-8")
+    code, res = _run_audit(audit, tmp_path, "--ledger-json", str(lj), ledger=True)
+    assert code == 1 and res["conditions_ok"] and res["ledger"]["ok"] is False and res["ledger"]["parse_errors"] == 1
+    lj.write_text(json.dumps({"problems": {"unreadable_records": [], "not_in_ledger": [1]}, "summary": {"parse_errors": 0}}),
+                  encoding="utf-8")
+    code, res = _run_audit(audit, tmp_path, "--ledger-json", str(lj), ledger=True)
+    assert code == 0 and res["ledger"]["ok"] and res["ledger"]["other_problems"] == {"not_in_ledger": 1}
+    os.utime(lj, (1_000_000, 1_000_000))                                 # 記録より古い結果
+    code, res = _run_audit(audit, tmp_path, "--ledger-json", str(lj), ledger=True)
+    assert code == 1 and "古い" in res["ledger"]["detail"]
+    code, res = _run_audit(audit, tmp_path, ledger=True)                 # 台帳が無い作業場所でこの場で照合すると欠け
+    assert code == 1 and "台帳が無い" in res["ledger"]["detail"]
+
+
+def _plan_with_n():
+    plan = _plan()
+    rc = next(c for c in plan["conditions"] if c["id"] == "RC_R1v3_fall_with_hold")
+    n = dict(rc, id="RC_N1v3_fall_with_hold", model="N1v3", record_condition="N1v3_fall_with_hold",
+             out_dir="outputs\\v2eval\\S4DREC\\N1v3_fall_with_hold")
+    plan["conditions"].append(n)
+    return plan
+
+
+def test_audit_gate1_cross_check(audit, tmp_path, capsys):
+    """0155 の 2-7: gate1.py の入力の件数を、点検の列挙と数え方で照らす。無ければ not_available（--require-gate1 で欠け）。"""
+    _build(tmp_path, _plan_with_n())
+    code, res = _run_audit(audit, tmp_path)
+    assert code == 0 and res["gate1_cross_check"]["status"] == "not_available"
+    code, res = _run_audit(audit, tmp_path, "--require-gate1")
+    assert code == 1
+    gin = {"schema": "recovery_vla.s4_gate1_input/1",
+           "R": {"settings": {"naive": {"natural_success_30": 3, "n_trials": 6, "radial_gap_mm": 1.0}}},
+           "T": {"arms": {"EH": {"first_close_lift": {"k": 1, "n": 2}, "all_three_true": {"k": 1, "n": 2}}}},
+           "C": {"fall_with_hold": {"by_L": {"30": {"recovery_R": {"k": 2, "n": 2}, "recovery_N": {"k": 2, "n": 2},
+                                                    "paired": {"pairs": 2, "r_only": 0, "n_only": 0}}}}},
+           "S": {"conditions": {}}}
+    gp = tmp_path / "gate1_input.json"
+    gp.write_text(json.dumps(gin), encoding="utf-8")
+    code, res = _run_audit(audit, tmp_path, "--gate1-input", str(gp))
+    g = res["gate1_cross_check"]
+    assert code == 0 and g["status"] == "done" and g["ok"], g
+    assert {r["item"] for r in g["rows"]} == {"R.naive", "T.EH.all_three_true", "C.fall_with_hold.30"}
+    assert any(x.startswith("S:") for x in g["not_compared"])
+    gin["C"]["fall_with_hold"]["by_L"]["30"]["paired"]["pairs"] = 3          # 食い違い
+    gin["R"]["settings"]["naive"]["natural_success_30"] = 4
+    gp.write_text(json.dumps(gin), encoding="utf-8")
+    capsys.readouterr()
+    code, res = _run_audit(audit, tmp_path, "--gate1-input", str(gp))
+    g = res["gate1_cross_check"]
+    assert code == 1 and not g["ok"]
+    assert {m["item"]: m["keys"] for m in g["mismatch"]} == {"R.naive": ["natural_success_30"],
+                                                            "C.fall_with_hold.30": ["paired.pairs"]}
+    out = capsys.readouterr().out
+    assert "natural_success_30" in out and '"gate1_input"' not in out          # 標準出力は項目の名前だけ
 
 
 def test_audit_bundle1_plan_is_readable(audit, tmp_path):
