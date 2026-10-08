@@ -358,8 +358,8 @@ def cmd_package(a) -> None:
         import av
         with av.open(str(mp4)) as c:
             sec = float(c.duration) / av.time_base
-        if not 60 <= sec <= 300:
-            problems.append(f"動画の長さ {sec:.1f} s（1〜5 分の外）")
+        if not 60 <= sec <= 180:   # 10/08 の規則の変更: 1〜3 分
+            problems.append(f"動画の長さ {sec:.1f} s（1〜3 分の外）")
     for f, base in ((pdf, "paper.pdf"), (mp4, "video.mp4")):   # 提出名のファイルが、照合した組み上げ（paper.pdf・video.mp4）と同じ中身か
         b = build / base
         if f.is_file() and (not b.is_file() or f.read_bytes() != b.read_bytes()):

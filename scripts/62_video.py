@@ -100,10 +100,16 @@ def header(d, title, speed=None, note=None):
         text(d, (40, H - 44), note, 22, MUTED)
 
 
+MAX_SPEED = 2.0   # 課題の規則（10/08 の変更）: 倍速は 2 倍まで
+
+
 def _speed(sc, clip_dur):
     t0 = float(sc.get("t0", 0.0))
     t1 = float(sc.get("t1", clip_dur))
-    return t0, (t1 - t0) / float(sc["dur_s"])
+    sp = (t1 - t0) / float(sc["dur_s"])
+    if sp > MAX_SPEED + 1e-9:
+        raise SystemExit(f"場面 {sc.get('id')} の倍速 {sp:.2f} が {MAX_SPEED:g} 倍を超える（dur_s を延ばす）")
+    return t0, sp
 
 
 # ------------------------------------------------------------------ 場面
@@ -402,9 +408,12 @@ def cmd_check(a) -> None:
     joined = "\n".join(info["texts"])
     hits = [(p, m.group(0)) for p in pm.FORBIDDEN for m in re.finditer(p, joined)]
     problems = [f"使わない語 {h[1]!r}（{h[0]}）" for h in hits]
-    if not 60 <= info["seconds"] <= 300:
-        problems.append(f"長さ {info['seconds']:.0f} s")
+    if not 60 <= info["seconds"] <= 180:   # 10/08 の規則の変更: 1〜3 分、倍速は 2 倍まで
+        problems.append(f"長さ {info['seconds']:.0f} s（1〜3 分の外）")
     S, order = spec()
+    for sc in order:
+        if "t1" in sc and _speed(sc, float(sc["t1"]))[1] > MAX_SPEED + 1e-9:
+            problems.append(f"場面 {sc['id']} の倍速 {_speed(sc, float(sc['t1']))[1]:.2f} が {MAX_SPEED:g} 倍を超える")
     want = sum(float(sc["dur_s"]) for sc in order)
     if abs(info["seconds"] - want) > 0.5:
         problems.append(f"長さ {info['seconds']:.1f} s が場面の表の合計 {want:.0f} s と違う（説明資料の時刻がずれる）")
