@@ -6,8 +6,12 @@
         --induced --out outputs\\results\\s4_time_p1.json --svg outputs\\results\\s4_time_p1.svg
 
 読むもの: --dirs の各フォルダの trial_*.json（1 つか 2 つ。2 つなら種と目標の色で対にして比べる）。
-  フォルダに trial_*.json がなく run_*.json（3 個の連続タスク）があれば、手順ごとの成功時刻の分布だけを出す
-  （連続タスクは制限時間で経過が変わるので、30 s での採点し直しはしない。time_scoring の冒頭）。
+  フォルダに trial_*.json がなく run_*.json（3 個の連続タスク）があれば、手順ごとの成功時刻の分布と、3 個そろった時刻
+  （all_three_in_box が真の試行の truth_success_t の最大。0155 の 1-2）の曲線を JSON に出す（連続タスクは制限時間で経過が
+  変わるので、30 s での採点し直しはしない。time_scoring の冒頭）。
+数える前の確かめ（time_scoring.check_records）: 記録に誘発の試行があるのに --induced が無い、--induced なのに誘発の試行が
+  無い、自然と誘発が混ざっている、制限時間が 2 種類以上、環境が 2 つ以上なら、数えずに終了コード 2。
+  誘発の分母は T 秒より前に成立した試行（t_established < T）。曲線は時刻ごとの分母で描き、図に分母を書く（0155 の 1-1・1-3）。
 書くもの: --out の JSON（primary＝30 s の主な指標、secondary＝45・60 s と曲線、補正なし）と、--svg の図（横に時間、
   縦に累積の成功率の階段、30 s と 60 s に縦の線）。図の語は 60_paper.py の FORBIDDEN に当たらないかを確かめ、
   当たれば標準エラーに書いて終了コード 1。
@@ -36,11 +40,11 @@ FONT = '"BIZ UDPGothic", "Yu Gothic", "Meiryo", sans-serif'
 
 def curve_svg(rep: dict, marks=(30.0, 60.0)) -> str:
     """累積の成功率の階段の曲線（2 条件を重ねる）。rep は time_scoring.time_report の結果。"""
-    W, H = 640, 400
+    induced = rep["settings"]["induced_only"]
+    W, H = 640, (420 if induced else 400)                      # 誘発の条件は凡例の下に分母の行を足す
     x0, x1, y0, y1 = 72, 612, 56, 316
     curves = rep["secondary"]["curves"]
     t_max = max(c["t"][-1] for c in curves.values())
-    induced = rep["settings"]["induced_only"]
 
     def X(t):
         return x0 + (x1 - x0) * t / t_max
@@ -49,7 +53,8 @@ def curve_svg(rep: dict, marks=(30.0, 60.0)) -> str:
         return y1 - (y1 - y0) * r
 
     kind = "意図的な失敗" if induced else "通常の試行"
-    sub = "分母は意図的な失敗が起きた試行" if induced else "分母はすべての試行"
+    # 誘発の条件の曲線は時刻ごとの分母（その時刻より前に失敗が起きた試行。0155 の 1-3）。図にそう書き、凡例に 30・60 秒の分母を出す
+    sub = "分母は各時刻より前に意図的な失敗が起きた試行（時刻で変わる。凡例に 30 秒と 60 秒の分母）" if induced else "分母はすべての試行"
     o = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" role="img">',
          f"<title>{kind}の累積の成功率</title>",
          f"<style>text{{font-family:{FONT};fill:{INK}}} .tk{{font-size:12px;fill:{MUTED}}} .ax{{font-size:13px}} "
@@ -71,13 +76,13 @@ def curve_svg(rep: dict, marks=(30.0, 60.0)) -> str:
         if m <= t_max + TS.EPS:
             o.append(f'<line x1="{X(m):.1f}" y1="{y0}" x2="{X(m):.1f}" y2="{y1}" stroke="{MUTED}" stroke-width="1" stroke-dasharray="2 3"/>')
             o.append(f'<text class="mk" x="{X(m):.1f}" y="{y0 - 6}" text-anchor="middle">{m:g} 秒</text>')
-    pk = TS._key(TS.PRIMARY_LIMIT_S)
     for i, (s, c) in enumerate(curves.items()):
-        if not c["n"]:
+        pts = [(t, r) for t, r in zip(c["t"], c["rate"]) if r is not None]     # 分母が 0 の時刻（誘発の始めのほう）は描かない
+        if not c["n"] or not pts:
             continue
         col, dash = SERIES[i % len(SERIES)]
-        d = [f"M{X(c['t'][0]):.1f},{Y(c['rate'][0]):.1f}"]
-        for t, r in zip(c["t"][1:], c["rate"][1:]):              # 右連続の階段: t で上がる
+        d = [f"M{X(pts[0][0]):.1f},{Y(pts[0][1]):.1f}"]
+        for t, r in pts[1:]:                                    # 右連続の階段: t で上がる
             d.append(f"H{X(t):.1f}V{Y(r):.1f}")
         da = f' stroke-dasharray="{dash}"' if dash else ""
         o.append(f'<path d="{"".join(d)}" fill="none" stroke="{col}" stroke-width="2.2"{da}/>')
@@ -86,6 +91,10 @@ def curve_svg(rep: dict, marks=(30.0, 60.0)) -> str:
         o.append(f'<line x1="{lx}" y1="{ly - 4}" x2="{lx + 28}" y2="{ly - 4}" stroke="{col}" stroke-width="2.2"{da}/>')
         o.append(f'<text class="lg" x="{lx + 36}" y="{ly}">{html.escape(c["label"])}（{TS.PRIMARY_LIMIT_S:g} 秒で '
                  f'{p["successes"]}/{p["n"]}）</text>')
+        if induced:                                             # 時刻ごとの分母（30 秒と曲線の終わり）
+            n_end = c["n_at"][-1]
+            o.append(f'<text class="mk" x="{lx + 36}" y="{ly + 16}">分母 {TS.PRIMARY_LIMIT_S:g} 秒 {p["n"]}・'
+                     f'{c["t"][-1]:g} 秒 {n_end}</text>')
     o.append("</svg>")
     return "\n".join(o) + "\n"
 
@@ -116,7 +125,8 @@ def main(argv=None) -> int:
     ap.add_argument("--dirs", nargs="+", required=True)
     ap.add_argument("--labels", nargs="+", default=None)
     ap.add_argument("--limits", nargs="+", type=float, default=list(TS.DEFAULT_LIMITS))
-    ap.add_argument("--induced", action="store_true", help="分母を induce_established が真の試行に絞る")
+    ap.add_argument("--induced", action="store_true",
+                    help="分母を T 秒より前に失敗が成立した試行に絞る（誘発の記録なのに付けない・自然の記録に付けると止まる）")
     ap.add_argument("--step", type=float, default=TS.GRID_STEP_S, help="曲線の格子の刻み [s]")
     ap.add_argument("--out", default=None)
     ap.add_argument("--svg", default=None)
@@ -134,10 +144,17 @@ def main(argv=None) -> int:
         if not any(runs):
             print(f"trial_*.json も run_*.json もない: {a.dirs}", file=sys.stderr)
             return 1
-        res = {"tasks": {lab: TS.task_step_times(r) for lab, r in zip(labels, runs)}}
+        res = {"tasks": {lab: TS.task_step_times(r) for lab, r in zip(labels, runs)},
+               "all_three": {lab: TS.task_all_three(r) for lab, r in zip(labels, runs)}}
         if a.svg:
-            print("連続タスクには図を作らない（採点し直しをしないため）", file=sys.stderr)
+            print("連続タスクには図を作らない（採点し直しをしないため。3 個そろった時刻の曲線は JSON の all_three）", file=sys.stderr)
     else:
+        # --induced の付け忘れ・付け違いは数えずに止める（査読の軽微 3。96 の score は誘発の試行を記録から見分ける）
+        probs = [f"{d}: {p}" for d, rs in zip(a.dirs, trials) for p in TS.check_records(rs, a.induced)]
+        if probs:
+            for p in probs:
+                print(p, file=sys.stderr)
+            return 2
         res = TS.time_report(trials[0], trials[1] if len(trials) > 1 else None, labels, a.limits, a.induced, a.step)
     res["dirs"] = [str(d) for d in a.dirs]
     text = json.dumps(res, ensure_ascii=False, indent=1)
