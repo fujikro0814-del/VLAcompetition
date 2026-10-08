@@ -3,12 +3,17 @@
 
     .venv\\Scripts\\python.exe scripts\\98_s4_test1.py example --out outputs\\s4\\test1\\       # layout・params の雛形を書く
     .venv\\Scripts\\python.exe scripts\\98_s4_test1.py check --layout outputs\\s4\\test1\\layout.json --params outputs\\s4\\test1\\params.json ^
-        [--out outputs\\s4\\test1\\result.json --md outputs\\s4\\test1\\result.md]
+        [--out outputs\\s4\\test1\\result.json --md outputs\\s4\\test1\\result.md] [--ledger-json <97 の結果>]
 終了コード: 0 一致して判定した（または、両方が「未完」で一致した。未完なら判定は書かない）/ 1 A と B が一致しない（判定を書かない）/
   2 入力を読めない / 3 未完（入口の点検を満たさない条件がある。A・B の点検の結果は一致）。
-一致の基準（事前登録の案 第 7 節 1）: 件数・真偽・文字列は完全に一致。p 値・割合・区間・中央値は相対 1e-9 以内（A は scipy、
-  B は自前の計算なので、浮動小数の丸めの差だけを許す）。入口の点検は、条件ごとの合否（ok）と足りない条件の一覧を照らす
-  （理由の文は実装ごとに違うので照らさない）。
+一致の基準（事前登録の案 第 7 節 1）: 件数・真偽・文字列は完全に一致。p 値・割合・区間・中央値は相対 1e-9 以内（p 値は相対だけ、
+  ほかは 0 の近くだけ絶対 1e-12。A は scipy、B は自前の計算なので、浮動小数の丸めの差だけを許す）。入口の点検は、条件ごとの合否（ok）・git の HEAD の
+  集合と足りない条件の一覧を照らす（理由の文は実装ごとに違うので照らさない）。
+条件をまたぐ入口の点検（0155 の 2-5・2-6。A・B が一致した後に、ここで 1 回だけ行う。満たさなければ未完）:
+  2-5 版: 全条件の試行の HEAD が 2 つ以上なら、98_s4_d_audit.py の order_heads・compare_heads（束 1 と同じ「子が読み込むファイル」
+      の定義）で、いちばん古い HEAD にあるファイルが後の HEAD で変わっていないことを git で確かめる。
+  2-6 台帳: 97_s4_ledger_check.py の build_report（または --ledger-json の結果。点検する記録のどれよりも新しいこと）で
+      parse_errors が 0。
 params の P-n・作者の判断（D1〜D7）の値は、結果の JSON の params にそのまま残る。
 """
 import argparse
@@ -21,9 +26,13 @@ import time
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 REL = 1e-9
+ABS = 1e-12
+P_KEYS = {"p", "p_holm", "mcnemar_p", "p_all_layers"}             # p 値の鍵（相対だけで照らす）
+LEDGER = ROOT / "docs" / "種の台帳.md"
 
 EXAMPLE_LAYOUT = {
-    "_note": "条件名（outputs/v2eval/<experiment>/<条件>）。model を書けば試行の json のモデル名と照らす。rtc は案 B のときだけ",
+    "_note": ("条件名（outputs/v2eval/<experiment>/<条件>）。model を書けば試行の json のモデル名と照らす。rtc は RTC の腕を置く"
+              "とき（P-3）だけ。案 B なら rtc に p1_n（N1v3＋RTC の設定の P1、100 本）を足す"),
     "root": "outputs/v2eval", "experiment": "S4T1",
     "e7": {"v3": {"cond": "E7_R1v3_v3", "model": "R1v3"}, "cur": {"cond": "E7_R1v3_cur", "model": "R1v3"},
            "n1v3_v3": {"cond": "E7_N1v3_v3", "model": "N1v3"}},
@@ -34,7 +43,7 @@ EXAMPLE_LAYOUT = {
     "rtc": {"natural": "nat_R1v3_rtc", "p1": "P1_R1v3_rtc"},
 }
 EXAMPLE_PARAMS = {
-    "h1": True, "e7_n": 150, "plan": "A", "guard_mode": "point", "ni_margin": 0.10, "h2_layers": ["1001", "1002"],
+    "h1": True, "e7_n": 150, "rtc_arm": True, "plan": "A", "guard_mode": "point", "ni_margin": 0.10, "h2_layers": ["1001", "1002"],
     "rtc_p1_n": 50, "e7_band_extended": False, "c4_on_time": None,
     "p_fill": {"P-1": "B1 を採った（例）", "P-2": "ES（例）", "P-3": "B2 を採らない（例）", "P-4": 150, "P-6": "naive",
                "P-7": "1001・1002 とも 2 万手", "_note": "結果で埋まる所（P-1〜P-10）と作者の判断（D1〜D8）を、出どころとともに書く"},
@@ -79,7 +88,9 @@ def compare(a: dict, b: dict) -> list:
             if x != y:
                 diffs.append(f"{k}: A={x} B={y}")
         else:
-            if math.isnan(float(x)) or math.isnan(float(y)) or abs(x - y) > REL * max(1.0, abs(x), abs(y)):
+            # 相対 1e-9。p 値は小さくても相対だけで照らす。割合・区間・中央値は 0 の近くだけ絶対 1e-12
+            tol = 0.0 if k.rsplit(".", 1)[-1] in P_KEYS else ABS
+            if math.isnan(float(x)) or math.isnan(float(y)) or not math.isclose(x, y, rel_tol=REL, abs_tol=tol):
                 diffs.append(f"{k}: A={x!r} B={y!r}")
     return diffs
 
@@ -89,6 +100,85 @@ def run_check(layout: dict, params: dict) -> tuple:
     a = T1.analyze(layout, params)
     b = _load_b().run_b(layout, params)
     return a, b, compare(a, b)
+
+
+# ---------------------------------------------------------------- 条件をまたぐ入口の点検（0155 の 2-5・2-6）
+def _load_script(name: str, modname: str):
+    spec = importlib.util.spec_from_file_location(modname, ROOT / "scripts" / name)
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    return m
+
+
+def check_heads(heads: dict) -> dict:
+    """heads: {HEAD: 最初に現れた順の番号}。2 つ以上なら、子が読み込むファイルが同じかを git で照らす。"""
+    if len(heads) <= 1:
+        return {"ok": "None" not in heads and len(heads) == 1, "heads": sorted(heads), "note": "HEAD が 1 つ"}
+    if "None" in heads:
+        return {"ok": False, "heads": sorted(heads), "note": "HEAD の無い試行がある"}
+    try:
+        au = _load_script("98_s4_d_audit.py", "s4_audit_for_test1")
+        order = au.order_heads(ROOT, {h: [i] for h, i in heads.items()})
+        cmp = au.compare_heads(ROOT, order, "S4T1")
+    except Exception as e:                              # noqa: BLE001
+        return {"ok": False, "heads": sorted(heads), "note": f"git で照らせない: {type(e).__name__}: {e}"}
+    return {"ok": not cmp["changed"], "heads": order, "changed": cmp["changed"], "added_only": cmp["added_only"],
+            "note": "子が読み込むファイルは同じ" if not cmp["changed"] else "HEAD の間で子が読み込むファイルが違う"}
+
+
+def _newest_mtime(dirs: list) -> float:
+    t = 0.0
+    for d in dirs:
+        if d.is_dir():
+            for p in d.iterdir():
+                if p.is_file() and p.suffix.lower() == ".json":
+                    t = max(t, p.stat().st_mtime)
+    return t
+
+
+def check_ledger(ledger_json, dirs: list) -> dict:
+    if ledger_json:
+        p = pathlib.Path(ledger_json)
+        try:
+            rep = json.loads(p.read_text(encoding="utf-8-sig"))
+        except Exception as e:                          # noqa: BLE001
+            return {"ok": False, "source": str(p), "note": f"台帳の照合の結果が読めない: {type(e).__name__}"}
+        if p.stat().st_mtime < _newest_mtime(dirs):
+            return {"ok": False, "source": str(p), "note": "台帳の照合の結果が、記録より古い（97 を回し直す）"}
+        src = str(p)
+    else:
+        try:
+            rep, _, _ = _load_script("97_s4_ledger_check.py", "s4_ledger_for_test1").build_report(ROOT, LEDGER, [])
+        except Exception as e:                          # noqa: BLE001
+            return {"ok": False, "source": "97_s4_ledger_check.build_report", "note": f"照合が回らない: {type(e).__name__}: {e}"}
+        src = "97_s4_ledger_check.build_report（この場で）"
+    unread = (rep.get("problems") or {}).get("unreadable_records")
+    n = len(unread) if isinstance(unread, list) else (rep.get("summary") or {}).get("parse_errors")
+    return {"ok": n == 0, "source": src, "parse_errors": n}
+
+
+def cross_audit(res: dict, layout: dict, ledger_json=None) -> dict:
+    """A・B が一致した結果に、条件をまたぐ点検を足す。満たさなければ未完にして、検定・判定を消す。"""
+    heads = {}
+    for name in sorted(res["checks"]):
+        for h in res["checks"][name].get("git_heads") or []:
+            heads.setdefault(h, len(heads))
+    base = pathlib.Path(layout["root"]) / layout["experiment"]
+    dirs = [base / (v if isinstance(v, str) else v["cond"]) for v in _layout_conds(layout)]
+    ea = {"versions": check_heads(heads), "ledger": check_ledger(ledger_json, dirs)}
+    ea["problems"] = [f"{k}: {v.get('note') or v}" for k, v in ea.items() if not v["ok"]]
+    out = dict(res, entry_audit=ea)
+    if ea["problems"] and out["status"] == "complete":
+        out.update(status="incomplete", primary=None, holm=None, secondary=None, face_switch=None)
+    return out
+
+
+def _layout_conds(layout: dict) -> list:
+    out = list((layout.get("e7") or {}).values()) + list((layout.get("rtc") or {}).values())
+    for grp in ("p1", "natural"):
+        for arms in (layout.get(grp) or {}).values():
+            out += [arms["R"], arms["N"]]
+    return out
 
 
 def cmd_check(args) -> int:
@@ -105,6 +195,7 @@ def cmd_check(args) -> int:
         for d in diffs[:50]:
             print("  " + d, file=sys.stderr)
         return 1
+    a = cross_audit(a, layout, args.ledger_json)
     res = dict(a, double_count={"implementations": ["src/recovla/eval/test1.py", "scripts/98_s4_test1_b.py"], "agree": True,
                                 "rule": "件数・真偽は完全一致、実数は相対 1e-9 以内"},
                layout=layout, written=time.strftime("%Y-%m-%d %H:%M:%S"))
@@ -140,6 +231,7 @@ def main(argv=None) -> int:
     p.add_argument("--params", required=True)
     p.add_argument("--out", default=None)
     p.add_argument("--md", default=None)
+    p.add_argument("--ledger-json", default=None, help="97_s4_ledger_check.py の結果（記録より新しいこと）。無ければこの場で照らす")
     p = sub.add_parser("example", help="layout・params の雛形を書く")
     p.add_argument("--out", required=True)
     a = ap.parse_args(argv)

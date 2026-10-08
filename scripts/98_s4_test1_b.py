@@ -32,7 +32,9 @@ TINY = 1e-9
 TRIAL_RE = re.compile(r"^trial_(\d{4})\.json$")
 RUN_RE = re.compile(r"^run_(\d{4})\.json$")
 COLOR_LIST = ["red", "green", "blue"]
-DEFAULTS = {"h1": True, "e7_n": None, "plan": "A", "guard_mode": "point", "ni_margin": 0.10, "h2_layers": ["1001", "1002"],
+ENV_FIELDS = ["driver", "torch", "torch_cuda", "os_build"]
+MUST = ["h1", "rtc_arm"]                     # P-1・P-3（既定を置かない）
+DEFAULTS = {"e7_n": None, "plan": "A", "guard_mode": "point", "ni_margin": 0.10, "h2_layers": ["1001", "1002"],
             "rtc_p1_n": 50, "e7_band_extended": False, "c4_on_time": None, "p_fill": {}}
 KNOWN_RETURNS = {"placed": "scripted_return", "retry": "retry", "replan": "replan"}
 
@@ -129,15 +131,43 @@ def middle(values):
 # ================================================================ 条件と入口の点検
 def fill(params):
     q = {k: (list(v) if isinstance(v, list) else (dict(v) if isinstance(v, dict) else v)) for k, v in DEFAULTS.items()}
-    for k, v in (params or {}).items():
-        if k not in q:
+    params = params or {}
+    for k in MUST:
+        if k not in params:
+            raise ValueError(f"params に {k} が要る")
+    for k, v in params.items():
+        if k not in q and k not in MUST:
             raise ValueError(f"知らない params: {k}")
         q[k] = v
+    if type(q["h1"]) is not bool or type(q["rtc_arm"]) is not bool:
+        raise ValueError("h1・rtc_arm の値")
     if q["plan"] not in ("A", "B") or q["guard_mode"] not in ("point", "interval"):
         raise ValueError("plan・guard_mode の値")
-    if q["h1"] and not q["e7_n"]:
-        raise ValueError("h1 なら e7_n が要る")
+    if q["plan"] == "B" and q["rtc_arm"] is not True:
+        raise ValueError("案 B なら rtc_arm が要る")
+    want_rtc_n = {"A": 50, "B": 100}[q["plan"]]
+    if int(q["rtc_p1_n"]) != want_rtc_n:
+        raise ValueError("rtc_p1_n の値")
+    if q["h1"] and q["e7_n"] not in (100, 150, 200):
+        raise ValueError("h1 なら e7_n は 100・150・200")
     return q
+
+
+def needed(q):
+    out = []
+    layers = ["1000"]
+    layers.extend(q["h2_layers"])
+    for s in layers:
+        for kind in ("p1", "natural"):
+            out.append(f"{kind}.{s}.R")
+            out.append(f"{kind}.{s}.N")
+    if q["h1"]:
+        out.extend(["e7.v3", "e7.cur", "e7.n1v3_v3"])
+    if q["rtc_arm"]:
+        out.extend(["rtc.natural", "rtc.p1"])
+    if q["plan"] == "B":
+        out.append("rtc.p1_n")
+    return out
 
 
 def name_model(x):
@@ -176,6 +206,12 @@ def plan_conditions(layout, q):
         cond, model = name_model(rtc["p1"])
         found["rtc.p1"] = {"kind": "single", "role": "p1", "dir": os.path.join(base, cond), "model": model,
                            "keys": {(162000 + i, "*") for i in range(int(q["rtc_p1_n"]))}, "induce": "P1"}
+    if "p1_n" in rtc:
+        cond, model = name_model(rtc["p1_n"])
+        found["rtc.p1_n"] = {"kind": "single", "role": "p1", "dir": os.path.join(base, cond), "model": model,
+                             "keys": {(162000 + i, "*") for i in range(100)}, "induce": "P1"}
+    for spec in found.values():
+        spec["experiment"] = layout["experiment"]
     return found
 
 
@@ -221,13 +257,39 @@ def inspect(name, spec, q):
             seen.add((float(tl.get("step_timeout_s", -1)), float(tl.get("retry", -1)), float(tl.get("task_time_limit_s", -1))))
         if recs and seen != {(30.0, 1.0, 200.0)}:
             why.append("time_limits")
-    if "env_segments" in run and run["env_segments"] is not None:
-        if len(run["env_segments"]) > 1:
-            why.append("env_segments")
-    else:
-        envs = {json.dumps(r.get("env"), sort_keys=True) for r in recs}
-        if len(envs) > 1:
-            why.append("env_mixed")
+    tl = run.get("time_limits")
+    if tl:
+        if spec["kind"] == "single":
+            if float(tl.get("time_limit_s", -1)) != 60.0:
+                why.append("run_json_time_limits")
+        elif (float(tl.get("step_timeout_s", -1)), float(tl.get("retry", -1)), float(tl.get("task_time_limit_s", -1))) \
+                != (30.0, 1.0, 200.0):
+            why.append("run_json_time_limits")
+    segs = run.get("env_segments")
+    if type(segs) is not list or len(segs) != 1:
+        why.append("env_segments")
+    env_kinds = set()
+    for r in recs:
+        e = r.get("env")
+        env_kinds.add(tuple(e.get(k) for k in ENV_FIELDS) if isinstance(e, dict) else "none")
+    if "none" in env_kinds or len(env_kinds) > 1:
+        why.append("env_mixed")
+    for r in recs:
+        if not (r.get("env") or {}).get("git_head"):
+            why.append("no_git_head")
+            break
+    sha_seen = {}
+    for r in recs:
+        dg = r.get("diag") or {}
+        for k in dg:
+            if k.endswith("sha256"):
+                sha_seen.setdefault(k, set()).add(str(dg[k]))
+    if any(len(v) > 1 for v in sha_seen.values()):
+        why.append("diag_sha_mixed")
+    if spec["kind"] == "single":
+        folder = os.path.basename(os.path.normpath(d))
+        if any(r.get("experiment") != spec["experiment"] or r.get("condition") != folder for r in recs):
+            why.append("experiment_condition_label")
     if spec["model"] is not None:
         for r in recs:
             mm = r.get("model")
@@ -407,15 +469,12 @@ def run_b(layout, params):
     checks = {}
     for name in specs:
         w = inspect(name, specs[name], q)
-        checks[name] = {"ok": len(w) == 0, "problems": w}
-    need = ["p1.1000.R", "p1.1000.N"]
-    for s in q["h2_layers"]:
-        need += [f"p1.{s}.R", f"p1.{s}.N"]
-    if q["h1"]:
-        need += ["e7.v3", "e7.cur"]
-    if q["plan"] == "B":
-        need += ["rtc.natural", "rtc.p1", "natural.1000.R"]
-    missing = [x for x in need if x not in checks]
+        heads = []
+        if os.path.isdir(specs[name]["dir"]):
+            heads = sorted({str((r.get("env") or {}).get("git_head"))
+                            for r in list_records(specs[name]["dir"], specs[name]["kind"] == "single")})
+        checks[name] = {"ok": len(w) == 0, "problems": w, "git_heads": heads}
+    missing = [x for x in needed(q) if x not in checks]
     complete = not missing and all(v["ok"] for v in checks.values())
     res = {"schema": "recovery_vla.s4_test1_result/1", "status": "complete" if complete else "incomplete", "params": q,
            "checks": checks, "missing_conditions": missing, "primary": None, "holm": None, "secondary": None, "face_switch": None}
@@ -436,7 +495,12 @@ def run_b(layout, params):
     cc = sum(v["c"] for v in lay.values())
     prim["H2"] = {"layers": lay, "pairs": sum(v["pairs"] for v in lay.values()), "b": bb, "c": cc, "p": exact_two_sided(bb, cc)}
     pv["H2"] = prim["H2"]["p"]
-    h3 = layer_counts(D["p1.1000.R"], D["p1.1000.N"], LIMIT_30)
+    if q["plan"] == "B":                       # 改良版の R と N（RTC の設定。事前登録の案 12-2）
+        r_arm, n_arm = "rtc.p1", "rtc.p1_n"
+    else:
+        r_arm, n_arm = "p1.1000.R", "p1.1000.N"
+    h3 = layer_counts(D[r_arm], D[n_arm], LIMIT_30)
+    h3["arms"] = [r_arm, n_arm]
     h3["p"] = exact_two_sided(h3["b"], h3["c"])
     prim["H3"] = h3
     pv["H3"] = h3["p"]
@@ -460,7 +524,7 @@ def second(D, q):
         t = task_compare(D["e7.v3"], D["e7.n1v3_v3"])
         t["mcnemar_p"] = exact_two_sided(t["b"], t["c"])
         out["e7_r_vs_n"] = t
-    for name in sorted(k for k in D if k.startswith("p1.") or k == "rtc.p1"):
+    for name in sorted(k for k in D if k.startswith("p1.") or k in ("rtc.p1", "rtc.p1_n")):
         out["p1_rates"][name] = {"30": rate_after_induce(D[name], LIMIT_30), "45": rate_after_induce(D[name], LIMIT_45),
                                  "60": rate_after_induce(D[name], LIMIT_60)}
     layers = sorted({k.split(".")[1] for k in D if k.startswith("p1.")})

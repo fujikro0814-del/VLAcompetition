@@ -12,6 +12,8 @@ A の作り: ファイルは pathlib の glob で列挙、検定は scipy.stats�
 3 個の連続タスク（E7）の主な指標は all_three_in_box（0155 の 2）。3 個そろった時刻は all_three_in_box が真の試行だけ、3 色の
 truth_success_t の最大。
 入口の点検（0155 の 2 節）を満たさない条件が 1 つでもあれば status = "incomplete" とし、検定・判定は出さない（None）。
+条件をまたぐ点検（2-5 の HEAD の間の照らし合わせ、2-6 の台帳）は入口（scripts/98_s4_test1.py）が 1 回だけ行う。
+H3 の腕: 案 A は種 1000 の naive の P1（p1.1000.R 対 p1.1000.N）、案 B は RTC の設定の P1（rtc.p1 対 rtc.p1_n。事前登録の案 12-2）。
 """
 import importlib.util
 import json
@@ -32,23 +34,36 @@ ROOT = pathlib.Path(__file__).resolve().parents[3]
 GATES = ROOT / "configs" / "s4_gates.json"
 E7_LIMITS = {"step_timeout_s": 30.0, "retry": 1, "task_time_limit_s": 200.0}
 SINGLE_LIMIT_S = 60.0
-PARAM_DEFAULTS = {"h1": True, "e7_n": None, "plan": "A", "guard_mode": "point", "ni_margin": 0.10, "h2_layers": ["1001", "1002"],
+ENV_KEYS = ("driver", "torch", "torch_cuda", "os_build")        # 96_s4_resume.ENV_STOP_KEYS と同じ
+# h1（P-1）と rtc_arm（P-3）は結果で埋まる所なので既定を置かない（params に必ず書く）
+PARAM_REQUIRED = ("h1", "rtc_arm")
+PARAM_DEFAULTS = {"e7_n": None, "plan": "A", "guard_mode": "point", "ni_margin": 0.10, "h2_layers": ["1001", "1002"],
                   "rtc_p1_n": 50, "e7_band_extended": False, "c4_on_time": None, "p_fill": {}}
 
 
 # ================================================================ 読み込み
 def params_with_defaults(params: dict) -> dict:
+    params = dict(params or {})
+    lack = [k for k in PARAM_REQUIRED if k not in params]
+    if lack:
+        raise ValueError(f"params に {lack} が要る（P-1・P-3。既定を置かない）")
     p = dict(PARAM_DEFAULTS)
-    p.update(params or {})
-    unknown = sorted(set(p) - set(PARAM_DEFAULTS))
+    p.update(params)
+    unknown = sorted(set(p) - set(PARAM_DEFAULTS) - set(PARAM_REQUIRED))
     if unknown:
         raise ValueError(f"知らない params: {unknown}")
+    if not isinstance(p["h1"], bool) or not isinstance(p["rtc_arm"], bool):
+        raise ValueError("h1・rtc_arm は真偽")
     if p["plan"] not in ("A", "B"):
         raise ValueError("plan は A か B")
+    if p["plan"] == "B" and not p["rtc_arm"]:
+        raise ValueError("案 B は RTC の腕（P-3）があるときだけ")
+    if int(p["rtc_p1_n"]) != (100 if p["plan"] == "B" else 50):
+        raise ValueError("rtc_p1_n は案 A なら 50、案 B なら 100（事前登録の案 第 4 節）")
     if p["guard_mode"] not in ("point", "interval"):
         raise ValueError("guard_mode は point か interval")
-    if p["h1"] and not p["e7_n"]:
-        raise ValueError("h1 が真なら e7_n（P-4）が要る")
+    if p["h1"] and p["e7_n"] not in (100, 150, 200):
+        raise ValueError("h1 が真なら e7_n（P-4）は 100・150・200 のどれか")
     return p
 
 
@@ -102,11 +117,35 @@ def conditions(layout: dict, p: dict) -> list:
         c, m = _entry(rtc["p1"])
         out.append(("rtc.p1", "single", "p1", root / c, m, {(s, "*") for s in range(162000, 162000 + int(p["rtc_p1_n"]))},
                     {"induce": "P1"}))
+    if "p1_n" in rtc:                                   # 案 B だけ: N1v3＋RTC の設定の P1（162000〜162099）
+        c, m = _entry(rtc["p1_n"])
+        out.append(("rtc.p1_n", "single", "p1", root / c, m, {(s, "*") for s in range(162000, 162100)}, {"induce": "P1"}))
     return out
 
 
+def required_conditions(p: dict) -> list:
+    """事前登録の案で回す条件（params で決まる）。1 つでも layout に無ければ未完。"""
+    need = []
+    for s in ["1000"] + list(p["h2_layers"]):
+        need += [f"p1.{s}.R", f"p1.{s}.N", f"natural.{s}.R", f"natural.{s}.N"]
+    if p["h1"]:
+        need += ["e7.v3", "e7.cur", "e7.n1v3_v3"]
+    if p["rtc_arm"]:
+        need += ["rtc.natural", "rtc.p1"]
+    if p["plan"] == "B":
+        need += ["rtc.p1_n"]
+    return need
+
+
 # ================================================================ 入口の点検（0155 の 2 節）
-def check_condition(name, kind, role, d: pathlib.Path, model, keys: set, mark: dict, p: dict) -> list:
+def check_condition(name, kind, role, d: pathlib.Path, model, keys: set, mark: dict, p: dict, experiment: str = None) -> tuple:
+    """(満たさない点の文の列, 試行の env.git_head の集合の並び)。"""
+    prob = check_condition_items(name, kind, role, d, model, keys, mark, p, experiment)
+    heads = sorted({str((r.get("env") or {}).get("git_head")) for r in _records(d, kind)}) if d.is_dir() else []
+    return prob, heads
+
+
+def check_condition_items(name, kind, role, d: pathlib.Path, model, keys: set, mark: dict, p: dict, experiment) -> list:
     prob = []
     if not d.is_dir():
         return [f"{name}: フォルダがない {d}"]
@@ -137,11 +176,40 @@ def check_condition(name, kind, role, d: pathlib.Path, model, keys: set, mark: d
     want = {SINGLE_LIMIT_S} if kind == "single" else {tuple(float(v) for v in E7_LIMITS.values())}
     if recs and lims != want:
         prob.append(f"{name}: 制限時間が計画と違うか 2 種類以上（{sorted(lims, key=str)}）")
+    rtl = run.get("time_limits")
+    if rtl:
+        got_rtl = (float(rtl.get("time_limit_s", -1)) if kind == "single"
+                   else tuple(float(rtl.get(k, -1)) for k in ("step_timeout_s", "retry", "task_time_limit_s")))
+        if got_rtl not in want:
+            prob.append(f"{name}: run.json の制限時間が計画と違う（{got_rtl}）")
+    # 環境（0155 の 2-4）: run.json の env_segments がちょうど 1 つ、試行の env（ドライバ・torch・CUDA・OS）も 1 種類
     segs = run.get("env_segments")
-    if segs is not None and len(segs) > 1:
-        prob.append(f"{name}: 環境の区切りが {len(segs)} つ（区切りごとに分けて出す。自動では判定しない）")
-    if segs is None and len({json.dumps(r.get("env"), sort_keys=True) for r in recs}) > 1:
-        prob.append(f"{name}: 試行の env が 2 種類以上")
+    if not isinstance(segs, list) or len(segs) != 1:
+        prob.append(f"{name}: run.json の env_segments が 1 つでない（{None if segs is None else len(segs)}。"
+                    f"2 つ以上なら区切りごとに分けて出す。自動では判定しない）")
+    envs = {json.dumps({k: r["env"].get(k) for k in ENV_KEYS}, sort_keys=True) if isinstance(r.get("env"), dict) else None
+            for r in recs}
+    if None in envs or len(envs) > 1:
+        prob.append(f"{name}: 試行の env（{'・'.join(ENV_KEYS)}）が無いか 2 種類以上")
+    # 版（0155 の 2-5）: 全試行に git の HEAD があり、diag の *_sha256 はそれぞれ 1 種類。HEAD が 2 つ以上のときの
+    # 子が読み込むファイルの照らし合わせは、条件をまたいで入口が行う
+    if any(not (r.get("env") or {}).get("git_head") for r in recs):
+        prob.append(f"{name}: env.git_head の無い試行がある")
+    shas = {}
+    for r in recs:
+        for k, v in (r.get("diag") or {}).items():
+            if k.endswith("sha256"):
+                shas.setdefault(k, set()).add(str(v))
+    multi = sorted(k for k, v in shas.items() if len(v) > 1)
+    if multi:
+        prob.append(f"{name}: diag の SHA-256 が 2 種類以上（{multi}）")
+    # 印（0155 の 2-3）: 単発の試行の実験名・条件名がフォルダと同じ
+    if kind == "single" and experiment is not None:
+        for r in recs:
+            if r.get("experiment") != experiment or r.get("condition") != d.name:
+                prob.append(f"{name}: 試行の実験名・条件名 {r.get('experiment')!r}/{r.get('condition')!r} がフォルダと違う"
+                            f"（seed {r.get('seed')}）")
+                break
     for r in recs:
         m = r.get("model")
         mname = m.get("name") if isinstance(m, dict) else m
@@ -295,14 +363,9 @@ def analyze(layout: dict, params: dict) -> dict:
     conds = conditions(layout, p)
     checks = {}
     for name, kind, role, d, model, keys, mark in conds:
-        pr = check_condition(name, kind, role, d, model, keys, mark, p)
-        checks[name] = {"ok": not pr, "problems": pr}
-    need = ["p1.1000.R", "p1.1000.N"] + [f"p1.{s}.{x}" for s in p["h2_layers"] for x in ("R", "N")]
-    if p["h1"]:
-        need += ["e7.v3", "e7.cur"]
-    if p["plan"] == "B":
-        need += ["rtc.natural", "rtc.p1", "natural.1000.R"]
-    missing = [x for x in need if x not in checks]
+        pr, heads = check_condition(name, kind, role, d, model, keys, mark, p, layout["experiment"])
+        checks[name] = {"ok": not pr, "problems": pr, "git_heads": heads}
+    missing = [x for x in required_conditions(p) if x not in checks]
     status = "complete" if all(c["ok"] for c in checks.values()) and not missing else "incomplete"
     res = {"schema": SCHEMA, "status": status, "params": p, "checks": checks, "missing_conditions": missing,
            "primary": None, "holm": None, "secondary": None, "face_switch": None}
@@ -319,7 +382,9 @@ def analyze(layout: dict, params: dict) -> dict:
     b, c = sum(x["b"] for x in layers.values()), sum(x["c"] for x in layers.values())
     prim["H2"] = {"layers": layers, "pairs": sum(x["pairs"] for x in layers.values()), "b": b, "c": c, "p": binom_two_sided(b, c)}
     ps["H2"] = prim["H2"]["p"]
-    h3 = p1_layer(dirs["p1.1000.R"], dirs["p1.1000.N"], L_MAIN)
+    h3_arms = ["p1.1000.R", "p1.1000.N"] if p["plan"] == "A" else ["rtc.p1", "rtc.p1_n"]
+    h3 = p1_layer(dirs[h3_arms[0]], dirs[h3_arms[1]], L_MAIN)
+    h3["arms"] = h3_arms
     h3["p"] = binom_two_sided(h3["b"], h3["c"])
     prim["H3"], ps["H3"] = h3, h3["p"]
     hm = holm(ps)
@@ -341,7 +406,7 @@ def secondary(dirs: dict, p: dict) -> dict:
         x = e7_pairs(dirs["e7.v3"], dirs["e7.n1v3_v3"])
         x["mcnemar_p"] = binom_two_sided(x["b"], x["c"])
         sec["e7_r_vs_n"] = x
-    for name in sorted(d for d in dirs if d.startswith("p1.") or d == "rtc.p1"):
+    for name in sorted(d for d in dirs if d.startswith("p1.") or d.startswith("rtc.p1")):
         sec["p1_rates"][name] = {f"{L:g}": recovery_rate(dirs[name], L) for L in (L_MAIN, L_DESC, L_SUB)}
     layers = sorted({n.split(".")[1] for n in dirs if n.startswith("p1.")})
     for L in (L_MAIN, L_DESC, L_SUB):
@@ -396,6 +461,7 @@ def summary_md(res: dict) -> str:
         o += ["", "## 入口の点検で満たさなかったもの", ""]
         o += [f"- {pr}" for c in res["checks"].values() for pr in c["problems"]]
         o += [f"- 条件がない: {x}" for x in res["missing_conditions"]]
+        o += [f"- 条件をまたぐ点検: {x}" for x in (res.get("entry_audit") or {}).get("problems", [])]
         return "\n".join(o) + "\n"
     o += ["", "## 主要評価項目（Holm、α = 0.05）", "", "| 項目 | 組 | b | c | p | Holm 補正後の p | 成立 |", "|---|---|---|---|---|---|---|"]
     for k in ("H1", "H2", "H3"):
@@ -405,7 +471,8 @@ def summary_md(res: dict) -> str:
             continue
         o.append(f"| {k} | {v['pairs']} | {v['b']} | {v['c']} | {v['p']:.6g} | {v['p_holm']:.6g} | {'○' if v['established'] else '×'} |")
     o += ["", "- 分母: H1 は同じ種で両方の腕の記録がそろった種。H2・H3 は同じ種で R・N の両方とも誘発が 30 s より前に成立した組"
-          "（成功は 30 s 以内）。b は前の腕（v3・R）だけ、c は後の腕だけ。"]
+          "（成功は 30 s 以内）。b は前の腕（v3・R）だけ、c は後の腕だけ。",
+          f"- H3 の腕: {' 対 '.join(res['primary']['H3']['arms'])}（案 {res['params']['plan']}）。"]
     fs = res["face_switch"]
     o += ["", "## 掲示板 0157 の条件", "",
           f"- 条件 1（H3）: {'満たす' if fs['c1']['pass'] else '満たさない'}",

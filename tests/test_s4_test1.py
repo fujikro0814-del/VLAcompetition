@@ -40,7 +40,7 @@ def _cond(d: pathlib.Path):
 def _trial(d, i, seed, target, success, t_success, model, induce=None, t_lim=60.0):
     m = {"trial": i, "seed": seed, "target": target, "success": bool(success), "t_success": t_success if success else None,
          "time_limit_s": t_lim, "time_limits": {"time_limit_s": t_lim}, "model": {"name": model}, "env": ENV,
-         "induce": induce or {}}
+         "induce": induce or {}, "experiment": d.parent.name, "condition": d.name}
     (d / f"trial_{i:04d}.json").write_text(json.dumps(m), encoding="utf-8")
 
 
@@ -131,14 +131,18 @@ def build(tmp, h1=(10, 3), h2=((5, 1), (2, 0)), h3=(13, 0), e7_n=100, nat_r=lamb
     lay = json.loads(json.dumps(LAYOUT))
     lay["root"] = str(tmp / "v2eval")
     if rtc:
-        nat_fn, p1_out = rtc
+        # rtc = (自然の成否の関数, R1v3＋RTC の P1 の outcome, 本数, N1v3＋RTC の P1 の outcome（案 B だけ。None なら置かない）)
+        nat_fn, p1_out, n_p1, p1_n_out = (tuple(rtc) + (50, None))[:4] if len(rtc) == 2 else rtc
         make_natural(base / "nat_rtc", "x", 161065, nat_fn)
-        make_p1(base / "P1_rtc", "R1v3", p1_out, n=50)
+        make_p1(base / "P1_rtc", "R1v3", p1_out, n=n_p1)
         lay["rtc"] = {"natural": "nat_rtc", "p1": "P1_rtc"}
+        if p1_n_out is not None:
+            make_p1(base / "P1_rtc_N", "N1v3", p1_n_out, n=100)
+            lay["rtc"]["p1_n"] = {"cond": "P1_rtc_N", "model": "N1v3"}
     return lay
 
 
-PARAMS = {"h1": True, "e7_n": 100, "plan": "A", "c4_on_time": None}
+PARAMS = {"h1": True, "e7_n": 100, "rtc_arm": False, "plan": "A", "c4_on_time": None}
 
 
 def both(lay, params):
@@ -204,22 +208,94 @@ def test_full_analysis_a_equals_b_and_hand_values(tmp_path):
     assert fs["switch"] is None and fs["c1_to_c3"] is False                          # 条件 4 は人が確かめる
 
 
-def test_entry_check_writes_only_when_agree(tmp_path, monkeypatch):
-    lay = build(tmp_path)
+def _ledger(tmp_path, parse_errors=0):
+    p = tmp_path / "ledger_check.json"                                              # 記録より後に書く（新しい）
+    p.write_text(json.dumps({"problems": {"unreadable_records": [{"path": "x"}] * parse_errors},
+                             "summary": {"parse_errors": parse_errors}}), encoding="utf-8")
+    return p
+
+
+def _entry_args(tmp_path, lay, params, out, ledger):
     lp, pp = tmp_path / "layout.json", tmp_path / "params.json"
     lp.write_text(json.dumps(lay), encoding="utf-8")
-    pp.write_text(json.dumps(PARAMS), encoding="utf-8")
+    pp.write_text(json.dumps(params), encoding="utf-8")
+    return ["check", "--layout", str(lp), "--params", str(pp), "--out", str(out), "--ledger-json", str(ledger)]
+
+
+def test_entry_check_writes_only_when_agree(tmp_path, monkeypatch):
+    lay = build(tmp_path)
     out = tmp_path / "out" / "r.json"
-    assert ENTRY.main(["check", "--layout", str(lp), "--params", str(pp), "--out", str(out)]) == 0
+    args = _entry_args(tmp_path, lay, PARAMS, out, _ledger(tmp_path))
+    assert ENTRY.main(args) == 0
     r = json.loads(out.read_text(encoding="utf-8"))
     assert r["double_count"]["agree"] and r["params"]["e7_n"] == 100 and out.with_suffix(".md").is_file()
+    assert r["entry_audit"]["versions"]["ok"] and r["entry_audit"]["ledger"]["parse_errors"] == 0
     # B だけがずれたら止まり、判定を書かない
     out2 = tmp_path / "out2" / "r.json"
     orig = B.exact_two_sided
     monkeypatch.setattr(B, "exact_two_sided", lambda b, c: min(1.0, orig(b, c) * 1.001))
     monkeypatch.setattr(ENTRY, "_load_b", lambda: B)
-    assert ENTRY.main(["check", "--layout", str(lp), "--params", str(pp), "--out", str(out2)]) == 1
+    args[args.index("--out") + 1] = str(out2)
+    assert ENTRY.main(args) == 1
     assert not out2.exists()
+
+
+def test_compare_is_relative_for_small_p():
+    # 絶対 1e-9 では見逃す小さな p の食い違い（相対 1e-6）を、相対で捉える
+    assert ENTRY.compare({"p": 2.44e-12}, {"p": 2.44e-12 * (1 + 1e-6)}) != []
+    assert ENTRY.compare({"p": 2.44e-12}, {"p": 2.44e-12 * (1 + 1e-12)}) == []
+    assert ENTRY.compare({"holm": {"by": {"H3": {"p_holm": 1e-20}}}}, {"holm": {"by": {"H3": {"p_holm": 2e-20}}}}) != []
+    assert ENTRY.compare({"x": 0.0}, {"x": 1e-15}) == []                           # 区間の端などは 0 の近くで絶対 1e-12
+
+
+# ---------------------------------------------------------------- 条件をまたぐ入口の点検（0155 の 2-5・2-6）
+class _FakeAudit:
+    def __init__(self, changed):
+        self.changed = changed
+
+    def order_heads(self, root, heads):
+        return sorted(heads)
+
+    def compare_heads(self, root, order, fam):
+        return {"heads": order, "changed": self.changed, "added_only": []}
+
+
+def _two_heads(lay):
+    p = pathlib.Path(lay["root"]) / "S4T1SYN" / "P1_N1001" / "trial_0050.json"
+    m = json.loads(p.read_text(encoding="utf-8"))
+    m["env"] = dict(m["env"], git_head="def")
+    p.write_text(json.dumps(m), encoding="utf-8")
+
+
+@pytest.mark.parametrize("changed, code", [([], 0), (["src/recovla/harness/loop.py"], 3)])
+def test_entry_versions_across_heads(tmp_path, monkeypatch, changed, code):
+    lay = build(tmp_path)
+    _two_heads(lay)
+    a, b, diffs = both(lay, PARAMS)
+    assert diffs == [] and a["status"] == "complete" and a["checks"]["p1.1001.N"]["git_heads"] == ["abc", "def"]
+    monkeypatch.setattr(ENTRY, "_load_script", lambda name, mod: _FakeAudit(changed))
+    out = tmp_path / "out" / "r.json"
+    assert ENTRY.main(_entry_args(tmp_path, lay, PARAMS, out, _ledger(tmp_path))) == code
+    r = json.loads(out.read_text(encoding="utf-8"))
+    assert r["entry_audit"]["versions"]["ok"] is (not changed)
+    assert (r["primary"] is None) is bool(changed)
+    if changed:
+        assert "条件をまたぐ点検" in out.with_suffix(".md").read_text(encoding="utf-8")
+
+
+def test_entry_ledger_parse_errors_and_stale(tmp_path):
+    lay = build(tmp_path)
+    out = tmp_path / "out" / "r.json"
+    assert ENTRY.main(_entry_args(tmp_path, lay, PARAMS, out, _ledger(tmp_path, parse_errors=1))) == 3
+    r = json.loads(out.read_text(encoding="utf-8"))
+    assert r["status"] == "incomplete" and r["face_switch"] is None and r["entry_audit"]["ledger"]["parse_errors"] == 1
+    # 記録より古い台帳の照合は使わない
+    led = _ledger(tmp_path)
+    import os
+    old = led.stat().st_mtime - 3600
+    os.utime(led, (old, old))
+    assert ENTRY.main(_entry_args(tmp_path, lay, PARAMS, out, led)) == 3
+    assert not json.loads(out.read_text(encoding="utf-8"))["entry_audit"]["ledger"]["ok"]
 
 
 # ---------------------------------------------------------------- 分母の境界（ちょうど L 秒）
@@ -238,11 +314,32 @@ def test_boundary_established_exactly_L_is_excluded_success_exactly_L_is_include
 
 
 # ---------------------------------------------------------------- 未完（入口の点検）
-@pytest.mark.parametrize("breaker", ["missing_trial", "gaudit", "band", "limits", "env", "model", "induce", "executor"])
+def _edit(p, fn):
+    m = json.loads(p.read_text(encoding="utf-8"))
+    fn(m)
+    p.write_text(json.dumps(m), encoding="utf-8")
+
+
+@pytest.mark.parametrize("breaker", ["missing_trial", "gaudit", "band", "limits", "env", "model", "induce", "executor",
+                                     "no_segments", "torch", "git_head", "diag_sha", "label", "run_limits"])
 def test_incomplete_is_not_decided(tmp_path, breaker):
     lay = build(tmp_path)
     base = pathlib.Path(lay["root"]) / "S4T1SYN"
-    if breaker == "missing_trial":
+    if breaker == "no_segments":
+        (base / "nat_N" / "run.json").write_text(json.dumps({}), encoding="utf-8")
+    elif breaker == "torch":                                                      # 試行の env の torch が途中で変わった
+        _edit(base / "nat_R1001" / "trial_0010.json", lambda m: m["env"].update(torch="2.12.0"))
+    elif breaker == "git_head":
+        _edit(base / "E7_N" / "run_0003.json", lambda m: m["env"].pop("git_head"))
+    elif breaker == "diag_sha":
+        for i, v in ((0, "aa"), (1, "bb")):
+            _edit(base / "P1_R1002" / f"trial_{i:04d}.json", lambda m, v=v: m.update(diag={"script_sha256": v}))
+    elif breaker == "label":                                                      # 別の条件の記録が混ざった
+        _edit(base / "P1_N" / "trial_0004.json", lambda m: m.update(condition="P1_N1001"))
+    elif breaker == "run_limits":
+        (base / "nat_R" / "run.json").write_text(json.dumps({"env_segments": [ENV], "time_limits": {"time_limit_s": 30.0}}),
+                                                 encoding="utf-8")
+    elif breaker == "missing_trial":
         (base / "P1_N1001" / "trial_0099.json").unlink()
     elif breaker == "gaudit":
         (base / "nat_R" / "G_AUDIT.json").write_text(json.dumps({"met": False}), encoding="utf-8")
@@ -299,10 +396,34 @@ def test_missing_condition_and_band_extension(tmp_path):
 
 def test_without_h1_two_hypotheses(tmp_path):
     lay = build(tmp_path)
-    a, b, diffs = both(lay, {"h1": False, "plan": "A"})
+    a, b, diffs = both(lay, {"h1": False, "rtc_arm": False, "plan": "A"})
     assert diffs == [] and a["status"] == "complete"
     assert set(a["primary"]) == {"H2", "H3"} and a["holm"]["m"] == 2
     assert a["face_switch"]["c3"] == {"by": "H1", "present": False, "pass": False}
+
+
+def test_params_placeholders_are_required_and_checked():
+    for impl in (T1.params_with_defaults, B.fill):
+        with pytest.raises(ValueError):
+            impl({"e7_n": 100, "plan": "A"})                                         # h1（P-1）・rtc_arm（P-3）に既定はない
+        with pytest.raises(ValueError):
+            impl(dict(PARAMS, e7_n=120))                                             # P-4 は 100・150・200
+        with pytest.raises(ValueError):
+            impl(dict(PARAMS, plan="B"))                                             # 案 B は RTC の腕が要る
+        with pytest.raises(ValueError):
+            impl(dict(PARAMS, plan="B", rtc_arm=True, rtc_p1_n=50))                  # 案 B の RTC の P1 は 100
+        assert impl(dict(PARAMS, p_fill={"P-2": "ES"}))["p_fill"] == {"P-2": "ES"}
+
+
+def test_required_conditions_include_natural_and_rtc(tmp_path):
+    lay = build(tmp_path)
+    del lay["natural"]["1000"]
+    a, b, diffs = both(lay, PARAMS)
+    assert diffs == [] and a["status"] == "incomplete"
+    assert a["missing_conditions"] == ["natural.1000.R", "natural.1000.N"]
+    lay = build(tmp_path / "y")
+    a, b, diffs = both(lay, dict(PARAMS, rtc_arm=True))                             # P-3 で置くと決めたのに RTC の腕が無い
+    assert diffs == [] and a["missing_conditions"] == ["rtc.natural", "rtc.p1"]
 
 
 # ---------------------------------------------------------------- 掲示板 0157 の条件
@@ -322,11 +443,28 @@ def test_face_switch_all_conditions(tmp_path):
 def test_face_switch_plan_b_guard(tmp_path, nat_drop, mode, g_nat):
     base_fn = lambda i: i % 3 != 0                                                   # noqa: E731  naive: 132/198
     rtc_nat = lambda i: base_fn(i) and not (i % 3 == 1 and i < 3 * nat_drop)         # noqa: E731  nat_drop 本だけ成功を落とす
-    R, _ = p1_pair_outcomes(13, 0, 10, 20)
-    lay = build(tmp_path, nat_r=base_fn, rtc=(rtc_nat, R[:50]))
-    a, b, diffs = both(lay, dict(PARAMS, plan="B", guard_mode=mode))
+    R, N = p1_pair_outcomes(13, 0, 10, 20)
+    lay = build(tmp_path, nat_r=base_fn, rtc=(rtc_nat, R, 100, N))
+    a, b, diffs = both(lay, dict(PARAMS, plan="B", rtc_arm=True, rtc_p1_n=100, guard_mode=mode))
     assert diffs == [], diffs[:5]
     c2 = a["face_switch"]["c2"]
     assert math.isclose(c2["g_nat_diff"], -nat_drop / 198)
     assert c2["g_nat"] == g_nat
     assert a["secondary"]["rtc"]["natural_vs_naive"]["pairs"] == 198
+
+
+def test_plan_b_h3_uses_rtc_arms(tmp_path):
+    """案 B の H3（0157 の条件 1）は改良版の R と N＝RTC の設定の R1v3 対 N1v3（事前登録の案 12-2）。naive の種 1000 ではない。"""
+    R, N = p1_pair_outcomes(2, 1, 10, 20)                                            # RTC の腕: 2 対 1
+    lay = build(tmp_path, h3=(13, 0), rtc=(lambda i: i % 3 != 0, R, 100, N))      # naive の種 1000: 13 対 0
+    a, b, diffs = both(lay, dict(PARAMS, plan="B", rtc_arm=True, rtc_p1_n=100, c4_on_time=True))
+    assert diffs == [], diffs[:5]
+    h3 = a["primary"]["H3"]
+    assert h3["arms"] == ["rtc.p1", "rtc.p1_n"] and (h3["b"], h3["c"]) == (2, 1)
+    assert not h3["established"] and not a["face_switch"]["c1"]["pass"] and a["face_switch"]["switch"] is False
+    assert a["secondary"]["p1_layers_by_limit"]["30"]["layers"]["1000"]["b"] == 13   # naive の比較は副次に残る
+    assert "rtc.p1_n" in a["secondary"]["p1_rates"]
+    # 案 A なら naive の種 1000 の腕
+    lay2 = build(tmp_path / "z", h3=(13, 0))
+    a, b, diffs = both(lay2, PARAMS)
+    assert diffs == [] and a["primary"]["H3"]["arms"] == ["p1.1000.R", "p1.1000.N"]
