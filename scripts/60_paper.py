@@ -377,6 +377,39 @@ def pie_svg() -> str:
     return "\n".join(out)
 
 
+BAR_COLORS = ("#2a78d6", "#eb6834")   # 復帰デモあり・なし（dataviz の既定の順の 1・2 番目。隣り合う組で検証済み）
+
+
+def bar_svg(v) -> str:
+    """冒頭の要点の図: 主な結果の横棒（復帰デモあり・なしの組）。値と分母は棒の右に文字で書く。"""
+    rows = [("把持を意図的に失敗させたときの復帰（非同期実行、主要評価項目）", ("e3a_xk", "e3a_pairs"), ("e3a_yk", "e3a_pairs")),
+            ("把持を意図的に失敗させたときの復帰（同期実行、主要評価項目）", ("e3s_xk", "e3s_pairs"), ("e3s_yk", "e3s_pairs")),
+            ("方策自身が起こした把持失敗からの復帰（参考）", ("nat_gf_xk", "nat_gf_xn"), ("nat_gf_yk", "nat_gf_yn")),
+            ("意図的な失敗なしの成功率", ("nat_rn_xk", "nat_rn_pairs"), ("nat_rn_yk", "nat_rn_pairs"))]
+    x0, w, bh = 330, 560, 20
+    out = ['<svg viewBox="0 0 1080 330" role="img" aria-label="主な結果の横棒グラフ。復帰デモありとなしの割合。">']
+    out.append(f'<rect x="{x0}" y="8" width="16" height="16" rx="3" style="fill:{BAR_COLORS[0]}"/><text class="t" x="{x0 + 24}" y="22">復帰デモあり</text>')
+    out.append(f'<rect x="{x0 + 160}" y="8" width="16" height="16" rx="3" style="fill:{BAR_COLORS[1]}"/><text class="t" x="{x0 + 184}" y="22">復帰デモなし</text>')
+    y = 48
+    for label, *pairs in rows:
+        words = label.split("（")
+        out.append(f'<text class="t" x="{x0 - 12}" y="{y + 16}" text-anchor="end">{words[0]}</text>')
+        if len(words) > 1:
+            out.append(f'<text class="tm" x="{x0 - 12}" y="{y + 38}" text-anchor="end">（{words[1]}</text>')
+        for i, (k, n) in enumerate(pairs):
+            kk, nn = int(v[k]), int(v[n])
+            bw = w * kk / nn
+            yy = y + i * (bh + 4)
+            out.append(f'<path d="M{x0},{yy} h{max(bw - 4, 0):.1f} a4,4 0 0 1 4,4 v{bh - 8} a4,4 0 0 1 -4,4 h{-max(bw - 4, 0):.1f} z" '
+                       f'style="fill:{BAR_COLORS[i]}"/>' if bw >= 4 else
+                       f'<rect x="{x0}" y="{yy}" width="2" height="{bh}" style="fill:{BAR_COLORS[i]}"/>')
+            out.append(f'<text class="t" x="{x0 + max(bw, 2) + 8:.1f}" y="{yy + 15}">{round(100 * kk / nn)}%（{kk}/{nn}）</text>')
+        y += 2 * (bh + 4) + 26
+    out.append(f'<line x1="{x0}" y1="40" x2="{x0}" y2="{y - 20}" style="stroke:#555c64;stroke-width:1"/>')
+    out.append("</svg>")
+    return "\n".join(out)
+
+
 def render(v) -> str:
     def sub(text):
         def rep(m):
@@ -388,7 +421,8 @@ def render(v) -> str:
     def svg(name):
         return sub((PAPER / name).read_text(encoding="utf-8")).replace('<span class="num" data-k=', '<tspan data-k=').replace("</span>", "</tspan>")
     figs = {"fig1_svg": lambda: svg("fig1.svg"), "fig_rec_svg": lambda: svg("fig_recovery.svg"),   # 図 1（構成）・図 2（作り方）
-            "fig_pie_svg": pie_svg}                                                                   # 図 3（学習データの内訳）
+            "fig_pie_svg": pie_svg,                                                                   # 図 3（学習データの内訳）
+            "fig_bar_svg": lambda: bar_svg(v)}                                                        # 冒頭の要点の図
     body = (PAPER / "template.html").read_text(encoding="utf-8")
     for key in figs:
         body = body.replace("{{" + key + "}}", f"@@{key}@@")
@@ -432,7 +466,7 @@ def pdf_pages(p) -> int:
 
 # 原稿の地の文に書いてよい数字（数字が値ではなく名前や固有の決まりの一部であるもの）
 ALLOWED = [r"fig2\.png", r"表 [12]",r"(95|1) パーセンタイル",r"two3", r"Physical AI 応用 1 講座", r"Haiku 4\.5", r"SmolVLM2", r"Apache-2\.0", r"図 [1-4]",
-           r"[12] 回目", r"工夫 [1-6]", r"\b[1-6]\.[1-6](?= )",r"3 (色|個)", r"95% 信頼区間", r"1 試行", r"[1-6]\. ", r"7 軸", r"画像 2 枚", r"1 行ずつ",
+           r"[12] 回目", r"工夫 [1-6]", r"\b[1-6]\.[1-6](?= )", r"et al\., (19|20)\d\d", r"3 (色|個)", r"95% 信頼区間", r"1 試行", r"[1-6]\. ", r"7 軸", r"画像 2 枚", r"1 行ずつ",
            r"× 3 色", r"A4", r"RGB-D", r"#[0-9a-f]{6}", r"\d+(\.\d+)?(mm|pt|px)", r"viewBox=\"[^\"]*\"", r"\b\d+(\.\d+)?%?\"",
            r"[xy][12]?=\"[^\"]*\"", r"points=\"[^\"]*\"", r"d=\"[^\"]*\"", r"rotate\([^)]*\)", r"\b(width|height|rx|dx|refX|refY|markerWidth|markerHeight)=\"[^\"]*\"",
            r"opacity:\.\d+", r"stroke-dasharray:[\d ]+", r"stroke-width:[\d.]+", r"font-size:[\d.]+(px|pt)", r"line-height:[\d.]+",
