@@ -13,8 +13,8 @@
                    入っていない更新（COM、端末の控えだけ Online=false）、System イベントログ（電源・再起動、直近 7 日）、最後の起動、
                    参考として 02:00 の更新の前後の窓（--window、既定 01:45〜02:45）に入るまでの分数。
                    書く: 標準出力に JSON、outputs\\s4\\wu_check.jsonl に 1 行追記（--no-log で省く）。
-                   終了コード: 再起動待ちなら 1、読めなかったら 2、印はないが入っていないドライバ・再起動しうる更新があれば 3、
-                   問題なしなら 0。確認用（任意）。01:45〜02:45 の窓と 17:00 の確認は、作者の決定（10/08）で必須から外した
+                   終了コード: 再起動待ちなら 1、印はないが入っていないドライバ・再起動しうる更新があれば 3、レジストリ・更新の履歴・
+                   イベントのどれかを読めなかったら 2（出力の errors）、問題なしなら 0（1・3・2・0 の順に強い）。確認用（任意）。01:45〜02:45 の窓と 17:00 の確認は、作者の決定（10/08）で必須から外した
                    （再起動は更新が入った日だけで曜日の決まりがなく、試行ごとに続きから回せるので回復できる）。
                    注意: ドライバの更新は印なしで 02:00 に入って再起動することがある（10/08 の実例。出力の notes に書く）。
   env-record       読む: nvidia-smi、OS・Python・パッケージの版、git（HEAD・タグ v3-s3-freeze）、メモリ、
@@ -25,14 +25,18 @@
                    コピーは実行しない。置き場所は作者が決める。既にあれば backup_manifest_<時刻>.json に退避してから書く。
   backup-verify    読む: 一覧とコピー先。書かない。違いがあれば終了コード 1。
   wait             読む: 実行の progress.json（96_s4_resume.py が書く）か PID。書く: 標準出力だけ。
-                   終わる・エラー・落ちる・止まる・時間切れのどれかになったら、要約を出して終わる。
+                   終わる・エラー・落ちる・止まる・固まる・時間切れのどれかになったら、要約を出して終わる。
                    メインが背景で動かして、終了の通知を受ける想定。終了コード: 0 完了、1 途中で止まった（合図・メモリ待ちの時間切れなど）、
-                   2 エラー、3 異常終了（状態が最終にならないまま消えた＝再起動・強制終了）、4 更新が途絶えた、5 時間切れ。
+                   2 エラー、3 異常終了（状態が最終にならないまま消えた＝再起動・強制終了）、4 途絶（更新が --stall-min 分途絶えた、
+                   今の試行が固まった＝current_started からの経過が 制限時間 × --hung-factor ＋ --hung-margin-min 分を超えた、包みが子の
+                   固まりを書いた、progress.json を読めない状態が --stall-min 分続いた。状態が LIVE でも最終でもない未知のものにも当てる）、
+                   5 時間切れ（既定 24 時間。--timeout-min 0 で無し）。
                    再起動で止まったら、サインインの後にこれ（または progress.json）で止まった所を見て、96_s4_resume.py の
                    同じコマンドで続きから回す。
 
 結果を見る前に決めてある項目: 再起動待ちの判定の 3 つの鍵、Edge の一時ファイルを無視する規則、
-  バックアップに含める組、wait の終了コードの割り当て。見た後に決める項目はない（この道具は成績を扱わない）。
+  バックアップに含める組、wait の終了コードの割り当て、wait の固まりの判定（倍率 4・余裕 15 分）と時間切れの既定（24 時間）。
+  見た後に決める項目はない（この道具は成績を扱わない）。
 """
 import argparse
 import ctypes
@@ -72,11 +76,19 @@ def _now() -> dt.datetime:
     return dt.datetime.now()
 
 
-def _dump(obj, path: pathlib.Path) -> None:
+def _dump(obj, path: pathlib.Path, tries: int = 8) -> None:
+    """一時ファイルから置き換えて書く。読んでいる相手がいれば少し待ち（Windows）、置き換えられなければ例外にする
+    （黙って古い中身を残さない。査読の軽微 5）。"""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text(json.dumps(obj, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
-    os.replace(tmp, path)
+    for k in range(tries):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:
+            time.sleep(0.2 * (k + 1))
+    raise OSError(f"{path} を置き換えられない（ほかのプロセスが開いている）。書いた中身は {tmp} に残した")
 
 
 def parse_window(s: str) -> tuple:
@@ -339,7 +351,9 @@ def cmd_wu_check(a) -> int:
             f.write(json.dumps(brief, ensure_ascii=False) + "\n")
     if out["reboot_pending"]:
         return 1
-    return 3 if risk else 0
+    if risk:
+        return 3
+    return 2 if out["errors"] else 0                             # 読めなかったものがあれば「問題なし」にしない（軽微 17）
 
 
 # ---------------------------------------------------------------- env-record
@@ -549,6 +563,8 @@ def cmd_backup_manifest(a) -> int:
     t0 = time.time()
     for gname, (desc, items) in groups.items():
         paths = []
+        if not items:                                            # 元が見つからない組（例: チェックポイント）も見落とさない（軽微 17）
+            res["missing_roots"].append(f"{gname}: {desc}")
         for rel, kind in items:
             if not (ROOT / rel).exists():
                 res["missing_roots"].append(rel)
@@ -598,7 +614,7 @@ def cmd_backup_manifest(a) -> int:
 def cmd_backup_verify(a) -> int:
     man = json.loads(pathlib.Path(a.manifest).read_text(encoding="utf-8"))
     dest = pathlib.Path(a.dest)
-    bad = {"missing": [], "size": [], "hash": []}
+    bad = {"missing": [], "size": [], "hash": [], "no_hash_in_manifest": []}
     n = 0
     for gname, g in man["groups"].items():
         for f in g["files"]:
@@ -608,7 +624,9 @@ def cmd_backup_verify(a) -> int:
                 bad["missing"].append(f["path"])
             elif p.stat().st_size != f["bytes"]:
                 bad["size"].append(f["path"])
-            elif not a.quick and f["sha256"] and _sha256_file(p) != f["sha256"]:
+            elif not a.quick and not f["sha256"]:
+                bad["no_hash_in_manifest"].append(f["path"])     # --no-hash の一覧ではハッシュを照合できない（黙って飛ばさない。軽微 17）
+            elif not a.quick and _sha256_file(p) != f["sha256"]:
                 bad["hash"].append(f["path"])
     ok = not any(bad.values())
     print(json.dumps({"checked": n, "ok": ok, **{k: {"n": len(v), "first": v[:10]} for k, v in bad.items()}}, ensure_ascii=False, indent=1))
@@ -629,21 +647,62 @@ def _alive(pid, create_time=None) -> bool:
         h = ctypes.windll.kernel32.OpenProcess(0x1000, False, int(pid))
         if not h:
             return False
-        code = ctypes.c_ulong()
-        ctypes.windll.kernel32.GetExitCodeProcess(h, ctypes.byref(code))
+        try:
+            code = ctypes.c_ulong()
+            ctypes.windll.kernel32.GetExitCodeProcess(h, ctypes.byref(code))
+            if code.value != 259:
+                return False
+            if create_time is not None:                          # psutil が無くても PID の使い回しを見分ける（軽微 17）
+                ct = _win_create_time(h)
+                if ct is not None and abs(ct - float(create_time)) > 2.0:
+                    return False
+            return True
+        finally:
+            ctypes.windll.kernel32.CloseHandle(h)
+
+
+def _win_create_time(h):
+    """プロセスのハンドルから作られた時刻（エポック秒。psutil.Process.create_time と同じ GetProcessTimes の値）。"""
+    ft = [ctypes.c_ulonglong() for _ in range(4)]                # 作成・終了・カーネル・ユーザーの FILETIME（100 ns、1601 年から）
+    if not ctypes.windll.kernel32.GetProcessTimes(h, *[ctypes.byref(x) for x in ft]):
+        return None
+    return ft[0].value / 1e7 - 11644473600.0
+
+
+def _create_time(pid):
+    try:
+        import psutil
+        return psutil.Process(int(pid)).create_time()
+    except ImportError:
+        pass
+    except Exception:                                            # noqa: BLE001
+        return None
+    try:
+        h = ctypes.windll.kernel32.OpenProcess(0x1000, False, int(pid))
+    except Exception:                                            # noqa: BLE001
+        return None
+    if not h:
+        return None
+    try:
+        return _win_create_time(h)
+    finally:
         ctypes.windll.kernel32.CloseHandle(h)
-        return code.value == 259
 
 
 def _read_progress(path: pathlib.Path):
+    """progress.json を読む。無ければ None、3 回読めなければ {"status": "unreadable", "_unreadable": True}。
+    BOM 付き（PowerShell 5.1 の Out-File などで書いた形）も読む。"""
     for _ in range(3):
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
+            d = json.loads(path.read_text(encoding="utf-8-sig"))
+            if isinstance(d, dict):
+                return d
         except FileNotFoundError:
             return None
-        except (json.JSONDecodeError, OSError):
-            time.sleep(0.5)
-    return {"status": "unreadable"}
+        except (json.JSONDecodeError, UnicodeDecodeError, OSError):
+            pass
+        time.sleep(0.5)
+    return {"status": "unreadable", "_unreadable": True}
 
 
 def _age_min(ts: str) -> float:
@@ -651,6 +710,60 @@ def _age_min(ts: str) -> float:
         return (_now() - dt.datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")).total_seconds() / 60
     except Exception:                                            # noqa: BLE001
         return 0.0
+
+
+def _progress_age_min(pr: dict, path=None) -> float:
+    """最後の更新からの分。updated が読めなければファイルの更新時刻で測る（未知の状態の progress にも途絶の判定を当てるため）。"""
+    try:
+        return (_now() - dt.datetime.strptime(pr["updated"], "%Y-%m-%d %H:%M:%S")).total_seconds() / 60
+    except Exception:                                            # noqa: BLE001
+        pass
+    try:
+        return (time.time() - pathlib.Path(path).stat().st_mtime) / 60
+    except Exception:                                            # noqa: BLE001
+        return 0.0
+
+
+# 固まった試行の判定（査読の重要 6）。96_s4_resume.py の心拍の別スレッドは、本体が GPU の推論などで固まっても updated を
+# 30 s ごとに書き続けるので、updated では見つからない。そこで今の試行の始め（progress の current_started。試行ごとに本体だけが
+# 書く）からの経過が「制限時間 × 実時間の倍率 ＋ 余裕」を超えたら固まったとみなす。倍率は ops.md 5 節の実測（run 1.6〜1.86 倍、
+# task 約 3.1 倍）に、3 本並行の遅れと E7 の API の 1 回の回し直しを見込んで 4 倍、余裕は世界の作り直し・計画役の API の待ち
+# の分で 15 分（run 60 s なら 19 分、E7 の全体 200 s なら約 28 分）。判定するのは status が running のときだけ（loading・
+# memory_wait などの待ちは current_started を更新しないので当てない）。結果を見る前に決めた値（成績は読まない）。
+HUNG_FACTOR = 4.0
+HUNG_MARGIN_MIN = 15.0
+HUNG_DEFAULT_LIMIT_S = 200.0          # progress に制限時間が無いとき（段階 4 の最長＝E7 の全体 200 s）
+
+
+def trial_limit_s(pr: dict):
+    """progress の time_limits から 1 試行の打ち切りの秒（task は全体の打ち切り）。無ければ None。"""
+    lim = (pr or {}).get("time_limits") or {}
+    for k in ("task_time_limit_s", "time_limit_s"):
+        v = lim.get(k) if isinstance(lim, dict) else None
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0:
+            return float(v)
+    return None
+
+
+def hung_check(pr: dict, now=None, factor: float = HUNG_FACTOR, margin_min: float = HUNG_MARGIN_MIN,
+               default_limit_s: float = HUNG_DEFAULT_LIMIT_S):
+    """固まった試行なら {"current", "current_started", "elapsed_min", "allowed_min", ...}、そうでなければ None。
+    factor が 0 なら判定しない。"""
+    if not pr or pr.get("status") != "running" or not factor:
+        return None
+    cs = pr.get("current_started")
+    try:
+        t = dt.datetime.strptime(str(cs), "%Y-%m-%d %H:%M:%S")
+    except (TypeError, ValueError):
+        return None
+    el = ((now or _now()) - t).total_seconds() / 60
+    lim = trial_limit_s(pr) or float(default_limit_s)
+    allow = lim * float(factor) / 60 + float(margin_min)
+    if el <= allow:
+        return None
+    return {"condition": pr.get("condition"), "current": pr.get("current"), "current_seed": pr.get("current_seed"),
+            "current_started": cs, "elapsed_min": round(el, 1), "allowed_min": round(allow, 1), "limit_s": lim,
+            "rule": f"今の試行の始めからの経過 > 制限時間 {lim:g} s × {factor:g} + {margin_min:g} 分"}
 
 
 def _tail(path, n=15) -> list:
@@ -661,12 +774,22 @@ def _tail(path, n=15) -> list:
 
 
 def evaluate_target(t: dict, a) -> None:
-    """t を 1 回調べ、終わっていれば t['final'] に {'outcome','code'} を入れる。"""
+    """t を 1 回調べ、終わっていれば t['final'] に {'outcome','code'} を入れる。
+    途絶（コード 4）は次の 4 つ: 更新が --stall-min 分途絶えた（stalled。LIVE でない未知の状態にも当てる）、今の試行が固まった
+    （hung。hung_check）、包み（98_s4_d_plan bundle）が子の固まりを状態に書いた（hung_child）、progress.json を読めない状態が
+    --stall-min 分続いた（unreadable）。"""
     if t["kind"] == "pid":
-        if not _alive(t["pid"]):
+        if not _alive(t["pid"], t.get("create_time")):          # 始めに控えた create_time で PID の使い回しを見分ける（軽微 17）
             t["final"] = {"outcome": "pid_gone", "code": 0}
         return
     pr = _read_progress(t["path"])
+    if pr is not None and pr.get("_unreadable"):
+        t.setdefault("unreadable_since", time.time())
+        t["unreadable_n"] = t.get("unreadable_n", 0) + 1
+        if (time.time() - t["unreadable_since"]) / 60 > a.stall_min:
+            t["final"] = {"outcome": "unreadable", "code": 4}
+        return
+    t.pop("unreadable_since", None)
     t["progress"] = pr
     if pr is None:
         if (time.time() - t["t0"]) / 60 > a.appear_min:
@@ -685,7 +808,16 @@ def evaluate_target(t: dict, a) -> None:
         else:
             t["final"] = {"outcome": "crashed", "code": 3}
         return
-    if st in LIVE_STATUS and _age_min(pr.get("updated", "")) > a.stall_min:
+    hung = hung_check(pr, factor=getattr(a, "hung_factor", HUNG_FACTOR), margin_min=getattr(a, "hung_margin_min", HUNG_MARGIN_MIN))
+    if hung:
+        t["hung"] = [hung]
+        t["final"] = {"outcome": "hung", "code": 4}
+        return
+    if pr.get("hung_children"):                                  # 包みが見つけた子の固まり（98_s4_d_plan.py bundle が書く）
+        t["hung"] = pr["hung_children"]
+        t["final"] = {"outcome": "hung_child", "code": 4}
+        return
+    if _progress_age_min(pr, t["path"]) > a.stall_min:           # LIVE の状態も未知の状態も（軽微 17・重要 6）
         t["final"] = {"outcome": "stalled", "code": 4}
 
 
@@ -693,10 +825,10 @@ def cmd_wait(a) -> int:
     if not a.progress and not a.pid:
         raise SystemExit("--progress か --pid が要る")
     targets = [{"kind": "progress", "path": pathlib.Path(p), "t0": time.time()} for p in a.progress or []]
-    targets += [{"kind": "pid", "pid": int(p), "t0": time.time()} for p in a.pid or []]
+    targets += [{"kind": "pid", "pid": int(p), "t0": time.time(), "create_time": _create_time(p)} for p in a.pid or []]
     t0, last_report, timed_out = time.time(), 0.0, False
-    print(f"[wait] 開始 {_now():%H:%M:%S}: {len(targets)} 件を監視（間隔 {a.interval} s、途絶 {a.stall_min} 分、時間切れ "
-          f"{a.timeout_min if a.timeout_min else 'なし'} 分）", flush=True)
+    print(f"[wait] 開始 {_now():%H:%M:%S}: {len(targets)} 件を監視（間隔 {a.interval} s、途絶 {a.stall_min} 分、固まり 制限時間 × "
+          f"{a.hung_factor:g} + {a.hung_margin_min:g} 分、時間切れ {a.timeout_min if a.timeout_min else 'なし'} 分）", flush=True)
     while True:
         for t in targets:
             if "final" not in t:
@@ -725,7 +857,11 @@ def cmd_wait(a) -> int:
                       "started", "updated", "elapsed_min", "last_trial_wall_s", "free_phys_gb", "error", "stop_reason", "pid"):
                 if k in p:
                     row[k] = p[k]
-        if fin["outcome"] in ("crashed", "error", "stalled") and a.log:
+        if t.get("hung"):
+            row["hung"] = t["hung"]
+        if t.get("unreadable_n"):
+            row["unreadable_reads"] = t["unreadable_n"]
+        if fin["outcome"] in ("crashed", "error", "stalled", "hung", "hung_child", "unreadable") and a.log:
             row["log_tail"] = _tail(a.log)
         rows.append(row)
     summary = {"finished": _now().strftime("%Y-%m-%d %H:%M:%S"), "waited_min": round((time.time() - t0) / 60, 1),
@@ -755,8 +891,13 @@ def main(argv=None) -> int:
     p.add_argument("--progress", nargs="*", default=[], help="progress.json（複数可）")
     p.add_argument("--pid", nargs="*", default=[], help="PID（複数可。終了だけを見る）")
     p.add_argument("--interval", type=float, default=30.0, help="確認の間隔 [s]")
-    p.add_argument("--stall-min", type=float, default=30.0, help="progress.json の更新がこの分数途絶えたら止まったとみなす")
-    p.add_argument("--timeout-min", type=float, default=0.0, help="0 なら時間切れなし")
+    p.add_argument("--stall-min", type=float, default=30.0,
+                   help="progress.json の更新がこの分数途絶えたら（読めない状態がこの分数続いても）止まったとみなす")
+    p.add_argument("--hung-factor", type=float, default=HUNG_FACTOR,
+                   help="今の試行の始めからの経過が 制限時間 × これ + --hung-margin-min 分を超えたら固まったとみなす（0 で判定しない）")
+    p.add_argument("--hung-margin-min", type=float, default=HUNG_MARGIN_MIN)
+    p.add_argument("--timeout-min", type=float, default=1440.0,
+                   help="時間切れ（既定 24 時間。束の全体を見るときは長くする。0 なら時間切れなし）")
     p.add_argument("--appear-min", type=float, default=10.0, help="progress.json がこの分数のうちに現れなければエラー")
     p.add_argument("--report-min", type=float, default=15.0, help="途中経過の行を出す間隔 [分]")
     p.add_argument("--log", default=None, help="異常のときに末尾を要約へ入れるログ")

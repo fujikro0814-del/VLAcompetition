@@ -283,6 +283,8 @@ def _fake_96(tmp: pathlib.Path, calls: list, fail_on: str = None):
             for p in trial_paths("run", out, i).values():
                 p.write_text("x", encoding="utf-8")
             ran += 1
+        for name in ("run.json", "G_AUDIT.json"):                  # 本物の 96 と同じく、全部そろったら両方を書く
+            (out / name).write_text("{}", encoding="utf-8")
         (out / "progress.json").write_text("{}", encoding="utf-8")
         return 0
 

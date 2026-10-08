@@ -13,11 +13,14 @@ decompose.py（凍結。configs の planner.model: claude-haiku-4-5、温度 0�
 - キャッシュの鍵に model・"temperature": None・thinking を入れる（Haiku 4.5 のキャッシュと混ざらない）
 - 応答の記録（outputs/llm_cache/<鍵>.json）は decompose.py と同じ形に planner_variant と thinking を足す
 SYSTEM・SCHEMA・PROMPT_VERSION・user_message・check・fallback_reply・client・CACHE は decompose.py のものをそのまま使う。
-読むもの: decompose.py（import）、キャッシュ。書くもの: キャッシュ（outputs/llm_cache/）。鍵は decompose.client() が読む
+読むもの: decompose.py（import）、キャッシュ。書くもの: キャッシュ（outputs/llm_cache/。一時ファイルから先に書いた者を勝ちに
+置く。読めない写しは <鍵>.json.broken_<時刻>_<pid> へ退避して取り直す。下の「キャッシュの読み書き」）。鍵は decompose.client() が読む
 ANTHROPIC_API_KEY（環境変数かユーザー環境変数）。
 """
 import hashlib
 import json
+import os
+import threading
 import time
 
 from recovla.planner import decompose as _legacy
@@ -36,13 +39,98 @@ def cache_key(model: str, msg: str) -> str:
     return hashlib.sha256(key_src.encode("utf-8")).hexdigest()
 
 
+# ---------------------------------------------------------------- キャッシュの読み書き（査読の軽微 11）
+# 読み: 読めない写し（電源断の書きかけ・0 埋め・形の違うもの）は <鍵>.json.broken_<時刻>_<pid> へ退避して（消さない）、
+#   無いものとして取り直す。例外にしない（例外にすると、手で消すまで同じ鍵の試行が毎回失敗する）。
+# 書き: 一時ファイル（プロセスごとに別の名前）に書いてから、先に書いた者を勝ちにして置く（os.link は置き先があれば失敗する）。
+#   2 つの枠が同時に初めて同じ鍵を呼んだときは、後の者は自分の答えを捨てて先の写しを使う（「同じ入力の答えはキャッシュで保証」
+#   を崩さない）。use_cache=False（取り直しの指定）のときだけ、置き換えて上書きする。
+
+def _cache_ok(rec, key: str) -> bool:
+    return isinstance(rec, dict) and rec.get("key") == key and isinstance(rec.get("raw"), str)
+
+
+def _quarantine_cache(path):
+    dst = path.with_name(f"{path.name}.broken_{time.strftime('%Y%m%d-%H%M%S')}_{os.getpid()}")
+    try:
+        os.replace(path, dst)
+        return dst
+    except OSError:
+        return None
+
+
+def _read_cache(path, key: str):
+    """キャッシュの写し（dict）か None（無い・読めない）。読めない写しは退避する。開けないとき（ほかのプロセスが
+    掴んでいる）は少し待って読み直し、それでも開けなければ例外にする（中身は壊れていないかもしれないので退避しない）。"""
+    for k in range(4):
+        try:
+            rec = json.loads(path.read_text(encoding="utf-8-sig"))
+            break
+        except FileNotFoundError:
+            return None
+        except ValueError:                              # JSONDecodeError・UnicodeDecodeError（書きかけ・0 埋め）
+            _quarantine_cache(path)
+            return None
+        except OSError:
+            if k == 3:
+                raise
+            time.sleep(0.3 * (k + 1))
+    if not _cache_ok(rec, key):
+        _quarantine_cache(path)
+        return None
+    return rec
+
+
+def _replace(tmp, path, tries: int = 8) -> None:
+    for k in range(tries):
+        try:
+            os.replace(tmp, path)
+            return
+        except PermissionError:                         # 読んでいる最中の相手がいる（Windows）。少し待つ
+            time.sleep(0.2 * (k + 1))
+    raise OSError(f"計画役のキャッシュ {path} を置き換えられない（ほかのプロセスが開いている）")
+
+
+def _store_cache(path, rec: dict, overwrite: bool) -> dict:
+    """rec を置き、実際にキャッシュにある写しを返す（先客がいれば先客）。"""
+    CACHE.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    tmp.write_text(json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
+    try:
+        if overwrite:
+            _replace(tmp, path)
+            return rec
+        for _ in range(2):
+            try:
+                os.link(tmp, path)                      # 置き先があれば FileExistsError（先に書いた者が勝つ）
+                return rec
+            except FileExistsError:
+                other = _read_cache(path, rec["key"])   # 読めない先客は退避されるので、もう 1 回置く
+                if other is not None:
+                    other["from_cache"] = True
+                    return other
+            except OSError:                             # ハードリンクを作れないファイルシステム: 有無を見てから置き換える
+                other = _read_cache(path, rec["key"])
+                if other is not None:
+                    other["from_cache"] = True
+                    return other
+                _replace(tmp, path)
+                return rec
+        raise OSError(f"計画役のキャッシュ {path} を置けない（読めない写しを退避できない）")
+    finally:
+        try:
+            tmp.unlink()
+        except OSError:                                 # 置き換え済み（無い）か、読み手が開いている。*.tmp は読まれない
+            pass
+
+
 def decompose(text: str, table_colors, box_colors, cli=None, use_cache: bool = True, model: str = DEFAULT_MODEL) -> dict:
     p = _legacy._CFG["planner"]
     msg = user_message(text, table_colors, box_colors)
     key = cache_key(model, msg)
     path = CACHE / f"{key}.json"
-    if use_cache and path.is_file():
-        rec = json.loads(path.read_text(encoding="utf-8"))
+    rec = _read_cache(path, key) if use_cache else None
+    if rec is not None:
         rec["from_cache"] = True
     else:
         cli = cli or client()
@@ -61,8 +149,7 @@ def decompose(text: str, table_colors, box_colors, cli=None, use_cache: bool = T
                "usage": {"input_tokens": r.usage.input_tokens, "output_tokens": r.usage.output_tokens},
                "wall_s": round(time.perf_counter() - t0, 3), "written": time.strftime("%Y-%m-%d %H:%M:%S"),
                "from_cache": False, "planner_variant": PLANNER_VARIANT}
-        CACHE.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(rec, ensure_ascii=False, indent=2), encoding="utf-8")
+        rec = _store_cache(path, rec, overwrite=not use_cache)
     try:
         data = json.loads(rec["raw"])
         steps, reply = list(data["steps"]), str(data["reply"])

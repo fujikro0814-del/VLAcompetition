@@ -33,10 +33,18 @@
                              （段階 4 の予定を含む。載っている使用は警告 planned_with_registered_use に並べる）
   banned_with_use            台帳が「使わない」「取り消し」の範囲の中に使用の記録がある
   ledger_inconsistency       対応表の中の矛盾（使用済み同士の重なり、予定の帯からはみ出す使用済みの行、
-                             取り消し・使わないとの重なり、表の書式の誤り）
+                             取り消し・使わないとの重なり、表の書式の誤り、数字で始まるのに列が 6 未満の行）
+  unreadable_records         読めない記録（書きかけ・0 埋めの json、jsonl の読めない行、開けないフォルダ）のうち、種を
+                             フォルダ名（part_<種> など）・条件の控え（resume_spec.json・run.json・progress.json の trials）から
+                             拾えなかったもの（scan.parse_errors と同じ。summary の parse_errors に件数）。--bands-only でも
+                             1 件でもあれば終了コード 1（その種が帯の中かもしれない）
+json は BOM 付き（PowerShell 5.1 の Out-File などの形）も読む（utf-8-sig）。種は整数と数字だけの文字列（"190201"）を拾い、
+拡張子の大文字（.JSON）も拾う。
 警告（終了コードに入れない）: prose_not_in_table（本文にだけある範囲）、ledger_used_partial_record（使用済みの
 範囲の一部にしか記録がない）、status_mismatch_note（『記録なし』と注記したのに記録がある）、
-planned_with_registered_use（予定の帯の中の、台帳に載せた使用）。
+planned_with_registered_use（予定の帯の中の、台帳に載せた使用）、unreadable_records_seed_recovered（読めないが、
+_incomplete_* の中の記録か試行の記録で、種をフォルダ名・条件の控えから拾えたもの。拾った種は使用に数える。summary の
+parse_errors_seed_recovered に件数）。
 結果を見る前に決めた項目: 上の区分と終了コードの規則、記録の読み方（どのキー・ファイル名を使用とみなすか）。
 見た後に決めた項目: 対応表の中身（記録から確かめた範囲を台帳に書いた。『なし』と注記した範囲の理由）、
 クリップのフォルダ名の読み取り（demo_v2・V3DEMO の名前に種がある形を見て足した）、
@@ -75,9 +83,14 @@ SPEC_KEYS = {"trials", "trials_spec"}
 SKIP_FILE_RE = re.compile(
     r"^(trial_\d+_runtime|run_\d+_runtime|runtime_\d+|G_AUDIT|config|train_config|"
     r"policy_preprocessor|policy_postprocessor|optimizer_param_groups|scheduler_state|"
-    r"training_step|info|stats)\.json$"
+    r"training_step|info|stats)\.json$", re.IGNORECASE
 )
-TRIAL_FILE_RE = re.compile(r"^(trial|task|run)_\d+\.json$")
+TRIAL_FILE_RE = re.compile(r"^(trial|task|run)_\d+\.json$", re.IGNORECASE)     # 拡張子の大文字 .JSON も拾う（軽微 16）
+# 退避のフォルダ（96_s4_resume.py・98_s4_x2.py が書きかけ・壊れた記録を移す _incomplete_<時刻>）と、X2 の種ごとの小フォルダ part_<種>
+INCOMPLETE_PREFIX = "_incomplete_"
+PART_DIR_RE = re.compile(r"^part_(\d{5,6})$")
+# 条件のフォルダで、試行の並びの指定（trials・trials_spec・seeds）を持つ控え。読めない記録の種をここから拾う（重要 5）
+COND_SPEC_FILES = ("resume_spec.json", "run.json", "progress.json")
 TRAIN_FILE_RE = re.compile(r"(^train_|train_run\.json$|train_launch_config\.json$|g0_train\d+\.json$)")
 EPISODE_DIR_RE = re.compile(r"(?:^|_)(\d{5,6})_(?:red|green|blue)_r\d+$|^R2P\d_(\d{5,6})_")
 # 動画・描き直しのクリップのフォルダ名（例: demo_v2/nat_140011_R、V3DEMO/p1_141004_N、demo/task_115000）
@@ -157,6 +170,17 @@ def seeds_from_listlike(v):
     return out
 
 
+def as_seed(v):
+    """種の値（整数か、数字だけの文字列 "190201"）を整数に。それ以外は None（軽微 16: 文字列の種も拾う）。"""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, int):
+        return v
+    if isinstance(v, str) and re.fullmatch(r"\s*\d{1,9}\s*", v):
+        return int(v)
+    return None
+
+
 # ----------------------------------------------------------------------------- 証拠の集め方
 class Evidence:
     def __init__(self):
@@ -167,12 +191,14 @@ class Evidence:
         self.queue_only = defaultdict(lambda: {"labels": set(), "sample": None})
         self.spec_runs = []                      # run.json の指定と、その実行の中の試行記録の突き合わせ用
         self.counts = defaultdict(int)
-        self.parse_errors = []
+        self.parse_errors = []                   # 読めず、種も拾えなかった記録（問題に数える。重要 5）
+        self.recovered = []                      # 読めないが、種をフォルダ名・条件の控えから拾えた記録（警告）
         self.empty_clip_dirs = []                # 中身のないクリップのフォルダ（使用に数えない）
         self.sealed = {"entries": 0, "files": 0, "opened": 0}
 
     def add(self, seed, tier, label, path):
-        if not isinstance(seed, int) or isinstance(seed, bool):
+        seed = as_seed(seed)
+        if seed is None:
             return
         if seed < MIN_LAYOUT_SEED:
             self.low_seeds[seed].add(label)
@@ -209,9 +235,9 @@ def walk_generic(obj, ev, label, path, tier, in_train, depth=0):
         return
     if isinstance(obj, dict):
         for k, v in obj.items():
-            if k in SEED_INT_KEYS and isinstance(v, int) and not isinstance(v, bool):
+            if k in SEED_INT_KEYS and as_seed(v) is not None:
                 if in_train and k == "seed":
-                    ev.train_seeds[v].add(path)
+                    ev.train_seeds[as_seed(v)].add(path)
                 else:
                     ev.add(v, tier, label, path)
             elif k in SEED_LIST_KEYS:
@@ -235,8 +261,53 @@ def walk_generic(obj, ev, label, path, tier, in_train, depth=0):
 
 
 def read_json(p):
-    with open(p, encoding="utf-8") as f:
+    with open(p, encoding="utf-8-sig") as f:              # BOM 付き（PowerShell 5.1 の Out-File など）も読む（重要 5）
         return json.load(f)
+
+
+def _cond_dir_of(dpp: Path, out_root: Path):
+    """記録のあるフォルダから、条件のフォルダ（_incomplete_* の中なら、その外側）を返す。"""
+    p = dpp
+    while p != out_root and out_root in p.parents:
+        if p.name.startswith(INCOMPLETE_PREFIX):
+            return p.parent, True
+        p = p.parent
+    return dpp, False
+
+
+def recover_seeds(dpp: Path, fn: str, out_root: Path):
+    """読めない記録の種を、フォルダ名（part_<種>・エピソード・クリップ）と条件のフォルダの控え（resume_spec.json・run.json・
+    progress.json の trials・trials_spec・seeds）から拾う。返り値 (種の集合, 出どころの説明)。拾うのは、_incomplete_* の中の
+    記録と、試行の記録（trial_*・task_*・run_*.json）だけ。控えの指定は条件の全部の種なので、安全側（多めに使用と数える）。"""
+    cond, in_inc = _cond_dir_of(dpp, out_root)
+    if not (in_inc or TRIAL_FILE_RE.match(fn)):
+        return set(), None
+    seeds, src = set(), []
+    p = dpp
+    while p != cond and cond in p.parents:
+        m = PART_DIR_RE.match(p.name) or EPISODE_DIR_RE.search(p.name) or CLIP_DIR_RE.search(p.name)
+        if m:
+            g = next(x for x in m.groups() if x)
+            seeds.add(int(g))
+            src.append(f"フォルダ名 {p.name}")
+        p = p.parent
+    for name in COND_SPEC_FILES:
+        f = cond / name
+        if not f.is_file():
+            continue
+        try:
+            j = read_json(f)
+        except Exception:                                  # noqa: BLE001
+            continue
+        got = set()
+        for k in ("trials", "trials_spec", "seeds"):
+            if isinstance(j, dict) and k in j:
+                got |= seeds_from_listlike(j[k])
+        if got:
+            seeds |= got
+            src.append(f"{name} の trials（{len(got)} 種）")
+            break
+    return seeds, "・".join(src) or None
 
 
 def scan_queue(obj, ev, label, path):
@@ -253,11 +324,29 @@ def scan_queue(obj, ev, label, path):
                             q["sample"] = path
 
 
+def _walk_error(ev: Evidence, root: Path):
+    """os.walk が開けなかったフォルダ（権限・長すぎるパスなど）を黙って飛ばさない（軽微 16）。"""
+    def f(e):
+        ev.parse_errors.append({"path": str(getattr(e, "filename", "") or ""), "error": f"walk: {type(e).__name__}: {e}"})
+    return f
+
+
+def _unreadable(ev: Evidence, dpp: Path, fn: str, relp: str, label: str, err: str, out_root: Path) -> None:
+    """読めない記録。種をフォルダ名・条件の控えから拾えれば警告（recovered）、拾えなければ問題（parse_errors）。"""
+    seeds, src = recover_seeds(dpp, fn, out_root)
+    if seeds:
+        ev.add_many(seeds, TIER_TRIAL, label, relp)
+        ev.recovered.append({"path": relp, "error": err, "seeds_from": src, "n_seeds": len(seeds),
+                             "seed_ranges": seeds_to_ranges(sorted(seeds))[:8]})
+    else:
+        ev.parse_errors.append({"path": relp, "error": err})
+
+
 def collect(root: Path) -> Evidence:
     ev = Evidence()
     out_root = root / "outputs"
     sealed_root = out_root / "sealed"
-    for dp, dns, fns in os.walk(out_root):
+    for dp, dns, fns in os.walk(out_root, onerror=_walk_error(ev, root)):
         dpp = Path(dp)
         if dpp == sealed_root or sealed_root in dpp.parents:
             ev.sealed["entries"] += len(dns) + len(fns)
@@ -286,37 +375,46 @@ def collect(root: Path) -> Evidence:
                     ev.counts["clip_dirs"] += 1
                 else:
                     ev.empty_clip_dirs.append(str(dpp.relative_to(root)))
+        # X2 の種ごとの小フォルダ part_<種>（98_s4_x2.py。退避された _incomplete_* の中を含む）
+        mpart = PART_DIR_RE.match(dpp.name)
+        if mpart and fns:
+            ev.add(int(mpart.group(1)), TIER_TRIAL, label_of(rel_parts[:2], ""), str(dpp.relative_to(root)))
+            ev.counts["part_dirs"] += 1
         for fn in fns:
             p = dpp / fn
+            fl = fn.lower()
             relp = str(p.relative_to(root))
             label = label_of(rel_parts, fn)
             if relp.replace("\\", "/") == "outputs/s4/ledger_check.json":
                 continue  # このスクリプト自身の出力は読まない
             mfn = FILENAME_SEED_RE.search(fn)
-            if mfn and not fn.endswith(".json"):
+            if mfn and not fl.endswith(".json"):
                 ev.add(int(mfn.group(1)), TIER_TRIAL, label, relp)
                 ev.counts["filename_seed_files"] += 1
             try:
-                if fn.endswith(".jsonl"):
-                    n = 0
-                    with open(p, encoding="utf-8") as f:
-                        for line in f:
+                if fl.endswith(".jsonl"):
+                    n, bad = 0, []
+                    with open(p, encoding="utf-8-sig") as f:
+                        for lineno, line in enumerate(f, 1):
                             line = line.strip()
                             if not line:
                                 continue
                             try:
                                 j = json.loads(line)
-                            except Exception:
+                            except Exception as e:
+                                bad.append(f"{lineno} 行目 {type(e).__name__}")     # 黙って飛ばさない（軽微 16）
                                 continue
                             if isinstance(j, dict):
                                 for k in ("seed", "layout_seed"):
-                                    if isinstance(j.get(k), int):
+                                    if as_seed(j.get(k)) is not None:
                                         ev.add(j[k], TIER_TRIAL, label, relp)
                                         n += 1
                                         break
+                    if bad:
+                        _unreadable(ev, dpp, fn, relp, label, f"jsonl の読めない行 {len(bad)} 行: {', '.join(bad[:5])}", out_root)
                     ev.counts["jsonl_files"] += 1
                     continue
-                if fn.endswith(".csv") and top == "results":
+                if fl.endswith(".csv") and top == "results":
                     with open(p, encoding="utf-8", errors="replace", newline="") as f:
                         rd = csv.DictReader(f)
                         if rd.fieldnames and "seed" in rd.fieldnames:
@@ -327,39 +425,39 @@ def collect(root: Path) -> Evidence:
                                     pass
                             ev.counts["csv_files"] += 1
                     continue
-                if not fn.endswith(".json"):
+                if not fl.endswith(".json"):
                     continue
                 if SKIP_FILE_RE.match(fn):
                     ev.counts["json_skipped_by_name"] += 1
                     continue
-                if fn == "plan.json" and top == "f":
+                if fl == "plan.json" and top == "f":
                     ev.counts["plan_json_skipped(計画。使用の記録ではない)"] += 1
                     continue
                 if TRIAL_FILE_RE.match(fn):
-                    with open(p, encoding="utf-8") as f:
-                        head = f.read()
-                    j = json.loads(head)
-                    if isinstance(j, dict) and isinstance(j.get("seed"), int):
+                    j = read_json(p)
+                    if isinstance(j, dict) and as_seed(j.get("seed")) is not None:
                         ev.add(j["seed"], TIER_TRIAL, label, relp)
-                    elif isinstance(j, dict) and isinstance(j.get("layout"), dict) and isinstance(j["layout"].get("seed"), int):
+                    elif isinstance(j, dict) and isinstance(j.get("layout"), dict) and as_seed(j["layout"].get("seed")) is not None:
                         ev.add(j["layout"]["seed"], TIER_TRIAL, label, relp)
+                    else:
+                        ev.counts["trial_like_files_without_seed"] += 1
                     ev.counts["trial_like_files"] += 1
                     continue
                 if os.path.getsize(p) > 40_000_000:
                     ev.counts["json_too_large_skipped"] += 1
                     continue
                 j = read_json(p)
-                if fn == "meta.json" and top == "gen":
+                if fl == "meta.json" and top == "gen":
                     if isinstance(j, dict):
                         for k in ("layout_seed", "seed"):
-                            if isinstance(j.get(k), int):
+                            if as_seed(j.get(k)) is not None:
                                 ev.add(j[k], TIER_TRIAL, label, relp)
                                 break
                     ev.counts["gen_meta_files"] += 1
                     continue
-                if fn == "run.json":
+                if fl == "run.json":
                     tier = TIER_RUN
-                elif "queue" in fn.lower():
+                elif "queue" in fl:
                     scan_queue(j, ev, label, relp)
                     ev.counts["queue_files"] += 1
                     continue
@@ -376,8 +474,8 @@ def collect(root: Path) -> Evidence:
                 in_train = bool(TRAIN_FILE_RE.search(fn))
                 walk_generic(j, ev, label, relp, tier, in_train)
                 ev.counts["json_walked"] += 1
-            except Exception as e:  # 読めない記録は止まらず報告する
-                ev.parse_errors.append({"path": relp, "error": f"{type(e).__name__}: {e}"})
+            except Exception as e:  # 読めない記録は止まらず報告する（種を拾えなければ問題に数える）
+                _unreadable(ev, dpp, fn, relp, label, f"{type(e).__name__}: {e}", out_root)
     # docs/results の json（結果の写し）
     dres = root / "docs" / "results"
     if dres.is_dir():
@@ -417,12 +515,11 @@ def spec_vs_trials(root: Path):
             continue
         trial_seeds = set()
         for fn in fns:
-            if re.match(r"^(trial|task|run)_\d+\.json$", fn):
+            if TRIAL_FILE_RE.match(fn):
                 try:
-                    with open(dpp / fn, encoding="utf-8") as f:
-                        jj = json.load(f)
-                    if isinstance(jj, dict) and isinstance(jj.get("seed"), int):
-                        trial_seeds.add(jj["seed"])
+                    jj = read_json(dpp / fn)
+                    if isinstance(jj, dict) and as_seed(jj.get("seed")) is not None:
+                        trial_seeds.add(as_seed(jj["seed"]))
                 except Exception:
                     pass
         if trial_seeds != spec_seeds:
@@ -460,7 +557,10 @@ def parse_ledger(text: str):
             if not ln.startswith("|"):
                 continue
             cells = [c.strip() for c in ln.strip().strip("|").split("|")]
-            if len(cells) < 6 or not re.match(r"^\d+$", cells[0]):
+            if not re.match(r"^\d+$", cells[0]):
+                continue
+            if len(cells) < 6:                             # 数字で始まるのに列が足りない行は黙って落とさない（軽微 16）
+                errors.append(f"列が 6 未満: {ln}")
                 continue
             a, b, status_ja, kind, rec, note = cells[0], cells[1], cells[2], cells[3], cells[4], "|".join(cells[5:])
             if status_ja not in STATUS_JA:
@@ -717,10 +817,13 @@ def sha256_of(p: Path):
 
 
 def build_report(root: Path, ledger_path: Path, bands):
-    text = ledger_path.read_text(encoding="utf-8")
+    text = ledger_path.read_text(encoding="utf-8-sig")
     entries, errors, prose_ranges = parse_ledger(text)
     ev = collect(root)
     problems, warnings = check(ev, entries, errors, prose_ranges)
+    # 読めず種も拾えなかった記録は、その種が数えられていないので問題に数える（重要 5）。種を拾えたものは警告に並べる
+    problems["unreadable_records"] = list(ev.parse_errors)
+    warnings["unreadable_records_seed_recovered"] = list(ev.recovered)
     used_seeds = sorted(s for s, info in ev.seed_info.items() if info["tiers"] & USED_TIERS)
 
     by_label = defaultdict(set)
@@ -748,6 +851,7 @@ def build_report(root: Path, ledger_path: Path, bands):
             "seeds_with_record": len(used_seeds),
             "labels": len(used_by_label),
             "parse_errors": ev.parse_errors,
+            "parse_errors_seed_recovered": ev.recovered,
             "sealed_not_opened": ev.sealed,
             "rules": {
                 "min_layout_seed": MIN_LAYOUT_SEED,
@@ -794,11 +898,15 @@ def main(argv=None):
     bands = [parse_band_arg(b) for b in args.bands]
     report, problems, band_rows = build_report(root, ledger, bands)
     n_problem = sum(len(v) for v in problems.values())
+    n_unreadable = len(problems["unreadable_records"])
     bands_ok = all(b["unused"] for b in band_rows)
-    ok = bands_ok if args.bands_only else (n_problem == 0 and bands_ok)
+    # 読めない記録が 1 件でもあれば、帯の確認だけ（--bands-only）でも「問題なし」にしない（その種が帯の中かもしれない。重要 5）
+    ok = (bands_ok and n_unreadable == 0) if args.bands_only else (n_problem == 0 and bands_ok)
     report["ok"] = ok
     report["summary"] = {k: len(v) for k, v in problems.items()}
     report["summary"].update({"warnings_" + k: len(v) for k, v in report["warnings"].items()})
+    report["summary"]["parse_errors"] = n_unreadable
+    report["summary"]["parse_errors_seed_recovered"] = len(report["warnings"]["unreadable_records_seed_recovered"])
     report["summary"]["bands_all_unused"] = bands_ok if band_rows else None
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -808,6 +916,9 @@ def main(argv=None):
         print(f"帯 {b['band'][0]}-{b['band'][1]}: {'未使用' if b['unused'] else '使用あり'}"
               f"（記録 {len(b['record_uses'])} 件、台帳の使用済みと重なり {len(b['ledger_used_overlaps'])} 件、"
               f"予定と重なり {len(b['ledger_planned_overlaps'])} 件）")
+    if n_unreadable:
+        print(f"読めず種も拾えなかった記録 {n_unreadable} 件（problems.unreadable_records）: "
+              + ", ".join(e["path"] for e in problems["unreadable_records"][:5]))
     print("OK（問題なし）" if ok else "問題あり: " + str(out))
     return 0 if ok else 1
 
