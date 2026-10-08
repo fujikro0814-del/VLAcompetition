@@ -11,7 +11,8 @@
         6 設定を同じ種で、種の塊ごとに交互に回す（目標書_段階4.md 第 4 節「比べる組は同じ種・同じ時期に、種の塊ごとに交互に」）。
         1 つのプロセスで方策を読み込んだまま設定を切り替える（RTC の設定だけを入れ直す）。監視役は
         outputs\\s4\\d_rtc\\rotate_<タグ>.progress.json を見る（96_s4_ops.py wait --progress ...）。
-        smoke 用に --block-trials N（交互の単位を試行の数で）と --rounds N（N 巡で止める）がある
+        smoke 用に --block-trials N（交互の単位を試行の数で）と --rounds N（N 巡で止める）がある。
+        全設定の試行がそろっても run.json か G_AUDIT.json が無い設定（再起動の隙間で切れた）は、96 を 1 回呼んで書かせてから終わる
     .venv\\Scripts\\python.exe scripts\\98_s4_d_rtc.py metrics --experiment S4K --condition K1 [--out ...]        # 関門 R の指標（読むだけ）
     .venv\\Scripts\\python.exe scripts\\98_s4_d_rtc.py shadow-metrics --experiment S4DRTC --condition shadow_current_repro
   smoke（学習用の帯の担当 A の小帯 44430〜44449 だけ）: run --setting ZEROS --experiment S4SMOKE_A --condition ZEROS --trials natural:44430:1
@@ -379,6 +380,11 @@ def cmd_rotate(a, extra) -> int:
             cnt += int(ok)
         return cnt
 
+    def sealed(n):
+        """設定 n の条件に run.json と G_AUDIT.json があるか（96 が全部そろったときだけ書く。保つ条件 1 の監査の印）。"""
+        out = v82.OUT / a.experiment / n
+        return (out / "run.json").is_file() and (out / "G_AUDIT.json").is_file()
+
     put()
     status, code = "done", 0
     rounds = 0
@@ -387,6 +393,18 @@ def cmd_rotate(a, extra) -> int:
             counts = {n: done_of(n) for n in names}
             left = [n for n in names if counts[n] < n_trials]
             if not left:
+                # 試行が全部そろっていても、最後の試行を書いた後・run.json と G_AUDIT を書く前に切れた設定（再起動の隙間。
+                # 査読の重要 3）は、96 を 1 回呼んで書かせる（回す試行は 0 本。96 は run.json・G_AUDIT が無ければ書く）
+                for n in [x for x in names if not sealed(x)]:
+                    t0 = time.time()
+                    c = run_condition(m, ops, v82, a, n, False, n, trials, extra)
+                    prog["calls"].append({"setting": n, "code": c, "status": "seal", "wall_s": round(time.time() - t0, 1),
+                                          "note": "試行はそろっていたが run.json か G_AUDIT.json が無かった"})
+                    m._write_atomic(log_p, json.dumps(prog["calls"], ensure_ascii=False, indent=1))
+                    if c != 0 or not sealed(n):
+                        status, code = ("stopped", 1) if c == 1 else ("error", c if c in (2, 3) else 2)
+                        put(stop_reason=f"{n}: 試行はそろったが run.json・G_AUDIT.json を書けていない（96 の終了コード {c}）")
+                        return code
                 break
             if a.rounds and rounds >= a.rounds:                      # smoke など: 決めた巡の数で止める
                 status, code = "stopped", 1

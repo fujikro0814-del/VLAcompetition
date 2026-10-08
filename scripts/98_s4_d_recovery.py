@@ -29,7 +29,8 @@
   - 採点は 30 s が主、60 s が副、45 s は記述だけ。誘発の試行の分母は L 秒以内に成立した試行（induce.t_established <= L）。
   - 比べる組（R と N、落下の 2 版）は、種の塊（既定 10 種）ごとに交互に回す（目標書_段階4.md 第 4 節「種の塊ごとに交互」）。
     塊 b の中で、通りの順（--variants の順）× モデルの順（--models の順）に、その塊の試行だけを回す（96 の --max-new で区切る）。
-    止まって再開しても、まだ完全でない試行を同じ順で回す。
+    止まって再開しても、まだ完全でない試行を同じ順で回す。試行がそろっていても run.json か G_AUDIT.json が無い条件
+    （再起動の隙間で切れた）は 96 を 1 回呼んで書かせ、どちらかが無いまま「全部そろった」（終了コード 0）にはしない。
   - 落下で手を止める版（fall_with_hold、誘発の版 P2H-v1）は診断にだけ使い、テストでは使わない（目標書_段階4.md 第 10 節 6、
     s4_gates の C.b2）。中身は src\\recovla\\diag\\recovery.py の冒頭。置き損ね・把持失敗・落下そのままは段階 3 の誘発のまま。
   - 本番の帯は s4_gates.json の D_recovery の割り当てと完全に一致する指定だけを受け付ける。smoke は smoke_data の帯（44400〜44799）
@@ -258,6 +259,10 @@ def cmd_run(a) -> int:
             todo[c] = [i for i, (seed, lay, tgt) in enumerate(trials)
                        if not r96.check_complete("run", out_root / c, i, {"seed": seed, "target": tgt})[0]]
     plan = schedule(todo, order, a.block, a.max_new)
+    # 試行が全部そろっていても run.json か G_AUDIT.json が無い条件（最後の試行を書いた後、それらを書く前に切れた。再起動の隙間。
+    # 査読の重要 3）は、96 を 1 回呼んで書かせる（(条件, 0)＝--max-new なし・回す試行は 0 本。96 は無ければ書く）
+    unsealed = [c for c in order if not todo[c] and not _sealed(out_root / c)]
+    plan += [(c, 0) for c in unsealed]
     print(f"[d-rec] {kind}: 実験 {a.experiment}、帯 {a.trials}（{len(trials)} 試行/条件）、条件 {order}、塊 {a.block} 種", flush=True)
     print(f"[d-rec] 残り: {{{', '.join(f'{c}: {len(v)}' for c, v in todo.items())}}}、この回の順: {plan}", flush=True)
     if a.dry_run:
@@ -266,8 +271,10 @@ def cmd_run(a) -> int:
             for v in variants:
                 code = max(code, _call_96(r96, v82, ops, build_96_args(r96, a, m, v, 0, True)))
         return code
+    if unsealed:
+        print(f"[d-rec] 試行はそろっているが run.json・G_AUDIT.json が無い条件: {unsealed}（96 を 1 回呼んで書かせる）", flush=True)
     if not plan:
-        print("[d-rec] 回す試行はない（全部完全）。run.json が無い条件があれば 96 で 1 回回すと書く", flush=True)
+        print("[d-rec] 回す試行はない（全部完全、run.json・G_AUDIT.json もある）", flush=True)
     OUT_S4.mkdir(parents=True, exist_ok=True)
     tag = f"{a.experiment}_{'-'.join(models)}_{'-'.join(variants)}"
     prog_path = pathlib.Path(a.progress_file) if a.progress_file else OUT_S4 / f"progress_{tag}.json"
@@ -308,6 +315,9 @@ def cmd_run(a) -> int:
     elif status == "done" and done < len(trials) * len(order):
         status, code = "stopped", 1                               # --max-new（smoke）で打ち切った
         prog.update(stop_reason=f"max_new:{a.max_new}")
+    if status == "done" and any(not _sealed(out_root / c) for c in order):
+        status, code = "error", 2                                 # 試行はそろっても監査の印が無ければ「済み」にしない（重要 3）
+        prog.update(error=f"run.json・G_AUDIT.json の無い条件: {[c for c in order if not _sealed(out_root / c)]}")
     prog.update(status=status, done=done)
     print(f"[d-rec] {status}（完全 {done}/{len(trials) * len(order)}）", flush=True)
     return code
@@ -352,6 +362,11 @@ def _read_json(p: pathlib.Path):
         return json.loads(p.read_text(encoding="utf-8"))
     except Exception:                                             # noqa: BLE001
         return None
+
+
+def _sealed(d: pathlib.Path) -> bool:
+    """条件のフォルダに run.json と G_AUDIT.json があるか（96 が全部そろったときだけ書く。保つ条件 1 の監査の印）。"""
+    return (d / "run.json").is_file() and (d / "G_AUDIT.json").is_file()
 
 
 def _count_complete(r96, v82, out_root, order, trials, full: bool = False) -> int:

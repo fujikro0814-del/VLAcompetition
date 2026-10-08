@@ -38,18 +38,35 @@
      塊は子に --max-new <塊の試行数> を渡して作る（96_s4_resume.py と同じ引数。塊を回し終えた子は終了コード 1・stop_reason
      "max_new:N" で終わり、最後の塊は 0 で終わる）。--no-interleave なら塊に分けず、長い仕事から先に 1 つずつ流す。
   3. 1 つの仕事が失敗しても（終了コード 2・3、スクリプトが無いなど）、ほかは続ける。失敗した仕事に依存する仕事（X2 の測定）は、
-     その回は回さない。
+     その回は回さない。終了コード 1 でこの回の progress.json を書かずに終わった子は、止まったのではなく落ちた（捕まえない例外・
+     強制終了）とみなして失敗にする（子のログに JSONDecodeError があれば、壊れた resume_log.json などの手がかりを理由に足す）。
+     子が自分で止まった（子の <条件>\\STOP など、包みの合図以外）ときは、その仕事だけをこの回は回さず、ほかは続ける。
   4. 続きから: 同じコマンドをもう一度打てば、完了した仕事を飛ばし、ほかは子が自分で続きから回す（子は完全な試行を飛ばす）。
      前の回の途中で包みが消えた（再起動など）とき、状態が running の仕事は、子が生きていれば引き取って終わりを待ち、
-     生きていなければ続きから回し直す。失敗・止めた仕事も次の回で回し直す。
-  5. 止める合図: --stop-file（既定 outputs\\s4\\runs\\STOP_BUNDLE1）を見たら、新しい塊を始めず、今の塊を終えてから止まる
-     （status=stopped、終了コード 1）。outputs\\s4\\STOP（子も今の試行の後で止まる）も新しい塊を始めない合図として見る。
+     生きていなければ続きから回し直す。失敗・止めた仕事も次の回で回し直す。状態のファイルが読めなければ（電源断の 0 埋め）、
+     <状態>.broken_<時刻> へ退避して仕事の状態を新しく始める。
+  5. 止める合図: 全体を止めるのは STOP のファイルだけ。--stop-file（既定 outputs\\s4\\runs\\STOP_BUNDLE1）を見たら、新しい塊を
+     始めず、今の塊を終えてから止まる（status=stopped、終了コード 1）。outputs\\s4\\STOP（子も今の試行の後で止まる）も新しい塊を
+     始めない合図として見る。
   6. 空きメモリ: 物理 --min-free-gb（既定 12）未満かコミット --min-commit-free-gb（既定 6）未満なら、新しい塊を始めない
      （運用の決まり「空きメモリ 12 GB 未満なら動かさない」。並行の本数で割らない＝docs\\stage4\\ops.md 1-1）。動いている子が
      1 本もないまま --mem-timeout-min（既定 120 分）を超えたら止まる（status=memory_timeout、終了コード 1）。
      子を始めた直後は子のメモリがまだ増えていないので、次の子は --stagger-s（既定 90 s）空けてから始める。
+     子が自分のメモリ待ちで時間切れになった（96 の status=memory_timeout、rotate・D-復帰の stop_reason に memory_timeout）ときは、
+     全体を止めず、その仕事を pending に戻して後で回し直す。同じ仕事が続けて --mem-timeout-repeat（既定 3）回なら、その仕事
+     だけを止める（状態 mem_stopped。残ったら status=memory_timeout・終了コード 1。次の回で回し直す）。
+     空きメモリの不足の印（動いている子の progress が memory_wait、子のメモリ待ちの時間切れ）を見たら、--mem-lane-hold-min
+     （既定 30 分）の間は枠を 1 つ減らす（3 → 2。動いている子は止めない）。状態の lanes_effective・lanes_note に出る。
   7. 子の記録の形・続きから回す仕組み・環境の食い違いでの停止は、子（96_s4_resume.py か、それを importlib で読み込む診断のスクリプト）の
      もの。包みは子の終了コードと progress.json（pid が子と一致するものだけ）で、塊の終わり・完了・失敗を見分ける。
+  8. 「済み」の確かめ: 子が終了コード 0 でも、まとめる run・task の条件に run.json か G_AUDIT.json が無ければ済みにせず、
+     1 回だけ子を呼び直して書かせる（96 は試行がそろっていれば run.json・G_AUDIT だけを書く）。呼び直しても無ければ失敗。
+     前の回で done の仕事も、続きから回すときに同じことを確かめる（再起動の隙間。査読の重要 3）。
+  9. 二重起動の守り: 状態のファイルの隣の <状態>.lock を OS のロックで押さえる（プロセスが消えれば OS が外すので、再起動の
+     後に残ったファイルは邪魔をしない）。ロックを取れなければ終了コード 3。
+  10. 固まった子: 動いている子の progress（仕事と、まとめる条件のもの）の current_started からの経過が「制限時間 ×
+     --hung-factor（既定 4）＋ --hung-margin-min（既定 15 分）」を超えたら、状態の hung_children に書き、ログに出す（子は止め
+     ない）。96_s4_ops.py wait はこれを見てコード 4（hung_child）で終わる。
 
 包みが子（診断のスクリプト）に求めること（計画の "interface"。食い違いは批判役が見る）:
   同じ命令をもう一度打てば続きから回る。終了コードは 96_s4_resume.py と同じ（0 全部そろった、1 途中で止まった、2 エラー、
@@ -118,10 +135,14 @@ def sha256_file(p) -> str:
 
 
 def write_atomic(path: pathlib.Path, text: str, tries: int = 8) -> bool:
-    """96_s4_resume._write_atomic と同じ（読んでいる相手がいれば少し待つ）。"""
+    """96_s4_resume._write_atomic と同じ（読んでいる相手がいれば少し待つ）。書けなければ False（一時ファイルを書けない
+    PermissionError も False にする）。呼ぶ側は False を無視しない（査読の軽微 5）。"""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(text, encoding="utf-8")
+    try:
+        tmp.write_text(text, encoding="utf-8")
+    except OSError:
+        return False
     for k in range(tries):
         try:
             os.replace(tmp, path)
@@ -655,7 +676,9 @@ def table_text(p: dict) -> str:
 def cmd_plan(a) -> int:
     p = build_plan(with_ex=a.with_ex)
     out = _abs(a.out)
-    write_atomic(out, json.dumps(p, ensure_ascii=False, indent=1))
+    if not write_atomic(out, json.dumps(p, ensure_ascii=False, indent=1)):
+        print(f"[plan] {_rel(out)} を書けない（ほかのプロセスが開いている）", file=sys.stderr)
+        return 2
     print(table_text(p))
     print(f"\n[plan] {_rel(out)}（SHA-256 {sha256_file(out)[:12]}…）。決まりの文書・s4_gates が掲示板 0153 と一致: "
           f"{p['sources']['matches_board_0153']}")
@@ -668,7 +691,9 @@ def cmd_plan(a) -> int:
 def cmd_smoke_plan(a) -> int:
     p = build_smoke_plan()
     out = _abs(a.out)
-    write_atomic(out, json.dumps(p, ensure_ascii=False, indent=1))
+    if not write_atomic(out, json.dumps(p, ensure_ascii=False, indent=1)):
+        print(f"[smoke-plan] {_rel(out)} を書けない（ほかのプロセスが開いている）", file=sys.stderr)
+        return 2
     print(table_text(p))
     print(f"\n[smoke-plan] {_rel(out)}")
     return 0
@@ -678,12 +703,81 @@ def cmd_smoke_plan(a) -> int:
 def read_progress(path: pathlib.Path):
     for _ in range(3):
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
+            d = json.loads(path.read_text(encoding="utf-8-sig"))
+            return d if isinstance(d, dict) else None
         except FileNotFoundError:
             return None
-        except (json.JSONDecodeError, OSError):
+        except (ValueError, OSError):
             time.sleep(0.3)
     return None
+
+
+def unsealed_conditions(plan: dict, j: dict) -> list:
+    """仕事 j がまとめる条件のうち、run.json か G_AUDIT.json が無いもの（96 の形の記録を書く run・task の条件だけ。X2 は
+    別の形なので見ない）。96 は全部そろったときだけ両方を書くので、無ければ「済み」ではない（査読の重要 3）。"""
+    by = {c["id"]: c for c in plan.get("conditions") or []}
+    out = []
+    for cid in (j or {}).get("covers", []):
+        c = by.get(cid)
+        if not c or c.get("kind") not in ("run", "task") or not c.get("out_dir"):
+            continue
+        d = _abs(c["out_dir"])
+        if not ((d / "run.json").is_file() and (d / "G_AUDIT.json").is_file()):
+            out.append(cid)
+    return out
+
+
+def _log_hint(path: pathlib.Path) -> str:
+    """子のログの末尾に、続きから回せない壊れ方の手がかりがあれば一言（96 の resume_log.json・resume_spec.json が壊れると
+    JSONDecodeError の捕まえない例外で終了コード 1 になる。査読の軽微 6。96 は変えないので、包みで見分けて知らせる）。"""
+    try:
+        with open(path, "rb") as f:
+            f.seek(0, 2)
+            f.seek(max(0, f.tell() - 6000))
+            tail = f.read().decode("utf-8", "replace")
+    except OSError:
+        return ""
+    if "JSONDecodeError" in tail:
+        names = [n for n in ("resume_log.json", "resume_spec.json", "progress.json", "llm_cache") if n in tail]
+        return (f"子のログに JSONDecodeError（{'・'.join(names) or '読めない json'}）。壊れたファイルを _incomplete_ などへ退避して"
+                "から回し直す（消さない）")
+    return ""
+
+
+def _lock(path: pathlib.Path):
+    """包みの二重起動を防ぐ排他のロック（査読の軽微 7）。開いたファイルの 1 バイトを OS のロックで押さえるので、プロセスが
+    消えれば（再起動・強制終了を含む）OS が外し、古いロックのファイルが残っても邪魔をしない。取れたら開いたファイル、
+    ほかのプロセスが持っていれば None。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    f = open(path, "a+b")
+    try:
+        f.seek(0)
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(f.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        f.close()
+        return None
+    return f
+
+
+def _unlock(f) -> None:
+    if f is None:
+        return
+    try:
+        f.seek(0)
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(f.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+    except OSError:
+        pass
+    f.close()
 
 
 def classify(rc, prog, child_pid, fresh: bool = False) -> tuple:
@@ -691,7 +785,11 @@ def classify(rc, prog, child_pid, fresh: bool = False) -> tuple:
     progress.json は、pid が子と一致するか、子を始めた後に書かれた（fresh）ときだけ使う（引数の食い違いで progress.json を書く前に
     終わった子に、前の塊の stopped・max_new を読み違えないため）。pid だけで見ないのは、.venv\\Scripts\\python.exe が本物の
     python を子として起こす起動役で、Popen の pid と子が progress.json に書く pid が違うため（Windows の venv。10/08 に確かめた）。
-    rc が None（引き取った子で終了コードが分からない）なら progress.json だけで決める。"""
+    rc が None（引き取った子で終了コードが分からない）なら progress.json だけで決める。
+    メモリ待ちの時間切れは、96 の子（status=memory_timeout）のほか、D-RTC の rotate・D-復帰の外側の包みが中の 96 の時間切れを
+    status=stopped・stop_reason「<条件>: …memory_timeout…」で返すので、stop_reason の中の memory_timeout でも見分ける
+    （査読の軽微 12。外側の包みは変えずに、ここで見分ける）。
+    終了コード 1 で、この回の progress.json が無い子は、止まったのではなく落ちた（捕まえない例外・強制終了）とみなして failed。"""
     pr = prog if (prog and (fresh or (child_pid is not None and prog.get("pid") == child_pid))) else None
     st = (pr or {}).get("status")
     reason = str((pr or {}).get("stop_reason") or "")
@@ -702,11 +800,11 @@ def classify(rc, prog, child_pid, fresh: bool = False) -> tuple:
     if rc in (1, None) and st in ("stopped", "interrupted", "memory_timeout"):
         if reason.startswith("max_new"):
             return "block_done", reason
-        if st == "memory_timeout" or reason == "memory_timeout":
-            return "memory_timeout", "子のメモリ待ちの時間切れ"
+        if st == "memory_timeout" or "memory_timeout" in reason:
+            return "memory_timeout", f"子のメモリ待ちの時間切れ（{reason or st}）"
         return "stopped", reason or st
     if rc == 1 and pr is None:
-        return "stopped", "終了コード 1（pid の合う progress.json なし）"
+        return "failed", "終了コード 1 だが、子はこの回の progress.json を書かずに終わった（捕まえない例外か強制終了。子のログを見る）"
     if rc is None:
         return "failed", f"引き取った子が状態 {st} のまま消えた（異常終了）"
     return "failed", f"終了コード {rc}" + (f"、progress の error: {pr.get('error')}" if pr and pr.get("error") else "")
@@ -731,6 +829,9 @@ class Bundle:
         self.interleave = not a.no_interleave
         self.jobs = {}                              # 動いている仕事: id -> {"popen" or None, "pid", "create_time", "started_t"}
         self.st = None
+        self.mem_short_t, self.mem_short_why = None, ""   # 最後にメモリ不足の印（子の memory_wait・メモリ待ちの時間切れ）を見た時刻
+        self.hung_seen = set()
+        self.save_fail = 0
 
     # -------------------------------------------------------- 記録
     def log(self, msg: str) -> None:
@@ -756,15 +857,29 @@ class Bundle:
             s["free_phys_gb"], s["free_commit_gb"] = m["phys_free_gb"], m["commit_free_gb"]
         except Exception:                            # noqa: BLE001
             pass
-        write_atomic(self.status_path, json.dumps(s, ensure_ascii=False, indent=1, default=str))
+        if write_atomic(self.status_path, json.dumps(s, ensure_ascii=False, indent=1, default=str)):
+            self.save_fail = 0
+        else:                                        # 読み手が掴んでいる（Windows）。次の save で書き直す。続けば知らせる
+            self.save_fail += 1
+            if self.save_fail in (1, 10, 100):
+                self.log(f"{_rel(self.status_path)} を書けない（{self.save_fail} 回続けて）。次の更新で書き直す")
 
     # -------------------------------------------------------- 始めの確かめと引き継ぎ
     def load_state(self) -> int:
         old = None
         if self.status_path.is_file():
             try:
-                old = json.loads(self.status_path.read_text(encoding="utf-8"))
-            except Exception:                        # noqa: BLE001
+                old = json.loads(self.status_path.read_text(encoding="utf-8-sig"))
+            except Exception as e:                   # noqa: BLE001
+                old = None                           # 電源断の 0 埋めなど。消さずに退避して、仕事は子の記録から続きを回す（軽微 6）
+                dst = self.status_path.with_name(f"{self.status_path.name}.broken_{time.strftime('%Y%m%d-%H%M%S')}")
+                try:
+                    os.replace(self.status_path, dst)
+                    self.log(f"{_rel(self.status_path)} を読めない（{type(e).__name__}）。{_rel(dst)} へ退避し、仕事の状態は"
+                             f"新しく始める（子は完全な試行を飛ばすので、済んだ仕事はすぐ終わる）")
+                except OSError:
+                    self.log(f"{_rel(self.status_path)} を読めない（{type(e).__name__}）。退避もできない。仕事の状態は新しく始める")
+            if not isinstance(old, dict):
                 old = None
         if old and old.get("status") in self.ops.LIVE_STATUS and old.get("pid") and old.get("pid") != os.getpid() \
                 and self.ops._alive(int(old["pid"]), old.get("proc_create_time")):
@@ -781,6 +896,7 @@ class Bundle:
                    "pid": os.getpid(), "proc_create_time": ct, "host": os.environ.get("COMPUTERNAME"), "started": _now_s(),
                    "status": "starting", "lanes": self.a.lanes, "interleave": self.interleave, "stop_file": _rel(self.stop_file),
                    "min_free_gb": self.a.min_free_gb, "successes": None, "stop_reason": None, "error": None,
+                   "lanes_effective": self.a.lanes, "lanes_note": None, "hung_children": [],
                    "jobs": jobs, "sessions": (old or {}).get("sessions", [])}
         if old and old.get("plan_sha256") and old.get("plan_sha256") != self.st["plan_sha256"]:
             self.log(f"計画が前の回と違う（{old['plan_sha256'][:12]}… → {self.st['plan_sha256'][:12]}…）。仕事は id で引き継ぐ")
@@ -800,14 +916,20 @@ class Bundle:
                     e["state"] = "pending"
                     e["note"] = f"前の回の途中で切れた（{_now_s()} に確認、子は残っていない）。子が続きから回す"
                     self.log(f"{j['id']}: 前の回の途中で切れていた。続きから回す")
-            elif e["state"] in ("failed", "stopped", "blocked", "memory_timeout"):
+            elif e["state"] in ("failed", "stopped", "blocked", "memory_timeout", "mem_stopped"):
                 self.log(f"{j['id']}: 前の回は {e['state']}。もう一度回す（子が完全な試行を飛ばす）")
                 e["state"] = "pending"
+                e["mem_timeouts"], e["seal_retries"] = 0, 0
             elif e["state"] == "done":
                 pr = read_progress(_abs(j["progress"])) if j.get("progress") else None
+                miss = unsealed_conditions(self.plan, j)
                 if pr is not None and pr.get("status") != "done":
                     e["state"] = "pending"
                     e["note"] = f"状態は done だが progress.json の status={pr.get('status')}。もう一度回す"
+                    self.log(f"{j['id']}: {e['note']}")
+                elif miss:                           # 再起動の隙間で、試行はそろったが監査の印が無い（重要 3）
+                    e["state"], e["seal_retries"] = "pending", 0
+                    e["note"] = f"状態は done だが run.json・G_AUDIT.json の無い条件 {miss}。子を 1 回呼んで書かせる"
                     self.log(f"{j['id']}: {e['note']}")
         return 0
 
@@ -871,19 +993,41 @@ class Bundle:
                 fresh = False
             res, why = classify(rc, pr, r["pid"], fresh)
             e = self.st["jobs"][jid]
+            if res == "done":                        # 終了コード 0 でも、条件に run.json・G_AUDIT.json が無ければ「済み」にしない（重要 3）
+                miss = unsealed_conditions(self.plan, j)
+                if miss:
+                    e["seal_retries"] = int(e.get("seal_retries", 0)) + 1
+                    res = "seal_retry" if e["seal_retries"] <= 1 else "failed"
+                    why = (f"終了コード 0 だが run.json・G_AUDIT.json の無い条件 {miss}"
+                           + ("。もう 1 回呼んで書かせる" if res == "seal_retry" else "。呼び直しても書かれない"))
+            if res == "failed":
+                hint = _log_hint(self.log_dir / f"{jid}.log")
+                why = why + (f"。{hint}" if hint else "")
             e.update({"ended": _now_s(), "exit_code": rc, "progress_status": (pr or {}).get("status"),
                       "progress_done": (pr or {}).get("done"), "progress_total": (pr or {}).get("total")})
             e["history"].append({"t": _now_s(), "pid": r["pid"], "rc": rc, "result": res, "why": why,
                                  "wall_min": round((time.time() - r["started_t"]) / 60, 2)})
             if res in ("done", "block_done"):
                 e["blocks_done"] = int(e.get("blocks_done", 0)) + 1
+                e["mem_timeouts"] = 0
             if res == "done":
                 e["state"] = "done"
                 e["blocks_done"] = max(e["blocks_done"], e["blocks"])
-            elif res == "block_done":
+            elif res in ("block_done", "seal_retry"):
                 e["state"] = "pending"
-            elif res in ("stopped", "memory_timeout"):
-                e["state"] = res
+            elif res == "memory_timeout":
+                # 子が自分のメモリ待ちで時間切れになった: 全体は止めず、その仕事を pending に戻して後で回し直す（既知の問題、
+                # 10/08 14:10〜15:30 に枠が空いた件）。同じ仕事が続けて --mem-timeout-repeat 回なら、その仕事だけを止める
+                e["mem_timeouts"] = int(e.get("mem_timeouts", 0)) + 1
+                self.mem_short_t, self.mem_short_why = time.time(), f"{jid} がメモリ待ちの時間切れ"
+                if self.a.mem_timeout_repeat and e["mem_timeouts"] >= self.a.mem_timeout_repeat:
+                    e["state"] = "mem_stopped"
+                    e["last_error"] = f"続けて {e['mem_timeouts']} 回メモリ待ちの時間切れ。この仕事だけ止めた（次の回で回し直す）"
+                else:
+                    e["state"] = "pending"
+                    e["note"] = f"メモリ待ちの時間切れ（続けて {e['mem_timeouts']} 回目）。後で回し直す"
+            elif res == "stopped":
+                e["state"] = "stopped"               # この仕事だけ（全体を止めるのは STOP のファイルだけ）
             else:
                 e["state"] = "failed"
                 e["last_error"] = why
@@ -901,7 +1045,8 @@ class Bundle:
                 e = self.st["jobs"][j["id"]]
                 if e["state"] != "pending":
                     continue
-                bad = [d for d in j.get("after", []) if self.st["jobs"].get(d, {}).get("state") in ("failed", "blocked")
+                bad = [d for d in j.get("after", []) if self.st["jobs"].get(d, {}).get("state") in ("failed", "blocked", "stopped",
+                                                                                                    "mem_stopped")
                        or (d not in self.by_id and self.st["jobs"].get(d, {}).get("state") != "done")]
                 if bad:
                     e["state"] = "blocked"
@@ -909,8 +1054,62 @@ class Bundle:
                     self.log(f"{j['id']}: 依存先 {bad} が無いので、この回は回さない")
                     changed = True
 
+    # -------------------------------------------------------- 子の様子（メモリ不足の印・固まり）
+    def progress_paths(self, jid: str) -> list:
+        """仕事の progress と、まとめる条件の progress（rotate・D-復帰は中の 96 が条件ごとに書く）。"""
+        j = self.by_id.get(jid) or {}
+        by = {c["id"]: c for c in self.plan.get("conditions") or []}
+        ps = [j.get("progress")] + [(by.get(cid) or {}).get("progress") for cid in j.get("covers", [])]
+        out = []
+        for p in ps:
+            if p and _abs(p) not in out:
+                out.append(_abs(p))
+        return out
+
+    def scan_children(self) -> tuple:
+        """動いている子の progress（その子を始めた後に書かれたものだけ）を読み、(メモリ不足の印の文, 固まった試行の並び) を返す。
+        固まりの判定は 96_s4_ops.hung_check（今の試行の始めからの経過 > 制限時間 × 倍率 + 余裕）。包みは子を殺さず、状態の
+        hung_children に書いて知らせる（96_s4_ops.py wait がコード 4 で終わる）。"""
+        mem, hung = "", []
+        hc = getattr(self.ops, "hung_check", None)
+        for jid, r in list(self.jobs.items()):
+            for pp in self.progress_paths(jid):
+                try:
+                    if pp.stat().st_mtime < r["started_t"] - 0.5:
+                        continue
+                except OSError:
+                    continue
+                pr = read_progress(pp)
+                if not pr:
+                    continue
+                if pr.get("status") == "memory_wait" and not mem:
+                    mem = f"{jid}: {_rel(pp)} が memory_wait（{pr.get('wait_note') or ''}）"
+                h = hc(pr, factor=self.a.hung_factor, margin_min=self.a.hung_margin_min) if (hc and self.a.hung_factor) else None
+                if h:
+                    hung.append(dict(h, job=jid, progress=_rel(pp)))
+        return mem, hung
+
+    def lanes_now(self) -> int:
+        """空きメモリが足りない間は枠を 1 つ減らす（3 → 2。1 より減らさない）。印（子の memory_wait・メモリ待ちの時間切れ）を
+        最後に見てから --mem-lane-hold-min 分たてば戻す。動いている子は止めない（減った枠は、子が終わってから効く）。"""
+        if self.a.lanes > 1 and self.a.mem_lane_hold_min and self.mem_short_t is not None \
+                and (time.time() - self.mem_short_t) / 60 < self.a.mem_lane_hold_min:
+            return self.a.lanes - 1
+        return self.a.lanes
+
     # -------------------------------------------------------- 本体
     def run(self) -> int:
+        lock_path = self.status_path.with_name(self.status_path.name + ".lock")
+        lock = _lock(lock_path)
+        if lock is None:
+            self.log(f"{_rel(lock_path)}: ほかの包みがこの状態のファイルで動いている（ロックを取れない）。二重に回さない")
+            return 3
+        try:
+            return self._run()
+        finally:
+            _unlock(lock)
+
+    def _run(self) -> int:
         code = self.load_state()
         if code:
             return code
@@ -923,8 +1122,25 @@ class Bundle:
         try:
             while True:
                 for jid, res in self.poll():
-                    if res == "stopped" and not stopping:
-                        stopping, stop_reason = "child_stopped", f"{jid} が止める合図で止まった（{self.st['jobs'][jid]['history'][-1]['why']}）"
+                    if res == "stopped":                 # 子が自分で止まった: その仕事だけ。全体を止めるのは STOP のファイルだけ
+                        self.log(f"{jid}: 子が止まった（{self.st['jobs'][jid]['history'][-1]['why']}）。この仕事はこの回は回さない。"
+                                 f"ほかは続ける")
+                    elif res == "memory_timeout":
+                        self.log(f"{jid}: {self.st['jobs'][jid]['history'][-1]['why']}。状態 {self.st['jobs'][jid]['state']}")
+                mem_why, hung = self.scan_children()
+                if mem_why:
+                    self.mem_short_t, self.mem_short_why = time.time(), mem_why
+                for h in hung:
+                    k = (h["job"], h["progress"], h.get("current_started"))
+                    if k not in self.hung_seen:
+                        self.hung_seen.add(k)
+                        self.log(f"{h['job']}: 試行が固まった恐れ（{h['progress']} の試行 {h.get('current')}、{h['elapsed_min']} 分 > "
+                                 f"{h['allowed_min']} 分）。包みは子を止めない。人が見る")
+                self.st["hung_children"] = hung
+                lanes = self.lanes_now()
+                self.st["lanes_effective"] = lanes
+                self.st["lanes_note"] = (f"空きメモリの不足の印（{self.mem_short_why}）を見たので枠を {lanes} に減らした"
+                                         f"（{self.a.mem_lane_hold_min:g} 分見なければ戻す）" if lanes < self.a.lanes else None)
                 if not stopping:
                     for f in (self.stop_file, self.global_stop):
                         if f.exists():
@@ -935,7 +1151,7 @@ class Bundle:
                     stopping, stop_reason = "max_jobs", f"max_jobs:{self.a.max_jobs}"
                 self.block_dependents()
                 status = "running"
-                while not stopping and len(self.jobs) < self.a.lanes:
+                while not stopping and len(self.jobs) < lanes:
                     j = pick_next(self.jobs_plan, self.st["jobs"], set(self.jobs), self.interleave)
                     if j is None:
                         break
@@ -966,9 +1182,13 @@ class Bundle:
             self.log("Ctrl+C。動いている子の状態は running のまま残す（次の回で、生きていれば引き取り、消えていれば続きから回す）")
         es = {j["id"]: self.st["jobs"][j["id"]]["state"] for j in self.jobs_plan}
         if final is None:
-            final = ("done" if all(s == "done" for s in es.values()) else "memory_timeout" if stopping == "memory_timeout"
-                     else "stopped" if stopping else "error")
+            vals = set(es.values())
+            final = ("done" if vals <= {"done"} else "memory_timeout" if stopping == "memory_timeout"
+                     else "stopped" if stopping else "error" if "failed" in vals
+                     else "memory_timeout" if "mem_stopped" in vals         # メモリで止めた仕事が残った（終了コード 1）
+                     else "stopped" if "stopped" in vals else "error")
         left = {k: v for k, v in es.items() if v != "done"}
+        self.st["hung_children"] = []
         self.st["sessions"][-1].update({"end": _now_s(), "status": final, "stop_reason": stop_reason})
         self.save(status=final, stop_reason=stop_reason, error=left if final == "error" else None)
         self.log(f"終わり: {final}（完了 {len(es) - len(left)}/{len(es)}、残り {left}）")
@@ -979,7 +1199,7 @@ class Bundle:
         old = {}
         if self.status_path.is_file():
             try:
-                old = json.loads(self.status_path.read_text(encoding="utf-8")).get("jobs") or {}
+                old = json.loads(self.status_path.read_text(encoding="utf-8-sig")).get("jobs") or {}
             except Exception:                        # noqa: BLE001
                 old = {}
         print(f"[dry-run] 計画 {_rel(self.plan_path)}、状態 {_rel(self.status_path)}、枠 {self.a.lanes}、塊に分ける {self.interleave}")
@@ -1019,7 +1239,7 @@ def load_plan(a) -> tuple:
     p = _abs(a.plan)
     if not p.is_file():
         raise SystemExit(f"計画 {p} が無い。先に plan（または smoke-plan）を回す")
-    return json.loads(p.read_text(encoding="utf-8")), p
+    return json.loads(p.read_text(encoding="utf-8-sig")), p
 
 
 def cmd_bundle(a, ops=None) -> int:
@@ -1042,7 +1262,7 @@ def cmd_status(a) -> int:
     if not sp.is_file():
         print(f"{_rel(sp)} がまだ無い（bundle を回していない）")
         return 0
-    s = json.loads(sp.read_text(encoding="utf-8"))
+    s = json.loads(sp.read_text(encoding="utf-8-sig"))
     print(f"{_rel(sp)}: status={s.get('status')} 完了 {s.get('done')}/{s.get('total')} 動いている {s.get('running')} "
           f"失敗 {s.get('failed')} 更新 {s.get('updated')} 空き {s.get('free_phys_gb')} GB")
     for jid, e in (s.get("jobs") or {}).items():
@@ -1084,6 +1304,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--min-free-gb", type=float, default=12.0)
     p.add_argument("--min-commit-free-gb", type=float, default=6.0)
     p.add_argument("--mem-timeout-min", type=float, default=120.0)
+    p.add_argument("--mem-timeout-repeat", type=int, default=3,
+                   help="同じ仕事が続けてこの回数メモリ待ちの時間切れになったら、その仕事だけを止める（0 で止めない）")
+    p.add_argument("--mem-lane-hold-min", type=float, default=30.0,
+                   help="空きメモリの不足の印（子の memory_wait・メモリ待ちの時間切れ）を見てからこの分数は枠を 1 つ減らす（0 で減らさない）")
+    p.add_argument("--hung-factor", type=float, default=4.0,
+                   help="子の今の試行の始めからの経過が 制限時間 × これ + --hung-margin-min 分を超えたら固まった恐れとして状態に書く"
+                        "（96_s4_ops.HUNG_FACTOR と同じ。0 で見ない）")
+    p.add_argument("--hung-margin-min", type=float, default=15.0)
     p.add_argument("--stagger-s", type=float, default=90.0, help="子を始める間隔の最小（動いている子があるとき）")
     p.add_argument("--poll-s", type=float, default=10.0)
     p.add_argument("--max-jobs", type=int, default=0, help="この数の塊を始めたら新しい塊を始めない（試験用。0 で無制限）")
