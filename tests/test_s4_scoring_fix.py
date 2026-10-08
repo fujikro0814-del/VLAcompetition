@@ -572,13 +572,21 @@ def test_audit_child_configs_exclude_demo(audit, tmp_path, git_on_path):
     subprocess.run([GIT, "init", "-q", str(root)], check=True)
     h1 = (_git(root, "add", "-A"), _git(root, "commit", "-q", "-m", "1"))[1]
     (root / "configs/demo/video.yaml").write_text("v: 2\n", encoding="utf-8")       # 動画の場面だけ
+    (root / "src/recovla/late.py").write_text("a = 1\n", encoding="utf-8")          # 途中で足したファイル
     h2 = (_git(root, "add", "-A"), _git(root, "commit", "-q", "-m", "2"))[1]
+    (root / "src/recovla/late.py").write_text("a = 2\n", encoding="utf-8")          # 足した後に直した（束 2 用の executor_v3 など）
+    h2b = (_git(root, "add", "-A"), _git(root, "commit", "-q", "-m", "2b"))[1]
     (root / "configs/default.yaml").write_text("a: 2\n", encoding="utf-8")           # 子が読む設定
     h3 = (_git(root, "add", "-A"), _git(root, "commit", "-q", "-m", "3"))[1]
     assert "configs/demo/video.yaml" not in audit.CHILD_CONFIGS
     assert audit.compare_heads(root, [h1, h2], "E7")["changed"] == []
+    cmp = audit.compare_heads(root, [h1, h2, h2b], "E7")
+    assert cmp["changed"] == [] and cmp["added_only"] == ["src/recovla/late.py"]
     assert audit.compare_heads(root, [h1, h3], "E7")["changed"] == ["configs/default.yaml"]
-
+    # 最初の HEAD にあったファイルが後で消えたら changed
+    (root / "src/recovla/a.py").unlink()
+    h4 = (_git(root, "add", "-A"), _git(root, "commit", "-q", "-m", "4"))[1]
+    assert "src/recovla/a.py" in audit.compare_heads(root, [h1, h4], "E7")["changed"]
 
 def test_audit_ledger_parse_errors(audit, tmp_path, capsys):
     """0155 の 2-6: 台帳の照合の parse_errors が 0 でなければ欠け。点検する記録より古い結果は使わない。"""

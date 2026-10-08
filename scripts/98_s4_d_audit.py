@@ -20,7 +20,8 @@
   6 versions           試行の diag の *_sha256（96・診断のモジュール・包み・定義の SHA-256）がそれぞれ 1 種類。git の HEAD が 2 つ以上
                        なら、それぞれの HEAD で「子が読み込むファイル」（下の CHILD_SCRIPTS、src/recovla の全部、CHILD_CONFIGS の
                        設定のファイル）の中身の SHA-256 を git show から計算して比べ、既存のファイルが 1 つも違わなければ同じ版と
-                       みなす（0155 の 2-5。後から足されただけのファイルは、既存のファイルが変わらない限り子が読めないので数えない）。
+                       みなす（0155 の 2-5。HEAD はコミットの時刻で古い順に並べ、いちばん古い HEAD に無いファイルは、足された後に
+                       直されたものも含めて、既存のファイルが変わらない限り子が読めないので数えない）。
                        configs は子が読み込むものだけ（configs/demo/**（動画の場面）と学習の種の設定 s4_seed_*.yaml は読まない）。
                        --no-git では HEAD が 2 つ以上なら欠けとする
   7 double_count       このスクリプトで数えた件数（run: 30・60 s の成功と分母。誘発は t_established < T の試行が分母。
@@ -314,22 +315,33 @@ def child_files_sha(root: pathlib.Path, head: str, fam: str) -> dict:
 
 
 def compare_heads(root: pathlib.Path, heads: list, fam: str) -> dict:
-    """HEAD ごとの子が読み込むファイルを比べる。changed: 2 つ以上の HEAD にあって中身が違う・どこかで消えたファイル。
-    added_only: 後の HEAD で足されただけのファイル（既存のファイルが変わらない限り子は読めないので、版の違いに数えない）。"""
+    """HEAD ごとの子が読み込むファイルを比べる（heads は古い順）。changed: いちばん古い HEAD にあって、後の HEAD で中身が違う・
+    消えたファイル。added_only: いちばん古い HEAD に無く、後から足されたファイル（足された後に中身が変わったものを含む）。
+    いちばん古い HEAD の子はそのファイルを読めず、後の HEAD の子が読むには既存のファイル（読み込む側）が変わる必要があり、
+    それは changed に出るので、足されたファイルは版の違いに数えない（束 1 の途中で束 2 用に足して直した executor_v3.py など）。"""
     shas = {h: child_files_sha(root, h, fam) for h in heads}
     paths = sorted(set().union(*(set(s) for s in shas.values())))
     changed, added = [], []
     for p in paths:
         vals = [shas[h].get(p) for h in heads]
-        present = [v for v in vals if v is not None]
-        if not present:
+        if all(v is None for v in vals):
             continue
-        if len(set(present)) > 1:
+        if vals[0] is None:
+            added.append(p)
+        elif any(v != vals[0] for v in vals[1:]):
             changed.append(p)
-        elif len(present) < len(vals):
-            first = next(k for k, v in enumerate(vals) if v is not None)
-            (added if all(v is not None for v in vals[first:]) and first > 0 else changed).append(p)
     return {"heads": heads, "n_files": len(paths), "changed": changed, "added_only": added}
+
+
+def order_heads(root: pathlib.Path, heads: dict) -> list:
+    """HEAD を古い順に並べる（git のコミットの時刻。同じ時刻・読めないときは最初に現れた試行の番号の順）。"""
+    def key(h):
+        try:
+            t = int(_git(root, "show", "-s", "--format=%ct", h).decode("utf-8").strip())
+        except Exception:                            # noqa: BLE001
+            t = None
+        return (0 if t is not None else 1, t or 0, min(heads[h]))
+    return sorted(heads, key=key)
 
 
 def check_versions(cond: dict, recs: dict, root: pathlib.Path, use_git: bool) -> dict:
@@ -351,9 +363,8 @@ def check_versions(cond: dict, recs: dict, root: pathlib.Path, use_git: bool) ->
             ok = False
             det["note"] = "HEAD が 2 つ以上（--no-git なので、子が読み込むファイルを照らせない）"
         else:
-            # 古い順（最初に現れた試行の番号の順）に並べて比べる
-            order = sorted(heads, key=lambda h: min(heads[h]))
             try:
+                order = order_heads(root, heads)                 # 古い順（コミットの時刻）に並べて比べる
                 cmp = compare_heads(root, order, family(cond))
                 det["heads_compare"] = cmp
                 ok = ok and not cmp["changed"]
