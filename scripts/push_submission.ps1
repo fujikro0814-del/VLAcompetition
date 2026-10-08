@@ -15,15 +15,22 @@
 #         ... push_submission.ps1 -RebuildHistory
 #       消える履歴（origin/main の全コミットと未送信のコミット）の一覧と、作業ツリーの検査の結果を出すだけ
 #   (b) 作る（手元だけ。送らない）:
-#         ... push_submission.ps1 -RebuildHistory -Execute [-Message "<コミット文>"]
+#         ... push_submission.ps1 -RebuildHistory -Execute -AuthorName <アカウント名> -AuthorEmail <ID>+<ユーザー名>@users.noreply.github.com [-Message "<コミット文>"]
 #       書き出し（70_export_submission.py export）→ 作業ツリーの検査 → 孤立した新しい枝 $CleanBranch に 1 コミット → HEAD の検査
-#       → 確認の表示（新しいコミットの短いハッシュ・ファイル数・消える履歴）。元の main の枝は手元にそのまま残る
+#       → 作者・コミッタの確かめ → 確認の表示（新しいコミットの短いハッシュ・ファイル数・消える履歴）。元の main の枝は手元にそのまま残る
 #   (c) 送る（作者が (b) の表示を確かめた後だけ）:
-#         ... push_submission.ps1 -RebuildHistory -ForcePush -ConfirmHash <(b) で出た短いハッシュ> [-Tag pai-final-v1]
-#       今の枝が $CleanBranch で、HEAD が -ConfirmHash と同じで、検査に通り、origin/main が (a)(b) のときから動いていないときだけ、
-#       origin の main を強制で置き換える（--force-with-lease）。送った後、手元の古い main は $BackupBranch に名前を変えて残し
-#       （送らない）、$CleanBranch を main にする
+#         ... push_submission.ps1 -RebuildHistory -ForcePush -ConfirmHash <(b) で出た短いハッシュ> -AuthorName <同じ> -AuthorEmail <同じ> [-Tag pai-final-v1]
+#       今の枝が $CleanBranch で、HEAD が -ConfirmHash と同じで、作者・コミッタが -AuthorName・-AuthorEmail だけで、検査に通り、
+#       origin/main が (a)(b) のときから動いていないときだけ、origin の main を強制で置き換える（--force-with-lease）。送った後、
+#       手元の古い main は $BackupBranch に名前を変えて残し（送らない）、$CleanBranch を main にする
 #   実行はメインの担当と作者が最終の段階で行う。-ForcePush は作者の明示の確認なしには使わない。
+#
+# 作者・コミッタ（課題の 10/8 版: PDF・コード・動画に氏名・所属・メールアドレスを載せない。omnicampus のアカウント名は可）:
+#   作り直したコミットの作者とコミッタを、-AuthorName（omnicampus のアカウント名。本名は使わない）と -AuthorEmail（GitHub の
+#   noreply アドレス <ID>+<ユーザー名>@users.noreply.github.com。GitHub の Settings → Emails に出る）に固定する。git の設定
+#   （user.name・user.email）は使わない。どちらも既定は空で、空なら (b)(c) は止まる。作り直した後に
+#   git log --format='%an %ae %cn %ce' が全部その値であることを確かめ、違えば止める。
+#   リポジトリが public かの確かめは手順書 docs\stage4\submission_1008.md に書く（このスクリプトは GitHub の設定を変えない）。
 param(
     [string]$Repo = 'C:\PAI\recovery-vla-panda',
     [string]$Branch = 'main',
@@ -33,6 +40,8 @@ param(
     [switch]$Execute,
     [switch]$ForcePush,
     [string]$ConfirmHash = '',
+    [string]$AuthorName = '',
+    [string]$AuthorEmail = '',
     [string]$Message = 'PAI 最終課題 提出版: 失敗からの復帰を学習する VLA（MuJoCo 上の Franka Panda）のコード・設定・テスト・説明資料と動画の原稿・評価結果の表'
 )
 $ErrorActionPreference = 'Stop'
@@ -77,6 +86,40 @@ function Invoke-Check([string[]]$extra) {
     return [int]$LASTEXITCODE
 }
 
+function Assert-Identity {
+    # 作り直したコミットの作者・コミッタにする値。空・仮の値・noreply の形でなければ止める
+    if ($AuthorName.Trim() -eq '') { throw '-AuthorName（omnicampus のアカウント名）が空。本名は使わない（docs\stage4\submission_1008.md）' }
+    if ($AuthorName -eq 'アカウント名') { throw '-AuthorName が仮の値「アカウント名」のまま' }
+    if ($AuthorEmail.Trim() -eq '') { throw '-AuthorEmail（GitHub の noreply アドレス <ID>+<ユーザー名>@users.noreply.github.com）が空' }
+    if ($AuthorEmail -cnotmatch '^\d+\+[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?@users\.noreply\.github\.com$') {
+        throw "-AuthorEmail が GitHub の noreply アドレスの形（<ID>+<ユーザー名>@users.noreply.github.com）ではない: $AuthorEmail"
+    }
+}
+
+function Test-HistoryIdentity {
+    # 今の枝の全コミットの作者・コミッタが -AuthorName・-AuthorEmail だけかを確かめる（大文字小文字も区別する）。違う行の数を返す
+    $want = "$AuthorName $AuthorEmail $AuthorName $AuthorEmail"
+    $lines = @(& $git -C $Repo log --format='%an %ae %cn %ce')
+    if ($LASTEXITCODE -ne 0 -or $lines.Count -eq 0) { throw 'git log で作者・コミッタを読めない' }
+    $bad = @($lines | Where-Object { $_ -cne $want })
+    if ($bad.Count -gt 0) {
+        Write-Host "作者・コミッタが -AuthorName・-AuthorEmail と違うコミットが $($bad.Count) 個ある（%an %ae %cn %ce）:" -ForegroundColor Red
+        $bad | Select-Object -First 5 | ForEach-Object { Write-Host "  $_" }
+    } else {
+        Write-Host "作者・コミッタの確かめ: 全 $($lines.Count) コミットが $AuthorName <$AuthorEmail>" -ForegroundColor Green
+    }
+    return $bad.Count
+}
+
+function Test-TagIdentity {
+    # 注釈付きタグの作成者（tagger）も公開される。-AuthorName・-AuthorEmail と違えば 1 を返す（軽いタグ・タグなしは作成者がないので 0）
+    if ($Tag -eq '') { return 0 }
+    $tg = ((& $git -C $Repo for-each-ref "refs/tags/$Tag" --format='%(taggername) %(taggeremail)') -join '').Trim()
+    if ($tg -eq '' -or $tg -ceq "$AuthorName <$AuthorEmail>") { return 0 }
+    Write-Host "タグ $Tag の作成者が -AuthorName・-AuthorEmail と違う: $tg（git -c user.name=... -c user.email=... tag -a で付け直す）" -ForegroundColor Red
+    return 1
+}
+
 function Push-TagIfAny([string]$headSha) {
     if ($Tag -eq '') { return }
     $tc = & $git -C $Repo rev-parse --verify --quiet "$Tag^{commit}"
@@ -95,6 +138,7 @@ if ($RebuildHistory) {
     if ($ForcePush) {
         # (c) 送る: 作者が (b) の表示を確かめた後だけ
         if ($Execute) { throw '-Execute と -ForcePush は同時に使わない（(b) で作って表示を確かめてから (c)）' }
+        Assert-Identity
         if ($cur -ne $CleanBranch) { throw "今の枝 $cur が $CleanBranch ではない（先に -RebuildHistory -Execute）" }
         $head = (& $git -C $Repo rev-parse HEAD).Trim()
         $short = (& $git -C $Repo rev-parse --short HEAD).Trim()
@@ -103,10 +147,12 @@ if ($RebuildHistory) {
         }
         $count = (& $git -C $Repo rev-list --count HEAD).Trim()
         if ($count -ne '1') { throw "$CleanBranch のコミットが 1 つではない（$count）" }
+        if ((Test-HistoryIdentity) -ne 0) { Write-Host '作者・コミッタが違うので送らない（(b) からやり直す）。' -ForegroundColor Red; exit 1 }
         if ((Invoke-Check @('--upstream', "origin/$Branch", '--json', (Join-Path $out 'check_submission.json'))) -ne 0) {
             Write-Host '検査に通らないので送らない。' -ForegroundColor Red; exit 1
         }
         Push-TagIfAny $head
+        if ((Test-TagIdentity) -ne 0) { exit 1 }
         Show-LostHistory
         Write-Host ''
         Write-Host "origin の $Branch を $short（1 コミット）で強制的に置き換える（--force-with-lease、origin/$Branch = $($originSha.Substring(0,7)) のときだけ）" -ForegroundColor Yellow
@@ -126,6 +172,7 @@ if ($RebuildHistory) {
             Write-Host "提出の URL: https://$ExpectedRemote/tree/$Tag"
         }
         Write-Host "送った。手元の古い履歴は枝 $BackupBranch に残っている（送らない。要らなくなったら作者が消す）。" -ForegroundColor Green
+        Write-Host '次: リポジトリが public かを GitHub で確かめる（docs\stage4\submission_1008.md。このスクリプトは設定を変えない）。' -ForegroundColor Yellow
         exit 0
     }
 
@@ -137,11 +184,12 @@ if ($RebuildHistory) {
         Write-Host '作業ツリーの検査（書き出した中身が提出の版になる）:' -ForegroundColor Cyan
         $rc = Invoke-Check @('--worktree')
         Write-Host ''
-        Write-Host "次の段: -RebuildHistory -Execute で、手元に孤立した枝 $CleanBranch を作って 1 コミットにする（送らない）。"
+        Write-Host "次の段: -RebuildHistory -Execute -AuthorName <アカウント名> -AuthorEmail <noreply> で、手元に孤立した枝 $CleanBranch を作って 1 コミットにする（送らない）。"
         exit $rc
     }
 
     # (b) 作る: 手元だけ。送らない
+    Assert-Identity
     if ($cur -ne $Branch) { throw "今の枝 $cur が $Branch ではない（作り直しは $Branch の作業ツリーから始める）" }
     $exists = & $git -C $Repo rev-parse --verify --quiet "refs/heads/$CleanBranch"
     if ($exists) { throw "枝 $CleanBranch がすでにある（前の試しの残り。中身を確かめてから git branch -D $CleanBranch）" }
@@ -151,8 +199,19 @@ if ($RebuildHistory) {
     & $git -C $Repo checkout --orphan $CleanBranch
     if ($LASTEXITCODE -ne 0) { throw '孤立した枝を作れない' }
     & $git -C $Repo add -A
-    & $git -C $Repo commit -q -m $Message
-    if ($LASTEXITCODE -ne 0) { throw 'コミットに失敗' }
+    # 作者とコミッタを固定する（git の設定 user.name・user.email は使わない）
+    $env:GIT_AUTHOR_NAME = $AuthorName; $env:GIT_AUTHOR_EMAIL = $AuthorEmail
+    $env:GIT_COMMITTER_NAME = $AuthorName; $env:GIT_COMMITTER_EMAIL = $AuthorEmail
+    try {
+        & $git -C $Repo commit -q -m $Message
+        $rcCommit = $LASTEXITCODE
+    } finally {
+        Remove-Item Env:GIT_AUTHOR_NAME, Env:GIT_AUTHOR_EMAIL, Env:GIT_COMMITTER_NAME, Env:GIT_COMMITTER_EMAIL -ErrorAction SilentlyContinue
+    }
+    if ($rcCommit -ne 0) { throw 'コミットに失敗' }
+    if ((Test-HistoryIdentity) -ne 0) {
+        Write-Host "作者・コミッタが違う。送らない。やめるとき: git checkout $Branch のあと git branch -D $CleanBranch" -ForegroundColor Red; exit 1
+    }
     $short = (& $git -C $Repo rev-parse --short HEAD).Trim()
     $nfiles = (& $git -C $Repo ls-files | Measure-Object -Line).Lines
     $rc = Invoke-Check @('--upstream', "origin/$Branch", '--json', (Join-Path $out 'check_submission_rebuild.json'))
@@ -163,7 +222,7 @@ if ($RebuildHistory) {
     Write-Host "枝 $CleanBranch、コミット 1 つ（$short）、ファイル $nfiles。検査: $(if ($rc -eq 0) { '合格' } else { '不合格' })"
     Write-Host ''
     Write-Host '作者が上の表示（消える履歴と新しいコミット）を確かめて、送ってよいと明示したときだけ、次を実行する:' -ForegroundColor Yellow
-    Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\push_submission.ps1 -RebuildHistory -ForcePush -ConfirmHash $short [-Tag pai-final-v1] [-DryRun]"
+    Write-Host "  powershell -ExecutionPolicy Bypass -File scripts\push_submission.ps1 -RebuildHistory -ForcePush -ConfirmHash $short -AuthorName $AuthorName -AuthorEmail $AuthorEmail [-Tag pai-final-v1] [-DryRun]"
     Write-Host "やめるとき: git checkout $Branch のあと git branch -D $CleanBranch（$Branch の履歴は変わっていない）"
     exit $rc
 }

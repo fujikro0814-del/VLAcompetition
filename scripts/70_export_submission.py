@@ -2,11 +2,16 @@
 
     .venv\\Scripts\\python.exe scripts\\70_export_submission.py export --dest C:\\PAI\\recovery-vla-panda
     .venv\\Scripts\\python.exe scripts\\70_export_submission.py scan --dest C:\\PAI\\recovery-vla-panda   # 残った語の一覧
-    .venv\\Scripts\\python.exe scripts\\70_export_submission.py package      # omnicampus に出す Zip（動画＋説明資料）を作って確かめる
+    .venv\\Scripts\\python.exe scripts\\70_export_submission.py youtube [--github-url https://github.com/<ユーザー名>/recovery-vla-panda]
+        # 動画の確かめ（長さ 1〜3 分・場面の倍速が 2 倍まで）と、YouTube のタイトル・概要欄の下書き（outputs/submission/youtube_*）
+    .venv\\Scripts\\python.exe scripts\\70_export_submission.py package --legacy   # 10/8 版で不要（Zip の提出はなくなった）。既定では使わない
 
-- push は scripts\\push_submission.ps1 から（検査 scripts\\check_submission.py に通ったときだけ）。手順は docs\\local\\submission_procedure.md
+- 提出（課題の 10/8 版）: omnicampus に説明資料の PDF と GitHub のリポジトリの URL（public）の 2 つ。動画は自分の YouTube に
+  上げて URL を出す（Zip はなくなった）。手順は docs/stage4/submission_1008.md
+- push は scripts\\push_submission.ps1 から（検査 scripts\\check_submission.py に通ったときだけ）
 - README.md は原稿 paper/README_submission.md に説明資料と同じ値（paper/build/values.json）を差し込んで作る。LICENSE（MIT）も
-  ここで作る（著作権者の名前 LICENSE_HOLDER は提出の前に作者が入れる）。THIRD_PARTY_NOTICES.md だけは書き出し先で手で書く
+  ここで作る。著作権者は omnicampus のアカウント名（ACCOUNT。60_paper.py・62_video.py と同じ値。本名を入れる欄は作らない）で、
+  ACCOUNT が仮の値のままなら export と youtube は止まる。THIRD_PARTY_NOTICES.md だけは書き出し先で手で書く
 
 - 入れるもの: INCLUDE の一覧（コード・設定・検査・場面と説明資料の原稿・環境の作り方・凍結のハッシュの一覧）
 - 入れないもの: 掲示板・作業記録（docs の大半）・卒研や C:\\VLA に触れるもの（取り込みと照合のスクリプト、予備実験の
@@ -19,10 +24,47 @@ import json
 import pathlib
 import re
 import shutil
+import subprocess
 
 from recovla.common import config
 
 ROOT = config.ROOT
+PAPER_PY, VIDEO_PY = ROOT / "scripts" / "60_paper.py", ROOT / "scripts" / "62_video.py"
+PLACEHOLDER = "アカウント名"                   # 60_paper.py・62_video.py の ACCOUNT の仮の値（check_submission.py も読む）
+
+
+def _const(path: pathlib.Path, name: str):
+    """スクリプトを読み込まずに、モジュールの一番上の `name = "..."` の値を取る（60_paper・62_video の ACCOUNT・FORBIDDEN）。"""
+    import ast
+    for node in ast.parse(path.read_text(encoding="utf-8")).body:
+        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == name for t in node.targets):
+            return ast.literal_eval(node.value)
+    raise SystemExit(f"{path.name} に {name} がない")
+
+
+# omnicampus のアカウント名（説明資料・動画のファイル名、YouTube のタイトル、LICENSE の著作権者に入る）。60_paper.py の値を使う
+ACCOUNT = _const(PAPER_PY, "ACCOUNT")
+
+
+def account_problems(acc_p: str, acc_v: str, allow_placeholder: bool = False) -> list:
+    """60_paper.py と 62_video.py の ACCOUNT が同じで、仮の値でないこと。問題の一覧を返す。"""
+    problems = []
+    if acc_p != acc_v:
+        problems.append(f"60_paper.py と 62_video.py の ACCOUNT が違う: {acc_p!r} / {acc_v!r}")
+    if not (acc_p or "").strip():
+        problems.append("ACCOUNT が空")
+    if PLACEHOLDER in (acc_p, acc_v) and not allow_placeholder:
+        problems.append(f"ACCOUNT が仮の値 {PLACEHOLDER!r} のまま（60_paper.py・62_video.py を omnicampus のアカウント名に直す）")
+    return problems
+
+
+def account_or_exit(allow_placeholder: bool = False, paper: pathlib.Path = PAPER_PY, video: pathlib.Path = VIDEO_PY) -> str:
+    """ACCOUNT を返す。2 つのスクリプトで違う・仮の値のまま（--allow-placeholder なし）なら止める。"""
+    acc_p, acc_v = _const(paper, "ACCOUNT"), _const(video, "ACCOUNT")
+    problems = account_problems(acc_p, acc_v, allow_placeholder)
+    if problems:
+        raise SystemExit("止める: " + " / ".join(problems))
+    return acc_p
 
 INCLUDE = [
     "pyproject.toml", ".gitignore",
@@ -50,6 +92,8 @@ INCLUDE = [
     "scripts/94_s3_round1.py", "scripts/95_s3_round2.py", "scripts/check_g1_boundary.py",
 ]
 EXCLUDE = [r"__pycache__", r"\.pyc$", r"tests/test_c_port\.py$", r"tests/test_push_check\.py$",
+           # 提出の道具（このスクリプト・check_submission.py・push_submission.ps1）のテスト。道具は入れないのでテストも入れない
+           r"tests/test_submission_1008\.py$",
            r"tests/fixtures/scene_g0_reference\.json$", r"tests/planner/fixtures/final_sentences\.json$",
            # 以前の版（目標 v1、9/29 提出）の表と図（0149: 提出用リポジトリの最初の 2 コミットに残る）
            r"^docs/results/results\.md$", r"^docs/results/e4_tradeoff_final\.png$",
@@ -85,10 +129,10 @@ KEEP = ("THIRD_PARTY_NOTICES.md",)                       # 書き出し先で手
 # （paper/build/values.json、scripts/60_paper.py build が作る）を差し込む。数字を手で書かないため（説明資料の 1 ページ目と同じ中身）
 README_TMPL = ROOT / "paper" / "README_submission.md"
 VALUES = ROOT / "paper" / "build" / "values.json"
-# LICENSE（10/08 の作者の決定: MIT）。著作権者の名前は、ACCOUNT と同じく最終の段階で作者が入れる（仮の値のままなら
-# check_submission.py が注意を出す）
-LICENSE_HOLDER = "著作権者の名前"
-LICENSE_HOLDER_PLACEHOLDER = "著作権者の名前"
+# LICENSE（10/08 の作者の決定: MIT）。著作権者は omnicampus のアカウント名（ACCOUNT と同じ値）。課題の 10/8 版で、PDF・コード・
+# 動画に氏名・所属・メールアドレスを載せない（アカウント名は可）ため、本名を入れる欄は作らない。仮の値のままなら export が止まり、
+# 書き出し先の LICENSE に仮の値が残っていれば check_submission.py が止める
+LICENSE_HOLDER = ACCOUNT
 LICENSE_YEAR = "2026"
 MIT_TEXT = """MIT License
 
@@ -255,8 +299,13 @@ def transform(text: str):
     return text, counts
 
 
+def license_text(holder: str) -> str:
+    return MIT_TEXT.format(year=LICENSE_YEAR, holder=holder)
+
+
 def cmd_export(a) -> None:
     dest = pathlib.Path(a.dest)
+    account_or_exit(a.allow_placeholder)               # LICENSE の著作権者（LICENSE_HOLDER = ACCOUNT）が仮の値なら、消す前に止める
     readme = render_readme()                           # 消す前に作れることを確かめる
     if dest.exists():                                  # 書き出し先を作り直す（.git と手書きのファイル KEEP は残す）
         if dest.name != "recovery-vla-panda":
@@ -292,7 +341,7 @@ def cmd_export(a) -> None:
         t, c = transform((ROOT / rel).read_text(encoding="utf-8"))
         (dest / rel).write_text(t, encoding="utf-8", newline="")
     (dest / "README.md").write_text(readme, encoding="utf-8", newline="")          # 原稿は語の決まりに沿って書くので置き換えをかけない
-    (dest / "LICENSE").write_text(MIT_TEXT.format(year=LICENSE_YEAR, holder=LICENSE_HOLDER), encoding="utf-8", newline="")
+    (dest / "LICENSE").write_text(license_text(LICENSE_HOLDER), encoding="utf-8", newline="")
     (ROOT / "outputs" / "submission").mkdir(parents=True, exist_ok=True)
     (ROOT / "outputs" / "submission" / "export_report.json").write_text(json.dumps(report, ensure_ascii=False, indent=1),
                                                                          encoding="utf-8")
@@ -327,21 +376,19 @@ def cmd_scan(a) -> None:
         print(k, len(v), v[:3])
 
 
-PLACEHOLDER = "アカウント名"
 ZIP_LIMIT = 200 * 1000 * 1000                  # 課題の 9/30 版: omnicampus の Zip は 200MB 以下（MB を小さい方の 10^6 で取る）
 
 
-def _const(path: pathlib.Path, name: str):
-    """スクリプトを読み込まずに、モジュールの一番上の `name = "..."` の値を取る（60_paper・62_video の ACCOUNT）。"""
-    import ast
-    for node in ast.parse(path.read_text(encoding="utf-8")).body:
-        if isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == name for t in node.targets):
-            return ast.literal_eval(node.value)
-    raise SystemExit(f"{path.name} に {name} がない")
-
-
 def cmd_package(a) -> None:
-    """omnicampus に出す Zip（動画 MP4 1 つ＋説明資料 PDF 1 つ）を作り、課題の 9/30 版の決まりを確かめる。"""
+    """omnicampus に出す Zip（動画 MP4 1 つ＋説明資料 PDF 1 つ）を作り、課題の 9/30 版の決まりを確かめる。
+
+    10/8 版で不要（Zip の提出はなくなり、PDF と GitHub の URL を出し、動画は YouTube に上げる）。消さずに残すが、既定では
+    使わない（--legacy を付けたときだけ動く）。動画の確かめは youtube を使う。
+    """
+    if not a.legacy:
+        print("package は課題の 10/8 版で不要（Zip の提出はなくなった）。動画の確かめと概要欄の下書きは youtube を使う。"
+              "古い Zip をどうしても作るときだけ --legacy を付ける。")
+        raise SystemExit(2)
     import zipfile
     build = ROOT / "paper" / "build"
     acc_p, acc_v = _const(ROOT / "scripts" / "60_paper.py", "ACCOUNT"), _const(ROOT / "scripts" / "62_video.py", "ACCOUNT")
@@ -388,19 +435,210 @@ def cmd_package(a) -> None:
     raise SystemExit(0 if ok else 1)
 
 
+# ------------------------------------------------------------------ YouTube（課題の 10/8 版）
+# 動画は自分の YouTube に上げ、URL を出す。タイトルは「PAI最終課題_<omnicampus のアカウント名>」。長さは 1〜3 分、倍速は 2 倍まで
+# で、倍速は動画の中か概要欄に明記する。概要欄の数字は説明資料と同じ値の一覧（paper/build/values.json）から差し込み、手で書かない
+VIDEO_YAML = ROOT / "configs" / "demo" / "video_s3.yaml"
+MAX_SPEED = 2.0                                # 課題の 10/8 版: 倍速は 2 倍まで（62_video.py の MAX_SPEED と同じ）
+VIDEO_MIN_S, VIDEO_MAX_S = 60, 180             # 課題の 10/8 版: 動画は 1〜3 分
+CLIP_KEYS = ("clip", "clip_with", "clip_without", "t0", "t1")       # どれかがある場面は映像の場面（倍速を書く）
+# 概要欄に出す場面の名前（場面の id → 名前）。ない id はそのまま出す
+SCENE_NAMES = {"contrast": "冒頭の左右比較（復帰デモあり／なし）", "contrast_p1": "把持を意図的に失敗させた評価の 1 回",
+               "task": "「全部片付けて」の実演（3 個を順に片付ける）"}
+YT_TITLE = "PAI最終課題_{account}"
+YT_TITLE_MAX, YT_DESC_MAX = 100, 5000          # YouTube の上限（文字数）。概要欄に < と > は使えない
+GITHUB_BLANK = "（ここに提出する GitHub のリポジトリの URL を入れる。public にしてから）"
+# 概要欄の原稿。{{キー}} は values.json の値と、ここで計算する値（idea・speed_lines・github_url・v_len）
+YT_TMPL = """{{idea}}
+
+■ 倍速（動画の中でも、映像の場面ごとに右上へ「実時間」「N 倍速」と表示）
+{{speed_lines}}
+
+■ コード（GitHub）
+{{github_url}}
+
+■ 説明資料の要点
+・人手のデモ集めなし: 学習データ {{eps_auto}} 本（成功デモ {{n_normal}}・復帰デモ {{n_recovery}}）をすべてスクリプトで自動で作り、VLA（SmolVLA）を追加学習した
+・把持を意図的に失敗させた同じ配置・同じ失敗の {{e3a_pairs}} 組で、掴み直して成功したのは復帰デモあり {{e3a_xk}} 回、なし {{e3a_yk}} 回（Holm 補正後 p {{e3a_holmeq}}）
+・「全部片付けて」の 1 文から LLM が順番を決め、VLA が 3 個を運ぶ実演では、{{e7_n}} 配置中 {{e7_k}} 配置で 3 個とも片付いた。シミュレーションのみで、落下・置き損ねからはほとんど回復しない
+
+動画の長さ {{v_len}}。詳しい条件と数字は説明資料に記載
+"""
+# 上げるときの設定（課題の 10/8 版）。下書きと一緒に出す
+YT_SETTINGS = [("タイトル", "上の 1 行（PAI最終課題_<omnicampus のアカウント名>）"),
+               ("公開設定", "限定公開以上（最低条件。全体公開なら加点）。非公開は不可"),
+               ("視聴者（子ども向け）", "いいえ、子ども向けではありません"),
+               ("年齢制限", "いいえ、18 歳以上の視聴者のみに制限しません"),
+               ("プレミア公開", "しない（インスタントプレミア公開も使わない。すぐ公開する）"),
+               ("概要欄", "上の下書きを貼り、GitHub の URL の欄を埋める")]
+
+
+def mmss(s: float) -> str:
+    return f"{int(s) // 60}:{int(s) % 60:02d}"
+
+
+def speed_label(sp: float) -> str:
+    """62_video.py の画面の札と同じ書き方（1 倍から 0.05 以内なら実時間）。"""
+    return "実時間（1 倍速）" if abs(sp - 1) <= 0.05 else f"{sp:.1f} 倍速"
+
+
+def scene_speeds(scenes: list):
+    """場面の表（video_s3.yaml の scenes）から、映像の場面の時刻と倍速 (t1 − t0) / dur_s を出す。(行, 合計の秒, 問題)。"""
+    rows, problems, t = [], [], 0.0
+    for sc in scenes:
+        dur = float(sc["dur_s"])
+        start, t = t, t + dur
+        if not any(k in sc for k in CLIP_KEYS):
+            continue                                   # 図と文字だけの場面（倍速なし）
+        if "t1" not in sc:
+            problems.append(f"場面 {sc['id']} に t1 がなく倍速を計算できない（映像の長さで決まる。t1 を書く）")
+            continue
+        sp = (float(sc["t1"]) - float(sc.get("t0", 0.0))) / dur
+        rows.append({"id": sc["id"], "name": SCENE_NAMES.get(sc["id"], sc["id"]), "start": mmss(start), "end": mmss(t),
+                     "speed": round(sp, 4), "label": speed_label(sp)})
+        if sp > MAX_SPEED + 1e-9:
+            problems.append(f"場面 {sc['id']} の倍速 {sp:.2f} が {MAX_SPEED:g} 倍を超える（dur_s を延ばす）")
+    return rows, t, problems
+
+
+def video_seconds(path: pathlib.Path):
+    """動画の長さ（秒）と読んだ道具。ffprobe があればそれで、なければ OpenCV（フレーム数 ÷ fps）。読めなければ (None, 理由)。"""
+    exe = shutil.which("ffprobe")
+    if exe:
+        r = subprocess.run([exe, "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1",
+                            str(path)], capture_output=True, text=True)
+        try:
+            return float(r.stdout.strip().splitlines()[0]), "ffprobe"
+        except (ValueError, IndexError):
+            pass
+    try:
+        import cv2
+    except ImportError:
+        return None, "ffprobe も OpenCV もない"
+    cap = cv2.VideoCapture(str(path))
+    n, fps = cap.get(cv2.CAP_PROP_FRAME_COUNT), cap.get(cv2.CAP_PROP_FPS)
+    cap.release()
+    if n > 0 and fps > 0:
+        return n / fps, "OpenCV"
+    return None, "ffprobe でも OpenCV でも読めない"
+
+
+def idea_sentence() -> str:
+    """1 文のアイデア。README の原稿の最初の太字の段落（説明資料の冒頭と同じ考え方の文）をそのまま使う。"""
+    m = re.search(r"^\*\*(.+?)\*\*\s*$", README_TMPL.read_text(encoding="utf-8"), flags=re.M)
+    if not m:
+        raise SystemExit(f"1 文のアイデア（最初の太字の段落）が {README_TMPL.name} にない")
+    return m.group(1)
+
+
+def youtube_text(account: str, rows: list, values: dict, idea: str, github_url: str, seconds: float):
+    """YouTube のタイトルと概要欄。原稿のキーが値の一覧にないときは (タイトル, None, 足りないキー)。"""
+    lines = [f"・{r['start']}〜{r['end']} {r['name']}: {r['label']}" for r in rows]
+    lines.append("・ほかの場面は図と文字だけ（倍速なし）")
+    v = dict(values, idea=idea, speed_lines="\n".join(lines), github_url=github_url or GITHUB_BLANK, v_len=mmss(seconds))
+    missing = sorted({k for k in re.findall(r"\{\{(\w+)\}\}", YT_TMPL) if k not in v})
+    title = YT_TITLE.format(account=account)
+    if missing:
+        return title, None, missing
+    return title, re.sub(r"\{\{(\w+)\}\}", lambda m: str(v[m.group(1)]), YT_TMPL), []
+
+
+def forbidden_hits(text: str) -> list:
+    """60_paper.py の FORBIDDEN（使わない語）に当たった所。60_paper.py は読み込まない（設定と結果を読むため重い）。"""
+    return [(p, m.group(0)) for p in _const(PAPER_PY, "FORBIDDEN") for m in re.finditer(p, text)]
+
+
+def cmd_youtube(a) -> None:
+    """動画 MP4 を確かめ（長さ 1〜3 分・場面の倍速が 2 倍まで）、YouTube のタイトルと概要欄の下書きを出す。
+
+    読むもの: 60_paper.py・62_video.py の ACCOUNT、configs/demo/video_s3.yaml、paper/build/values.json、
+              paper/build/動画_PAI最終課題_<アカウント名>.mp4、paper/README_submission.md（1 文のアイデア）
+    書くもの: outputs/submission/youtube_title.txt・youtube_description.txt・youtube.json（--out で変える）。
+              問題があれば何も書かずに exit 1
+    """
+    import yaml
+    acc_p, acc_v = _const(PAPER_PY, "ACCOUNT"), _const(VIDEO_PY, "ACCOUNT")
+    problems = account_problems(acc_p, acc_v, a.allow_placeholder)
+    rows, total, p = scene_speeds(yaml.safe_load(pathlib.Path(a.scenes).read_text(encoding="utf-8"))["scenes"])
+    problems += p
+    mp4 = pathlib.Path(a.video) if a.video else ROOT / "paper" / "build" / f"動画_PAI最終課題_{acc_v}.mp4"
+    sec, how = None, ""
+    if not mp4.is_file():
+        problems.append(f"動画がない: {mp4}（62_video.py build）")
+    else:
+        sec, how = video_seconds(mp4)
+        if sec is None:
+            problems.append(f"動画の長さを読めない: {mp4}（{how}）")
+        elif not VIDEO_MIN_S <= sec <= VIDEO_MAX_S:
+            problems.append(f"動画の長さ {sec:.1f} s（1〜3 分の外）")
+        elif abs(sec - total) > 0.5:
+            problems.append(f"動画の長さ {sec:.1f} s が場面の表の合計 {total:g} s と違う（概要欄の時刻と倍速がずれる。62_video.py build）")
+    values_p = pathlib.Path(a.values)
+    values = json.loads(values_p.read_text(encoding="utf-8")) if values_p.is_file() else None
+    if values is None:
+        problems.append(f"値の一覧がない: {values_p}（先に scripts\\60_paper.py build）")
+    if a.github_url and not re.fullmatch(r"https://github\.com/[A-Za-z0-9-]+/[A-Za-z0-9._-]+/?", a.github_url):
+        problems.append(f"GitHub の URL の形が違う: {a.github_url}（https://github.com/<ユーザー名>/<リポジトリ>）")
+    title = desc = None
+    if values is not None:
+        title, desc, missing = youtube_text(acc_p, rows, values, idea_sentence(), a.github_url, sec if sec else total)
+        if missing:
+            problems.append(f"概要欄の原稿のキーが値の一覧にない: {', '.join(missing)}（60_paper.py build をやり直す）")
+    if desc is not None:
+        for pat, hit in forbidden_hits(title + "\n" + desc):
+            problems.append(f"使わない語 {hit!r}（60_paper.py の FORBIDDEN {pat!r}）")
+        if re.search(r"[<>]", title + desc):
+            problems.append("タイトルか概要欄に < か > がある（YouTube では使えない）")
+        if len(title) > YT_TITLE_MAX or len(desc) > YT_DESC_MAX:
+            problems.append(f"長すぎる: タイトル {len(title)} 字（上限 {YT_TITLE_MAX}）、概要欄 {len(desc)} 字（上限 {YT_DESC_MAX}）")
+    if problems:
+        print("YouTube の下書きを書かない:")
+        for q in problems:
+            print("  " + q)
+        raise SystemExit(1)
+    out = pathlib.Path(a.out) if a.out else ROOT / "outputs" / "submission"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "youtube_title.txt").write_text(title + "\n", encoding="utf-8")
+    (out / "youtube_description.txt").write_text(desc, encoding="utf-8")
+    (out / "youtube.json").write_text(json.dumps({
+        "title": title, "description": desc, "video": str(mp4), "video_s": round(sec, 2), "read_with": how,
+        "scenes_total_s": total, "speeds": rows, "max_speed": MAX_SPEED, "github_url": a.github_url,
+        "settings": dict(YT_SETTINGS)}, ensure_ascii=False, indent=1), encoding="utf-8")
+    print("=== タイトル ===")
+    print(title)
+    print("=== 概要欄 ===")
+    print(desc)
+    print("=== 上げるときの設定（課題の 10/8 版） ===")
+    for k, val in YT_SETTINGS:
+        print(f"  {k}: {val}")
+    if not a.github_url:
+        print("注意: GitHub の URL の欄が空（--github-url で入れるか、貼った後に手で埋める）")
+    print("書いた:", out / "youtube_title.txt", out / "youtube_description.txt", out / "youtube.json")
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("export")
     s.add_argument("--dest", required=True)
+    s.add_argument("--allow-placeholder", action="store_true",
+                   help="試しだけ: ACCOUNT が仮の名前のままでも書き出す（LICENSE に仮の値が入り、check_submission.py が止める）")
     s = sub.add_parser("scan")
     s.add_argument("--dest", required=True)
     s.add_argument("--show", type=int, default=30)
-    s = sub.add_parser("package")
+    s = sub.add_parser("youtube", help="動画の確かめと YouTube のタイトル・概要欄の下書き（課題の 10/8 版）")
+    s.add_argument("--video", default="", help="動画 MP4（既定 paper/build/動画_PAI最終課題_<アカウント名>.mp4）")
+    s.add_argument("--scenes", default=str(VIDEO_YAML), help="場面の表（既定 configs/demo/video_s3.yaml）")
+    s.add_argument("--values", default=str(VALUES), help="説明資料と同じ値の一覧（既定 paper/build/values.json）")
+    s.add_argument("--github-url", default="", help="提出する GitHub のリポジトリの URL（空なら欄だけ作る）")
+    s.add_argument("--out", default="", help="下書きの置き場所（既定 outputs/submission）")
+    s.add_argument("--allow-placeholder", action="store_true", help="試しだけ: ACCOUNT が仮の名前のままでも下書きを出す")
+    s = sub.add_parser("package", help="10/8 版で不要（Zip の提出はなくなった）。既定では使わない。--legacy のときだけ動く")
+    s.add_argument("--legacy", action="store_true", help="10/8 版で不要。古い Zip をどうしても作るときだけ")
     s.add_argument("--out", default="", help="Zip の置き場所（既定 outputs/submission）")
     s.add_argument("--allow-placeholder", action="store_true", help="試しだけ: ACCOUNT が仮の名前のままでも作る")
     a = ap.parse_args(argv)
-    {"export": cmd_export, "scan": cmd_scan, "package": cmd_package}[a.cmd](a)
+    {"export": cmd_export, "scan": cmd_scan, "youtube": cmd_youtube, "package": cmd_package}[a.cmd](a)
     return 0
 
 
