@@ -252,22 +252,58 @@ def cmd_defs(a) -> int:
     return 0
 
 
-def cmd_summary(a) -> int:
-    from recovla.diag import start as S
-    base = ROOT / "outputs" / "v2eval" / a.experiment
-    starts, xpl, unknown = {}, {}, []
+def summary_dirs(base: pathlib.Path) -> tuple:
+    """summary に使うフォルダを、全試行の diag から見分ける（mujoco を読まない。査読の重要 1）。
+    返り値 (starts {"<start>|<prior>": フォルダ}, xpl {腕: {回: フォルダ}}, 見分けられないフォルダ名, 問題の文の並び)。
+    同じ鍵のフォルダが 2 つ（前の版では名前順で後のほうが黙って上書きした）、1 つのフォルダの中で diag の鍵が混ざっている、
+    は問題として返す（cmd_summary は止める）。"""
+    starts, xpl, unknown, probs, seen = {}, {}, [], [], {}
     for d in sorted(x for x in base.iterdir() if x.is_dir()):
         tj = sorted(d.glob("trial_[0-9][0-9][0-9][0-9].json"))
         if not tj:
             continue
-        dg = json.loads(tj[0].read_text(encoding="utf-8")).get("diag") or {}
-        if dg.get("diag") == "D-single-start":
-            starts[f"{dg['start']}|{dg['prior']}"] = S.summarize_single(d)
-        elif dg.get("diag") == "XPL":
-            xpl.setdefault(dg["arm"].replace("XPL_", ""), {})[int(dg["rep"])] = S.summarize_single(d)
-        else:
+        keys = set()
+        for p in tj:
+            dg = json.loads(p.read_text(encoding="utf-8")).get("diag") or {}
+            if dg.get("diag") == "D-single-start":
+                keys.add(("start", f"{dg.get('start')}|{dg.get('prior')}"))
+            elif dg.get("diag") == "XPL":
+                keys.add(("xpl", f"{str(dg.get('arm')).replace('XPL_', '')}|{dg.get('rep')}"))
+            else:
+                keys.add(("unknown", str(dg.get("diag"))))
+        if len(keys) != 1:
+            probs.append(f"{d.name}: 試行の diag の鍵が {len(keys)} 種類ある {sorted(keys)}（1 つのフォルダに別の条件が混ざっている）")
+            continue
+        key = next(iter(keys))
+        if key[0] == "unknown":
             unknown.append(d.name)
-    out = {"written": time.strftime("%Y-%m-%d %H:%M:%S"), "experiment": a.experiment, "skipped_dirs": unknown}
+            continue
+        if key in seen:
+            probs.append(f"同じ鍵 {key[1]}（{key[0]}）のフォルダが 2 つある: {seen[key]} と {d.name}（どちらを使うか決めてから回す）")
+            continue
+        seen[key] = d.name
+        if key[0] == "start":
+            starts[key[1]] = d
+        else:
+            arm, rep = key[1].split("|")
+            xpl.setdefault(arm, {})[int(rep)] = d
+    return starts, xpl, unknown, probs
+
+
+def cmd_summary(a) -> int:
+    from recovla.diag import start as S
+    base = ROOT / "outputs" / "v2eval" / a.experiment
+    sd, xd, unknown, probs = summary_dirs(base)
+    if probs:
+        for p in probs:
+            print(f"[d_start] {p}", file=sys.stderr)
+        print("[d_start] summary を書かずに止めた（同じ鍵のフォルダ・混ざったフォルダ）", file=sys.stderr)
+        return 3
+    starts = {k: S.summarize_single(d) for k, d in sd.items()}
+    xpl = {arm: {rep: S.summarize_single(d) for rep, d in reps.items()} for arm, reps in xd.items()}
+    out = {"written": time.strftime("%Y-%m-%d %H:%M:%S"), "experiment": a.experiment, "skipped_dirs": unknown,
+           "dirs": {k: d.name for k, d in sd.items()} | {f"XPL_{arm}_r{rep}": d.name for arm, reps in xd.items()
+                                                          for rep, d in reps.items()}}
     if starts:
         out["gate_S_inputs"] = S.gate_S_inputs(starts)
     if xpl:

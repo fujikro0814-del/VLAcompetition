@@ -31,12 +31,15 @@
   画像の撮影時刻の最小・放した理由を残す。kind は "P2" のまま（87・50_e_eval・report・time_scoring が P2 として読む）。
 
 関門 C の指標（docs/目標書_段階4.md 8-1・8-2、s4_gates の gates.C。判定はしない＝数値を出すだけ）:
-- R の L 秒の復帰 = R の試行のうち、誘発が L 秒以内に成立した試行（induce.t_established <= L）の中で、L 秒までに成功した割合。
-- R−N（L 秒）= R と N の両方で L 秒以内に成立した種の対（鍵は種と目標の色）で、R の L 秒の成功率 − N の L 秒の成功率
+- R の L 秒の復帰 = R の試行のうち、誘発が L 秒より前に成立した試行（induce.t_established < L。ちょうど L 秒の成立は入れない。
+  掲示板 0155 の 1-1）の中で、L 秒までに成功した（t_success <= L）割合。
+- R−N（L 秒）= R と N の両方で L 秒より前に成立した種の対（鍵は種と目標の色）で、R の L 秒の成功率 − N の L 秒の成功率
   （= (R だけ成功 − N だけ成功) / 対の数）。
 - 成立した対の数 = 上の対の数。
 - L = 30 s が主、60 s が副、45 s は記述だけ。
 - 実装は time_scoring.compare_conditions と独立に書いた（3-6「集計は独立な 2 つの実装で一致」の片方）。cross_check で突き合わせる。
+  cross_check_dirs は、ファイルの列挙もそれぞれ独立に行う（こちらは load_condition の glob、time_scoring は load_trials の
+  正規表現。査読の重要 1 の最後）。列挙した試行の番号の集合が食い違っても一致にしない。
 """
 import json
 import pathlib
@@ -255,7 +258,8 @@ def summarize_fall_timing(rows: list) -> dict:
 
 # ---------------------------------------------------------------------- 関門 C の指標（判定はしない）
 def _est_by(rec: dict, L: float) -> bool:
-    """誘発が L 秒以内に成立したか（induce.t_established <= L）。成立の時刻が無い成立は、回した時間が L 以下なら真。"""
+    """誘発が L 秒より前に成立したか（induce.t_established < L。ちょうど L 秒の成立は入れない。掲示板 0155 の 1-1。段階 3 は
+    30 s で打ち切ったので成立は 29.9 s 以前だけだった）。成立の時刻が無い成立は、回した時間が L 以下なら真。"""
     ind = rec.get("induce") or {}
     if not (ind.get("kind") and ind.get("established")):
         return False
@@ -263,8 +267,8 @@ def _est_by(rec: dict, L: float) -> bool:
     if te is None:
         if float(L) >= float(rec["time_limit_s"]) - EPS:
             return True
-        raise ValueError(f"seed {rec.get('seed')}: 成立の時刻がなく、{L:g} s までに成立したか分からない")
-    return float(te) <= float(L) + EPS
+        raise ValueError(f"seed {rec.get('seed')}: 成立の時刻がなく、{L:g} s より前に成立したか分からない")
+    return float(te) < float(L) - EPS
 
 
 def _succ_by(rec: dict, L: float) -> bool:
@@ -300,8 +304,8 @@ def paired_at(recs_r: list, recs_n: list, L: float) -> dict:
 
 def gate_c_material(recs_r: list, recs_n: list, ats=SCORE_AT) -> dict:
     """関門 C の数値（判定はしない）。主 30 s、副 60 s、45 s は記述だけ。名前は s4_gates の gates.C の指標に合わせる。"""
-    out = {"definition": "recovery = L 秒以内に成立した試行のうち L 秒までに成功した割合。R−N = R・N の両方で L 秒以内に成立した"
-                         "種の対（種と目標の色）での (R だけ成功 − N だけ成功) / 対の数。pairs = その対の数",
+    out = {"definition": "recovery = L 秒より前に成立した試行（t_established < L）のうち L 秒までに成功した割合。R−N = R・N の"
+                         "両方で L 秒より前に成立した種の対（種と目標の色）での (R だけ成功 − N だけ成功) / 対の数。pairs = その対の数",
            "by_L": {}}
     for L in ats:
         rr, rn, pr = recovery_at(recs_r, L), recovery_at(recs_n, L), paired_at(recs_r, recs_n, L)
@@ -319,13 +323,15 @@ def gate_c_material(recs_r: list, recs_n: list, ats=SCORE_AT) -> dict:
     return out
 
 
-def cross_check(recs_r: list, recs_n: list, ats=SCORE_AT) -> dict:
-    """もう 1 つの実装（recovla.eval.time_scoring）と件数が完全に一致するか（目標書_段階4.md 第 3 節 6）。"""
+def cross_check(recs_r: list, recs_n: list, ats=SCORE_AT, ts_recs: tuple = None) -> dict:
+    """もう 1 つの実装（recovla.eval.time_scoring）と件数が完全に一致するか（目標書_段階4.md 第 3 節 6）。
+    ts_recs = (R, N) を渡すと、time_scoring の側はそれを数える（cross_check_dirs が別に列挙した記録を渡す）。"""
     from recovla.eval import time_scoring as TS
+    ts_r, ts_n = ts_recs if ts_recs is not None else (recs_r, recs_n)
     mine = gate_c_material(recs_r, recs_n, ats)
-    cr = TS.condition_scores(recs_r, ats, induced=True)
-    cn = TS.condition_scores(recs_n, ats, induced=True)
-    cmp = TS.compare_conditions(recs_r, recs_n, ats, induced=True)
+    cr = TS.condition_scores(ts_r, ats, induced=True)
+    cn = TS.condition_scores(ts_n, ats, induced=True)
+    cmp = TS.compare_conditions(ts_r, ts_n, ats, induced=True)
     diffs = []
     for L in ats:
         k = f"{L:g}"
@@ -340,6 +346,21 @@ def cross_check(recs_r: list, recs_n: list, ats=SCORE_AT) -> dict:
                  ("paired.n_only", m["paired"]["n_only"], cmp["by_limit"][k]["b_only"])]
         diffs += [{"L": k, "item": n, "mine": a, "time_scoring": b} for n, a, b in pairs if a != b]
     return {"agree": not diffs, "diffs": diffs}
+
+
+def cross_check_dirs(dir_r, dir_n, ats=SCORE_AT) -> dict:
+    """cross_check を、ファイルの列挙から独立にして当てる（査読の重要 1 の最後・掲示板 0155 の 2-7）。こちらは load_condition
+    （glob）、time_scoring は load_trials（iterdir と正規表現）で、それぞれのフォルダを読む。読んだ試行の番号の並びも比べる。"""
+    from recovla.eval import time_scoring as TS
+    mine_r, mine_n = load_condition(dir_r), load_condition(dir_n)
+    ts_r, ts_n = TS.load_trials(dir_r), TS.load_trials(dir_n)
+    out = cross_check(mine_r, mine_n, ats, ts_recs=(ts_r, ts_n))
+    lists = {"R": ([r.get("trial") for r in mine_r], [r.get("trial") for r in ts_r]),
+             "N": ([r.get("trial") for r in mine_n], [r.get("trial") for r in ts_n])}
+    enum = [{"side": s, "mine": a, "time_scoring": b} for s, (a, b) in lists.items() if a != b]
+    out["enumeration"] = {"R": len(mine_r), "N": len(mine_n), "diffs": enum}
+    out["agree"] = bool(out["agree"] and not enum)
+    return out
 
 
 # ---------------------------------------------------------------------- 読み込み

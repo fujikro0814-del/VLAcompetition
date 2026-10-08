@@ -30,8 +30,10 @@
     run.json、resume_spec.json に残す。既にある完全な記録の制限時間が今回と違えば、混ぜずに止める（終了コード 3）。
   30・45・60 秒の採点（score。主な指標は 30 s の採点）: run の試行は t_success（成功の時刻、シミュレーションの時刻）が記録に残るので、
     success かつ t_success <= T で同じ記録から出せる（打ち切りの前の経過は制限時間によらず同じ）。誘発の試行の分母は、誘発が
-    T 秒以内に成立した試行（induce.t_established <= T。批判役の指摘。30 s の採点が段階 3 と同じ定義になる）。
-    task は真値の 3 個の時刻の最大 <= T を「T 秒までに 3 個」として出す（E7 は段階 3 と同じ 1 手順 30 s で回すので、記録の成否がそのまま主）。
+    T 秒より前に成立した試行（induce.t_established < T。批判役の指摘と掲示板 0155 の 1-1。30 s の採点が段階 3 と同じ定義になる）。
+    task は all_three_in_box（主。E7 は段階 3 と同じ 1 手順 30 s で回すので、記録の成否がそのまま主）と timed_out の本数、
+    曲線用に「all_three_in_box が真の試行の、真値の 3 個の時刻の最大 <= T」を出す（0155 の 1-2）。
+    制限時間の混在・環境の区切りが 2 つ以上なら problems に書き、終了コード 1。
 
 読むもの: scripts\\82_v2_eval.py（importlib で読み込む。書き換えない。ハッシュを固定して照合する）、scripts\\41_results.py（試行の並び）、
   既にある outputs\\v2eval\\<実験>\\<条件>\\ の記録。
@@ -976,19 +978,26 @@ def build_parser() -> argparse.ArgumentParser:
 # ---------------------------------------------------------------- score（記録から T 秒の採点）
 def score_condition(d: pathlib.Path, ats) -> dict:
     """run: success かつ t_success <= T を T 秒の成功とする（打ち切りの前の経過は制限時間によらない）。
-      誘発の試行（meta["induce"]["kind"] がある）の分母は、誘発が T 秒以内に成立した試行（induce.t_established <= T）だけ
-      （目標書_段階4.md 第 3-1 節 6。段階 3 は 30 s で打ち切ったので成立はすべて 30 s 以内＝30 s の採点が段階 3 と同じ定義になる）。
-      成立しなかった・T 秒より後に成立した誘発の試行は、その T の分母にも分子にも入れない。自然の試行は全試行が分母。
-    task: 真値の 3 色の成功の時刻の最大 <= T を「T 秒までに 3 個」とする。分母は全試行。
-    at[T] = {"successes": 分子, "n": 分母, "n_trials": 記録の本数, "denominator": 分母の定義}。"""
+      誘発の試行（meta["induce"]["kind"] がある）の分母は、誘発が T 秒より前に成立した試行（induce.t_established < T）だけ
+      （掲示板 0155 の 1-1。段階 3 は 30 s で打ち切ったので成立は 29.9 s 以前だけで、30.0 s の成立は起こり得なかった。
+      ちょうど T 秒に成立した試行を入れないことで、60 s の記録の 30 s の採点が段階 3 と同じ定義になる）。成功の側（<= T）は変えない。
+      成立しなかった・T 秒ちょうど以後に成立した誘発の試行は、その T の分母にも分子にも入れない。自然の試行は全試行が分母。
+    task: 主な指標は段階 3 と同じ「終わりに 3 個とも箱の中（all_three_in_box）」で、その本数（all_three_in_box）と全体の
+      打ち切りの本数（timed_out）を出す。時間ごとの曲線は、all_three_in_box が真の試行についてだけ、真値の 3 色の成功の時刻の
+      最大 <= T を「T 秒までに 3 個そろった」とする（0155 の 1-2。途中で箱から出した試行を曲線で成功に数えない）。分母は全試行。
+    at[T] = {"successes": 分子, "n": 分母, "n_trials": 記録の本数, "denominator": 分母の定義}。
+    problems: 制限時間が 2 種類以上、環境（ENV_STOP_KEYS）が 2 つ以上（区切りごとに分けて出す）、task で all_three_in_box が
+      真なのに真値の時刻がそろわない試行。1 つでもあれば cmd_score は終了コード 1（数は出すが、報告に使う前に分ける）。"""
     runs = sorted(d.glob("trial_[0-9][0-9][0-9][0-9].json"))
     kind = "run"
     if not runs:
         runs, kind = sorted(d.glob("run_[0-9][0-9][0-9][0-9].json")), "task"
     res = {"dir": str(d), "kind": kind, "n": len(runs), "limits_seen": {}, "at": {}, "t_success": []}
-    ts, t_est, induced = [], [], []
+    ts, t_est, induced, metas = [], [], [], []
+    n_all3 = n_timed = n_all3_no_t = 0
     for p in runs:
         m = json.loads(p.read_text(encoding="utf-8"))
+        metas.append((int(p.stem.split("_")[1]), m))
         lim = m.get("time_limits") or ({"time_limit_s": m.get("time_limit_s")} if kind == "run" else {"step_timeout_s": "configs"})
         key = json.dumps({k: v for k, v in lim.items() if k != "source"}, sort_keys=True)
         res["limits_seen"][key] = res["limits_seen"].get(key, 0) + 1
@@ -1000,23 +1009,44 @@ def score_condition(d: pathlib.Path, ats) -> dict:
             t_est.append(float(te) if te is not None else None)
         else:
             tt = m.get("truth_success_t") or {}
-            t = max(tt.values()) if len(tt) == 3 else None
+            all3 = bool(m.get("all_three_in_box"))
+            ok_t = len(tt) == 3 and all(v is not None for v in tt.values())
+            t = max(tt.values()) if (all3 and ok_t) else None
+            n_all3 += all3
+            n_all3_no_t += all3 and not ok_t
+            n_timed += bool(m.get("timed_out"))
             induced.append(False)
             t_est.append(None)
         ts.append(t)
     n_ind = sum(induced)
     for T in ats:
-        # 分母に入る試行: 自然（誘発なし）は全部、誘発は T 秒以内に成立したものだけ
-        den = [i for i in range(len(ts)) if not induced[i] or (t_est[i] is not None and t_est[i] <= T + 1e-9)]
+        # 分母に入る試行: 自然（誘発なし）は全部、誘発は T 秒より前に成立したものだけ（ちょうど T は入れない）
+        den = [i for i in range(len(ts)) if not induced[i] or (t_est[i] is not None and t_est[i] < T - 1e-9)]
         k = sum(1 for i in den if ts[i] is not None and ts[i] <= T + 1e-9)
-        what = ("全試行" if not n_ind else
-                "誘発が T 秒以内に成立した試行（induce.t_established <= T）" if n_ind == len(ts) else
-                "自然の試行は全部、誘発の試行は T 秒以内に成立したものだけ")
+        what = (("全試行（分子は all_three_in_box が真で、3 色の真値の時刻の最大 <= T）" if kind == "task" else "全試行")
+                if not n_ind else
+                "誘発が T 秒より前に成立した試行（induce.t_established < T）" if n_ind == len(ts) else
+                "自然の試行は全部、誘発の試行は T 秒より前に成立したものだけ")
         res["at"][f"{T:g}"] = {"successes": k, "n": len(den), "n_trials": len(ts), "denominator": what}
     res["t_success"] = ts
+    if kind == "task":
+        res["all_three_in_box"] = n_all3                             # 主な指標（段階 3 と同じ定義）の本数
+        res["timed_out"] = n_timed                                   # 全体の打ち切りが効いた本数（1 件でも事前登録の逸脱として書く）
+        res["all_three_without_truth_time"] = n_all3_no_t
     if n_ind:
         res["n_induced"] = n_ind
         res["t_established"] = t_est
+    probs = []
+    if len(res["limits_seen"]) > 1:
+        probs.append(f"制限時間が {len(res['limits_seen'])} 種類ある（同じ条件に混ぜない）: {sorted(res['limits_seen'])}")
+    segs = env_segments(metas)
+    res["env_segments"] = [{"env": s["env"], "n": len(s["trials"]), "trials": s["trials"]} for s in segs]
+    if len(segs) > 1:
+        probs.append(f"環境の区切りが {len(segs)} つある（区切りごとに分けて出す。env_segments）")
+    if n_all3_no_t:
+        probs.append(f"all_three_in_box が真なのに真値の 3 色の時刻がそろわない試行が {n_all3_no_t} 本（曲線の終わりが主な数より低い）")
+    if probs:
+        res["problems"] = probs
     lims = [json.loads(k) for k in res["limits_seen"]]
     cap = min((x.get("time_limit_s") or 0) for x in lims) if kind == "run" and lims else None
     if cap and any(T > cap + 1e-9 for T in ats):
@@ -1033,7 +1063,10 @@ def cmd_score(a) -> int:
     print(text)
     if a.out:
         _write_atomic(pathlib.Path(a.out), text)
-    return 0
+    bad = {c: r["problems"] for c, r in out["conditions"].items() if r.get("problems")}
+    for c, ps in bad.items():
+        print(f"[score] {c}: {' / '.join(ps)}", file=sys.stderr)
+    return 1 if bad else 0
 
 
 def main(argv=None) -> int:
