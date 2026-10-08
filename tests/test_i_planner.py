@@ -159,6 +159,7 @@ def test_return_motion_is_only_in_the_task_executor():
     allowed = {root / "src" / "recovla" / "planner" / "executor.py", root / "scripts" / "51_planner.py",
                root / "scripts" / "50_e_eval.py",       # 50_e_eval.py は E7 の一覧の文に名前が出るだけ（下で import しないことを見る）
                root / "scripts" / "61_demo.py",         # 動画の場面の回し直し（3 個の連続タスクの場面だけが実行器を使う）
+               root / "scripts" / "56_intervention_s3.py",  # 介入率の集計。注釈と設定の読み出しに名前が出るだけ（下で import しないことを見る）
                root / "src" / "recovla" / "runtime" / "executor.py"}   # 目標書 v2 の上位層（E7 だけ。E1〜E6 の harness/loop.py は使わない）
     words = ("planner.executor", "TaskExecutor", "ReturnMotion", "return_to_retreat", "_return_to_retreat")
     hits = [str(p.relative_to(root)) for d in ("src", "scripts") for p in (root / d).rglob("*.py")
@@ -168,6 +169,10 @@ def test_return_motion_is_only_in_the_task_executor():
                                                                          root / "scripts" / "20_k1.py",
                                                                          root / "scripts" / "50_e_eval.py"]:
         assert "recovla.planner" not in p.read_text(encoding="utf-8"), p
+    import re
+    s56 = root / "scripts" / "56_intervention_s3.py"           # 書き出しでは任意のファイル（無ければ見ない）
+    assert not (s56.exists() and re.search(r"^\s*(?:from|import)\s+recovla\.(?:runtime|planner)\b",
+                                           s56.read_text(encoding="utf-8"), re.M))   # 記録を読むだけで実行器を使わない
 
 
 @pytest.fixture(scope="module")

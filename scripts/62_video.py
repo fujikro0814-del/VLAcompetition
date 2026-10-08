@@ -2,8 +2,13 @@
 
     .venv\\Scripts\\python.exe scripts\\62_video.py build     # paper/build/動画_PAI最終課題_<アカウント名>.mp4
     .venv\\Scripts\\python.exe scripts\\62_video.py check     # 画面の文字に使わない語（開発中の記号を含む）がないか・長さ・場面の再現
+    .venv\\Scripts\\python.exe scripts\\62_video.py stills    # 冒頭の静止画を outputs/demo_v2/_review/ に書き出す（--times 0,4,…）
 
 原則: 動画は簡易な説明にとどめ、詳しい説明は説明資料に任せる。開発中の記号（モデルや意図的な失敗の種類の番号）は画面に出さない。
+冒頭（10/08 の優秀賞の方針）: 最初の場面で、方策が自分で（意図的に失敗させずに）掴み損ねて掴み直す様子を、復帰デモなしの
+モデルと左右に並べる。字幕は 1 文のアイデアと数字 1 つだけにし、音なしで最初の 30 秒を見て何がすごいか分かることを目標にする。
+10/08 17:30 の作者の判断: 同時に出す文字は 3 つまで（見出し 1 行・左右の短いラベル・映像の下の一言か数字）と角の小さな札だけ。
+回し直しの注記は冒頭から外し、限界の場面と説明資料に書く。
 場面の並びと長さは configs/demo/video_s3.yaml（説明資料の「動画 m:ss〜m:ss」も同じ表から計算する）。
 映像は scripts/63_demo_v2.py で同じ設定で回し直したもの（outputs/demo_v2）で、元の記録と同じ経過のもの（meta.json の
 same_course）だけを使う。字幕の数字は説明資料の値（paper/build/values.json、scripts/60_paper.py build）から入れる。
@@ -44,8 +49,11 @@ def font(size, bold=False):
     return ImageFont.truetype(FONT_B if bold else FONT_R, size)
 
 
-def text(d, xy, s, size=32, fill=INK, bold=False, anchor="la"):
+def text(d, xy, s, size=32, fill=INK, bold=False, anchor="la", maxw=W - 80):
+    """文字を書く。幅が maxw を超えるときは収まるまで字を小さくする（はみ出しを防ぐ）。"""
     TEXTS.append(s)
+    while size > 14 and d.textlength(s, font=font(size, bold)) > maxw:
+        size -= 1
     d.text(xy, s, font=font(size, bold), fill=fill, anchor=anchor)
 
 
@@ -132,20 +140,85 @@ def single(sc, title, label, caption):
     return int(sc["dur_s"] * FPS), f
 
 
-def pair(sc, title, top):
+CROP = (120, 600, 250, 1103)                   # 左右比較で拡大する範囲（縦 y0:y1、横 x0:x1、16:9。腕の先・立方体・箱が入る）
+PW, PH = 930, 523                              # 左右比較の 1 枚の大きさ（間に 20 px あける）
+
+
+def _events(evs, t):
+    for e in evs or []:
+        if e["t0"] <= t < e["t1"]:
+            return e
+    return None
+
+
+def pair(sc, lines=None, band=None):
+    """同じ配置の 2 本（左 復帰デモあり・右 なし）を拡大して並べる。
+    lines: 上の帯の文（1〜2 行、太字）。yaml に headline があれば、それを 1 行だけ大きく書く（冒頭、10/08 17:30 の作者の判断）。
+    yaml の corner: 右上の小さな札（後ろに「・実時間」か「・N 倍速」を足す）。labels: 左右のラベル（既定は長い名前）。
+    footnote: false なら回し直しの注記を出さない。
+    events_with / events_without（yaml）: 各映像の下に出す一言（映像の時刻 s）。done_with: 左が成功した時刻（緑の枠）。
+    band: (説明, [(文字, 色), ...]) 下に出す数字。band_from（yaml、映像の時刻 s）から出し、出ている間は映像の下の一言を消す
+    （同時に出す文字を 3 つまでにするため）。"""
     cl = [Clip(sc["clip_with"]), Clip(sc["clip_without"])]
     t0, sp = _speed(sc, max(c.dur for c in cl))
+    y0, y1, x0, x1 = CROP
+    headline = sc.get("headline")
+    if headline:
+        lines = [headline]
+    top_h = 116 if headline else 150
+    labels = sc.get("labels") or [WITH, WITHOUT]
+    lab_size = 40 if sc.get("labels") else 34
+    py = top_h + (lab_size + 40) + (50 if headline else 26)      # 映像の上端（冒頭は縦の中央に寄せる）
+    xs = (20, W - 20 - PW)
+    sub = sc.get("sub")
+    spd = f"{sp:.1f} 倍速" if abs(sp - 1) > 0.05 else "実時間"
+    corner = f"{sc['corner']}・{spd}" if sc.get("corner") else spd
+    footnote = sc.get("footnote", True)
 
     def f(j):
         t = t0 + j * sp / FPS
         im = Image.new("RGB", (W, H), BG)
         for i, c in enumerate(cl):
-            im.paste(Image.fromarray(c.at(t)).resize((960, 540)), (960 * i, 150))
+            im.paste(Image.fromarray(c.at(t)[y0:y1, x0:x1]).resize((PW, PH)), (xs[i], py))
         d = ImageDraw.Draw(im)
-        header(d, title, sp, RERUN_NOTE)
-        text(d, (40, 100), top, 28, C_C, True)
-        for i, lab in enumerate((WITH, WITHOUT)):
-            text(d, (960 * i + 30, 710), lab, 32, C_B if i == 0 else INK, True)
+        d.rectangle((0, 0, W, top_h), fill=(29, 33, 38))
+        if headline:
+            text(d, (36, (top_h - 56) // 2), headline, 56, (255, 255, 255), True, maxw=W - 520)
+            text(d, (W - 30, (top_h - 28) // 2), corner, 28, (255, 214, 102), False, "ra", maxw=440)
+        else:
+            text(d, (W - 30, 20), corner, 32, (255, 214, 102), True, "ra")
+            y = 18
+            for k, s in enumerate(lines):
+                text(d, (36, y), s, 44 if len(lines) > 1 else 50, (255, 255, 255) if k == 0 else (255, 214, 102), True,
+                     maxw=W - 260)
+                y += 62
+        if sub:
+            text(d, (36, top_h + 14), sub, 27, MUTED)
+        for i, (lab, col) in enumerate(zip(labels, (C_B, INK))):
+            text(d, (xs[i] + 4, py - lab_size - 12), lab, lab_size, col, True, maxw=PW)
+        done = sc.get("done_with")
+        if done is not None and t >= done:       # 左が成功した: 緑の枠
+            d.rectangle((xs[0] - 6, py - 6, xs[0] + PW + 5, py + PH + 5), outline=C_B, width=8)
+        show_band = band and t >= float(sc.get("band_from", 0.0))
+        if not show_band:
+            for i, key in enumerate(("events_with", "events_without")):
+                e = _events(sc.get(key), t)
+                if e:
+                    col = {"ok": C_B, "ng": C_C}.get(e.get("kind"), INK)
+                    text(d, (xs[i] + PW // 2, py + PH + 22), e["text"], 44 if headline else 38, col, True, "ma", maxw=PW)
+        if show_band:
+            by = py + PH + 40
+            d.rounded_rectangle((20, by, W - 20, by + 170), 14, fill=(255, 255, 255), outline=C_B, width=3)
+            text(d, (W // 2, by + 16), band[0], 34, MUTED, False, "ma")
+            parts = band[1]
+            fb = font(72, True)
+            wsum = sum(d.textlength(s, font=fb) for s, _ in parts)
+            x = (W - wsum) / 2
+            for s, col in parts:
+                text(d, (x, by + 70), s, 72, col, True)
+                x += d.textlength(s, font=fb)
+        if footnote:
+            text(d, (W - 30, H - 34), RERUN_NOTE, 20, MUTED, False, "ra")
         return im
     return int(sc["dur_s"] * FPS), f
 
@@ -181,13 +254,19 @@ def task_scene(sc, title):
                 y += 38
         for e in sc.get("events", []):
             if e["t0"] <= t < e["t1"]:
-                text(d, (1470, y + 20), e["text"], 30, C_C, True)
+                text(d, (1470, y + 20), e["text"], 30, C_C, True, maxw=W - 1470 - 20)
         return im
     return int(sc["dur_s"] * FPS), f
 
 
-def fig1_image():
-    """図 1 だけの HTML を Edge で画像にする（説明資料と同じ SVG・値）。"""
+FIG_PICK = {                                    # 説明資料の HTML から図の SVG を選ぶ（要点の棒グラフなど、ほかの SVG を拾わない）
+    "fig1": r"<figure class=\"sys\">\s*(<svg.*?</svg>)",
+    "rec": r"(<svg[^>]*aria-label=\"復帰デモの作り方.*?</svg>)",
+}
+
+
+def fig_image(name):
+    """説明資料の図 1 つだけの HTML を Edge で画像にする（説明資料と同じ SVG・値）。name は FIG_PICK の鍵。"""
     import importlib.util
     s = importlib.util.spec_from_file_location("paper", ROOT / "scripts" / "60_paper.py")
     pm = importlib.util.module_from_spec(s)
@@ -195,12 +274,14 @@ def fig1_image():
     v = json.loads((BUILD / "values.json").read_text(encoding="utf-8"))
     body = pm.render(v)
     style = re.search(r"<style>.*?</style>", body, re.S).group(0)
-    svg = re.search(r"<svg.*?</svg>", body, re.S).group(0)
-    svg = re.sub(r"（\d+(\.\d+)? 節）", "", svg)                 # 説明資料の節番号は動画に出さない（10/07 の指示）
-    page = BUILD / "fig1_only.html"
+    m = re.search(FIG_PICK[name], body, re.S)
+    if not m:
+        raise SystemExit(f"説明資料の HTML に図 {name} が見つからない（{FIG_PICK[name]}）")
+    svg = re.sub(r"（\d+(\.\d+)? 節）", "", m.group(1))          # 説明資料の節番号は動画に出さない（10/07 の指示）
+    page = BUILD / f"{name}_only.html"
     page.write_text(f"<!doctype html><meta charset='utf-8'>{style}<body style='margin:0;background:#fff'>"
                     f"<div style='width:1800px;padding:20px 60px'>{svg}</div></body>", encoding="utf-8")
-    png = BUILD / "fig1_video.png"
+    png = BUILD / f"{name}_video.png"
     subprocess.run([str(pm.EDGE), "--headless", "--disable-gpu", "--hide-scrollbars", f"--screenshot={png}",
                     "--window-size=1920,2000", page.as_uri()], check=True, capture_output=True, timeout=120)
     from PIL import ImageChops
@@ -214,13 +295,15 @@ def image_scene(sc, img, title, lines):
     im0.thumbnail((1500, H - 100 - 44 * len(lines) - 60))      # 説明文が図に重ならない大きさ
     dur = float(sc["dur_s"])
 
+    top = 96 + max(0, (H - 96 - 40 - (im0.height + 20 + 44 * len(lines))) // 2)   # 図と説明文をまとめて縦の中央に
+
     def f(j):
         im = Image.new("RGB", (W, H), BG)
-        im.paste(im0, ((W - im0.width) // 2, 96))
+        im.paste(im0, ((W - im0.width) // 2, top))
         d = ImageDraw.Draw(im)
         header(d, title)
         k = min(len(lines), 1 + j // int(dur * FPS / max(1, len(lines))))
-        y = 96 + im0.height + 20
+        y = top + im0.height + 20
         for s in lines[:k]:
             text(d, (W // 2, y), s, 30, INK, False, "ma")
             y += 44
@@ -230,40 +313,57 @@ def image_scene(sc, img, title, lines):
 
 def scenes(v):
     S, order = spec()
-    fig1 = fig1_image()
+    figs = {}
+
+    def fig(name):                               # 図は要る場面があるときだけ描く
+        if name not in figs:
+            figs[name] = fig_image(name)
+        return figs[name]
+
+    # 冒頭の数字は 1 つだけ（優秀賞の方針 10/08）: 把持を意図的に失敗させた同じ配置・同じ失敗の組で、掴み直して成功した回数。
+    # 説明の文は短く（10/08 17:30 の作者の判断）。どの評価かの詳しい条件は主な結果の場面と説明資料に書く
+    band = (f"同じ失敗の {v['e3a_pairs']} 回で、掴み直して成功した回数",
+            [("復帰デモあり ", C_B), (f"{v['e3a_xk']} 回", C_B), ("　／　", MUTED), ("なし ", INK), (f"{v['e3a_yk']} 回", INK)])
     make = {
-        "title": lambda sc: card(sc, "失敗からの復帰を学習するロボット", [
-            ("日本語の指示で 3 色の立方体を箱へ片付ける（シミュレーション）", 34, MUTED),
-            ("失敗からの復帰を、人手なしで自動生成したデモで学習する", 36, INK)]),
-        "problem": lambda sc: single(sc, "課題: 復帰デモなしで学習すると、把持に失敗した後に回復しない", WITHOUT,
-                                     ["把持に失敗した後も、", "何も持たずに箱へ向かい、", "掴み直さない"]),
-        "method": lambda sc: image_scene(sc, fig1, "仕組み", [
+        # 冒頭: 方策が自分で掴み損ね、自分で掴み直す（左）と、掴み直さない（右）。見出し 1 行（yaml の headline）と数字 1 つ
+        "contrast": lambda sc: pair(sc, band=band),
+        "title": lambda sc: card(sc, "失敗からの復帰を学習するロボットアーム", [
+            ("シミュレーション上のロボットアームが、日本語の指示で立方体を箱へ片付ける", 34, MUTED),
+            ("実機も、人の手によるデモ集めも使わない。学習データはすべて自動で作る", 38, INK)]),
+        "problem": lambda sc: card(sc, "課題", [
+            ("成功デモだけで学習すると、失敗した後の状態を一度も見ていない", 38, INK),
+            ("そのため、掴み損ねても掴み直さない（冒頭の右の映像）", 38, INK),
+            ("一方、実機で失敗と回復のデモを人の手で集めるのは手間がかかる", 34, MUTED)]),
+        "recipe": lambda sc: image_scene(sc, fig("rec"), "方法: 復帰デモを自動で作る", [
+            "エキスパート（シミュレーションの正解を使えるプログラム）が、デモを作る途中で意図的に失敗する",
+            "失敗した後から、回復して箱に入れるまでを記録し、成功デモと一緒に学習する（人手なし）"]),
+        "contrast_p1": lambda sc: pair(sc, ["把持を意図的に失敗させた評価から 1 回",
+                                            "左は自分で掴み直して成功し、右は回復しない"]),
+        "method": lambda sc: image_scene(sc, fig("fig1"), "仕組み", [
             "カメラ画像と関節の状態だけで動く（シミュレーションの正解の情報は使わない）",
-            "意図的に失敗させ、自動の教師が回復する様子を記録して、学習データに加える"]),
-        "contrast": lambda sc: pair(sc, "比較: 同じ配置で、意図的な失敗なしの試行", "左は把持に失敗した後に掴み直して成功し、右は回復しない"),
-        "contrast_p1": lambda sc: pair(sc, "比較: 把持を意図的に失敗させた試行（主な評価の 1 組）",
-                                       "閉じる直前に手先を横へずらして失敗させる。左は掴み直して成功し、右は回復しない"),
+            "LLM が指示を色の順番に分け、VLA が 1 色ずつ箱へ運ぶ"]),
         "task_intro": lambda sc: card(sc, "実演の条件", [
-            ("指示は「全部片付けて」の 1 文だけ", 34, INK),
-            ("LLM が片付ける順番を決め（例: 赤 → 緑 → 青）、1 個ずつ箱へ運ぶ", 34, INK),
-            ("学習したのは「指示した 1 色を箱へ入れる」動作だけ。", 34, INK),
-            ("カメラで箱に入ったことを確かめたら、次の色の指示に切り替える", 34, INK),
+            ("指示は「全部片付けて」の 1 文だけ。LLM が片付ける順番を決める（例: 赤 → 緑 → 青）", 34, INK),
+            ("学習したのは「指示した 1 色を箱へ入れる」動作だけ。箱に入ったとカメラで確かめたら次の色へ", 34, INK),
             (f"1 個につき {v['step_timeout']} 秒以内。終わらなければ待機位置に戻って {v['retry']} 回だけやり直す", 34, INK),
-            (f"評価に使っていない {v['e7_n']} 配置のうち、3 個とも片付いたのは {v['e7_k']} 配置。次の映像はそのうちの 1 つ", 28, MUTED)]),
+            (f"学習にも調整にも使っていない {v['e7_n']} 配置のうち、3 個とも片付いたのは {v['e7_k']} 配置。次の映像はその 1 つ", 30, MUTED)]),
         "task": lambda sc: task_scene(sc, "実演: 日本語の指示から 3 個を順に片付ける"),
-        "numbers": lambda sc: card(sc, "主な結果（評価に使っていない配置で測定）", [
-            (f"■ 1 個を片付ける試行（指示した 1 色を {v['time_limit']} 秒以内に箱へ入れる）", 30, MUTED),
-            (f"成功率 {v['e1_pct']}（{v['nat_layouts']} 配置 × 3 色＝{v['nat_n']} 回のうち {v['e1_k']} 回）", 34, INK),
-            (f"把持を意図的に失敗させたとき、掴み直して成功した回数（同じ配置・同じ失敗の {v['e3a_pairs']} 回）:", 34, INK),
-            (f"復帰デモあり {v['e3a_xk']} 回、復帰デモなし {v['e3a_yk']} 回", 34, INK),
-            ("", 10, BG),
+        "numbers": lambda sc: card(sc, "主な結果（学習にも調整にも使っていない配置で測定）", [
+            (f"■ 把持を意図的に失敗させたとき（同じ配置・同じ失敗の {v['e3a_pairs']} 回）", 30, MUTED),
+            (f"掴み直して成功: 復帰デモあり {v['e3a_xk']} 回、なし {v['e3a_yk']} 回", 42, INK),
+            ("", 6, BG),
+            (f"■ 意図的に失敗させない、1 個を片付ける試行（{v['time_limit']} 秒以内）", 30, MUTED),
+            (f"成功 {v['nat_n']} 回中 {v['e1_k']} 回（{v['e1_pct']}）", 42, INK),
+            ("", 6, BG),
             ("■ 3 個を片付ける実演（「全部片付けて」の 1 文）", 30, MUTED),
-            (f"3 個とも片付いたのは {v['e7_n']} 配置のうち {v['e7_k']} 配置", 34, INK),
-            ("", 10, BG),
+            (f"3 個とも片付いたのは {v['e7_n']} 配置中 {v['e7_k']} 配置", 42, INK),
+            ("", 6, BG),
             ("詳しい数字と条件は説明資料に記載", 26, MUTED)]),
         "limits": lambda sc: card(sc, "限界と今後", [
             ("シミュレーションのみで、実機では確かめていない", 34, INK),
-            ("落下や置き損ねからは、ほとんど回復できない", 34, INK)]),
+            ("落下や置き損ねからは、ほとんど回復できない", 34, INK),
+            ("", 10, BG),
+            ("動画の映像はすべて、評価と同じ設定で回し直し、評価と同じ経過になったもの（冒頭を含む）", 26, MUTED)]),
     }
     return [make[sc["id"]](sc) for sc in order]
 
@@ -277,7 +377,7 @@ def cmd_build(a) -> None:
     box = av.open(str(out), mode="w")
     st = box.add_stream("libx264", rate=FPS)
     st.width, st.height, st.pix_fmt = W, H, "yuv420p"
-    st.options = {"crf": "22", "preset": "medium"}
+    st.options = {"crf": "22", "preset": "medium", "threads": "4"}     # 並行の診断の邪魔をしないよう 4 本に抑える
     for n, f in sc:
         for j in range(n):
             fr = av.VideoFrame.from_image(f(j))
@@ -314,13 +414,34 @@ def cmd_check(a) -> None:
     raise SystemExit(1 if problems else 0)
 
 
+def cmd_stills(a) -> None:
+    """組み上げた動画から指定の時刻の静止画を書き出す（作者・初見テストの確認用）。"""
+    import av
+    out = OUT / "demo_v2" / "_review"
+    out.mkdir(parents=True, exist_ok=True)
+    want = sorted(float(x) for x in a.times.split(","))
+    c = av.open(str(BUILD / OUT_NAME))
+    k = 0
+    for i, fr in enumerate(c.decode(video=0)):
+        while k < len(want) and i >= int(round(want[k] * FPS)):
+            p = out / f"video_{want[k]:05.1f}s.png"
+            fr.to_image().save(p)
+            print(p)
+            k += 1
+        if k >= len(want):
+            break
+    c.close()
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("build")
     sub.add_parser("check")
+    p = sub.add_parser("stills")
+    p.add_argument("--times", default="0,5,10,15,20,25")
     a = ap.parse_args(argv)
-    {"build": cmd_build, "check": cmd_check}[a.cmd](a)
+    {"build": cmd_build, "check": cmd_check, "stills": cmd_stills}[a.cmd](a)
     return 0
 
 

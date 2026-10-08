@@ -112,6 +112,100 @@ def e7_summary() -> dict:
     return out
 
 
+def e7_funnel() -> dict:
+    """3 個の連続タスクの段ごとの内訳（箱の実際の状態 final_in_box で数える）。
+    1 番目の色が箱に入った本数 → 2 番目の色も入った本数 → そのうち 2 番目の完了判定が出て 3 番目へ進んだ本数 → 3 番目の色も入った本数。
+    完了判定が出ずに止まると残りの手順は行わないので、3 番目は「進んだ本」だけを分母にする。"""
+    runs = [_j(p) for p in sorted((S3 / "E7_R1v3").glob("run_00??.json"))]
+    order = list(runs[0]["plan"]["steps"])                               # LLM の分解（本文は「全試行で同じ順」と書く）
+    assert all(list(r["plan"]["steps"]) == order for r in runs), "LLM の分解の順が試行で違う"
+    assert all([s["color"] for s in r["steps"]] == order[:len(r["steps"])] for r in runs)
+    assert len(order) == 3, order
+    f1 = [r for r in runs if r["final_in_box"].get(order[0])]
+    f2 = [r for r in f1 if r["final_in_box"].get(order[1])]
+    f2go = [r for r in f2 if len(r["steps"]) >= 3]                       # 2 番目の完了判定が出て 3 番目を始めた
+    assert all(r["steps"][1]["judged_complete"] for r in f2go)
+    f3 = [r for r in f2go if r["final_in_box"].get(order[2])]
+    return {"order": order, "n": len(runs), "f1": len(f1), "f2": len(f2), "f2go": len(f2go), "f3": len(f3)}
+
+
+def e7_fn_reasons() -> collections.Counter:
+    """完了判定の取りこぼし（最終の判定が未完了なのに、箱の実際の状態では入っていた手順）の理由を、記録の判定の行から分ける。
+    late: 立方体が箱の中で静止した時刻（truth_success_t）がない＝持ち時間の終わりの直前に入り、待機位置での確認が間に合わなかった。
+    overhead: 箱の中で静止した後、手が待機位置にある間の俯瞰カメラの画素（中央値）が閾値に届かない。
+    wrist: 俯瞰の画素は届いているのに判定が出ない（記録に残らない手首カメラの画素の割合の条件で落ちたと、消去法で推定）。"""
+    jcfg = CFG["runtime_v2"]["judge"]
+    tol, box_min = float(jcfg["retreat_tol_m"]), int(jcfg["box_min_pixels"])
+    out = collections.Counter()
+    for p in sorted((S3 / "E7_R1v3").glob("run_00??.json")):
+        r = _j(p)
+        rows = _j(p.with_name(p.stem + "_runtime.json"))["executor"]["judge_rows"]
+        for s in r["steps"]:
+            if s["judged_complete"] or not r["final_in_box"].get(s["color"]):
+                continue
+            tt = r["truth_success_t"].get(s["color"])
+            if tt is None:
+                out["late"] += 1
+                continue
+            at = [x for x in rows if x["step"] == s["step"] and x["t"] >= tt and x["retreat_dist_m"] <= tol]
+            assert at, (p.name, s["step"])
+            med = lambda k: sorted(x[k] for x in at)[len(at) // 2]
+            if med("box_pixels") < box_min:
+                out["overhead"] += 1
+            elif med("wrist_in") >= int(jcfg["wrist_min_pixels"]) and sum(x["depth_ok"] for x in at) * 2 > len(at):
+                out["wrist"] += 1                                         # 記録に残る条件はすべて満たす → 残るのは手首の画素の割合
+            else:
+                out["other"] += 1
+    assert not out["other"], out                                          # 本文の三つの分類に入らないものがあれば止める
+    return out
+
+
+RTC_CMP = ("A_nat", "E_nat")      # 復帰デモありの非同期実行の、RTC なし（A）と RTC（E）。意図的な失敗なしの 99 組
+
+
+def rtc_mechanism() -> dict:
+    """4.3 節の仕組みの指標（全試行。テスト用の記録 outputs/v2eval/V3S3 の A_nat・E_nat の読み取りのみ）。
+    close: 最初にグリッパを閉じた時点の、指先と目標の立方体の水平の差のうち、ロボットの根元から立方体へ向かう方向の成分（負＝手前）の中央値 [mm]
+    ratio: 最初に閉じるまでに方策が指令した水平移動の、その方向の成分 ÷ 必要な移動（開始時の指先から閉じた時点の立方体まで）の中央値
+    seam / non: 方策の指令の速度の 0.1 s ごとの変化の大きさ（試行ごとの平均の中央値）を、アクションチャンクの境界とそれ以外で分けたもの [mm/s]"""
+    import numpy as np
+    colors = ("red", "green", "blue")
+    out = {}
+    for cond in RTC_CMP:
+        close, ratio, seam, non = [], [], [], []
+        for jf in sorted((S3 / cond).glob("trial_*.json")):
+            m = _j(jf)
+            n = int(jf.stem.split("_")[1])
+            rt = _j(jf.parent / f"runtime_{n:04d}.json")["runtime"]
+            z = np.load(jf.with_suffix(".npz"))
+            ti = colors.index(m["target"].split(">")[0])
+            t, tip, cube = z["sim_time"], z["fingertip"], z["cube_pos"][:, ti]
+            closed = z["gripper_closed"].astype(bool)
+            acts = rt["actions"]
+            A = np.array([a["a"] for a in acts], float)
+            kt = np.array([a["t"] for a in acts], float)
+            held = np.array([a["held"] for a in acts], bool)
+            ch = np.array([(-1 if a["chunk"] is None else a["chunk"]) for a in acts])
+            v = A[:, :3] * float(CFG["convert"]["fps"])               # 行動は 1 ステップごとの位置の差 → 速度
+            jump = np.linalg.norm(np.diff(v, axis=0), axis=1)
+            both = ~held[1:] & ~held[:-1]
+            if (both & (ch[1:] != ch[:-1])).any():
+                seam.append(float(jump[both & (ch[1:] != ch[:-1])].mean()))
+            if (both & (ch[1:] == ch[:-1])).any():
+                non.append(float(jump[both & (ch[1:] == ch[:-1])].mean()))
+            if not closed.any():
+                continue
+            k1 = int(np.flatnonzero(closed)[0])
+            u = cube[k1, :2] / np.linalg.norm(cube[k1, :2])
+            close.append(float((tip[k1, :2] - cube[k1, :2]) @ u * 1e3))
+            need = float((cube[k1, :2] - tip[0, :2]) @ u)
+            if abs(need) > 0.02:
+                ratio.append(float(A[(kt < t[k1]) & ~held, :2].sum(axis=0) @ u) / need)
+        out[cond] = {"close": float(np.median(close)), "ratio": float(np.median(ratio)),
+                     "seam": float(np.median(seam)) * 1e3, "non": float(np.median(non)) * 1e3, "n": len(close)}
+    return out
+
+
 def values() -> dict:
     ee = _mod("e_eval", ROOT / "scripts" / "50_e_eval.py")
     st3 = _mod("v2e", ROOT / "scripts" / "87_v2_e.py").STAGES["s3"]
@@ -124,6 +218,7 @@ def values() -> dict:
     v["policy_hz"] = str(fps)
     v["exec_rows"] = str(rows)
     v["exec_s"] = f"{rows / fps:g}"
+    v["act_dt_s"] = f"{1 / fps:g}"                               # 行動 1 ステップの時間（4.3 節の速度の変化の刻み）
     lat = _j(ROOT / "configs" / "latency_v1.json")["kinds"]["policy"]
     v["lat_p50"], v["lat_p95"] = f"{lat['p50']:.2f}", f"{lat['p95']:.2f}"
     ck = _j(FREEZE)["checkpoints"]
@@ -194,6 +289,24 @@ def values() -> dict:
     v["sf_detect_mm"] = f"{sf['d_detect_m'] * 1000:g}"
     v["judge_hold_s"] = f"{float(CFG['runtime_v2']['judge']['hold_s']):g}"
     v["time_limit"] = f"{float(CFG['eval']['time_limit_s']):g}"
+    # 前の二つの構成のテスト（段階 1・2 の確定した記録。2. 目的の「この構成について一度だけ」の注記）
+    stages = _mod("v2e_stages", ROOT / "scripts" / "87_v2_e.py")
+    for st in ("s1", "s2", "s3"):                                      # テスト用のシード範囲の始まり（README の全テストの一覧）
+        v[f"seed_{st}"] = str(stages.STAGES[st]["base"])
+    for part in ("P1", "P2", "P3"):
+        v[f"seed_s3_{part.lower()}"] = stages.trials_of("s3", part).split(":")[1]
+    v["seed_s3_e6"] = _j(S3 / "e6_R1v3_both.json")["trials"].split(":")[0]
+    v["seed_s3_e7"] = str(min(_j(p)["seed"] for p in (S3 / "E7_R1v3").glob("run_00??.json")))
+    v["sf_val_on"], v["sf_val_off"] = (str(round(sfd["success"][k] * sfd["success"]["pairs"])) for k in ("x_rate", "y_rate"))
+    v["sf_val_con_on"], v["sf_val_con_off"] = (str(round(sfd["contact"][k] * sfd["contact"]["pairs"])) for k in ("x_rate", "y_rate"))
+    v["sf_val_n"] = str(sfd["success"]["pairs"])
+    for st in ("s1", "s2"):
+        rp = _j(RES / f"v2_e_report_{st}.json")["primary"]
+        v[f"{st}_e1_k"], v[f"{st}_e1_n"] = str(rp["E1"]["successes"]), str(rp["E1"]["n"])
+        v[f"{st}_e2_k"], v[f"{st}_e2_n"] = str(rp["E2"]["recovered"]), str(rp["E2"]["established"])
+        hp = rp["E3"]["main_A_vs_B"]["holm_p"]
+        v[f"{st}_holm"] = "1.00" if hp >= 0.995 else f"{hp:.3g}"          # 0.125 を 0.12 と丸めない（README の値と同じ書き方）
+        assert rp["E3"]["main_A_vs_B"]["holm_p"] >= float(ALPHA)         # どちらも主要評価項目の基準を満たさなかった
     # テスト用の試行の数
     v["nat_n"] = str(P["E1"]["n"])
     v["nat_layouts"] = str(P["E1"]["n"] // 3)
@@ -266,6 +379,60 @@ def values() -> dict:
     v["e7_sys"] = str(s7["n"] - sum(s7["stopped_at"].values()))        # 停止せずに全サブタスクの完了判定が出た試行
     v["e7_sys_ci"] = ci(ee._wilson(s7["n"] - sum(s7["stopped_at"].values()), s7["n"]))
     v["e7_viol"] = str(s7["audit_viol"])
+    fu = e7_funnel()                                                     # 段ごとの内訳（4.6 節）
+    cname = {"red": "赤", "green": "緑", "blue": "青"}
+    for i, c in enumerate(fu["order"], 1):
+        v[f"e7_c{i}"] = cname[c]
+    for k in ("f1", "f2", "f2go", "f3"):
+        v[f"e7_{k}"] = str(fu[k])
+    assert fu["f3"] == s7["all_three"], fu                               # 3 番目まで入った本数＝3 個とも箱に入った本数
+    v["e7_f2stop"] = str(fu["f2"] - fu["f2go"])
+    fr = e7_fn_reasons()
+    assert sum(fr.values()) == s7["false_neg"], fr
+    v["e7_fn_late"], v["e7_fn_over"], v["e7_fn_wrist"] = (str(fr[k]) for k in ("late", "overhead", "wrist"))
+    # 人が手を出す回数（束 6 (i)、scripts/56_intervention_s3.py → outputs/results/intervention_s3.json）
+    iv = _j(RES / "intervention_s3.json")
+    assert iv["baseline_check"]["all_match"] and iv["n"] == s7["n"] and iv["success"]["all_three_in_box"] == s7["all_three"]
+    assert iv["stopped"]["n"] == sum(s7["stopped_at"].values()) and iv["stopped"]["all_three_in_box"] == s7["stopped_all_three"]
+    v["iv_total"], v["iv_per_run"] = str(iv["interventions_total"]), f"{iv['interventions_per_run']:.2f}"
+    v["iv_retry"] = str(iv["per_type"]["retry"]["total"])
+    assert iv["interventions_total"] == iv["per_type"]["retry"]["total"]          # 段階 3 の介入はすべて自動のやり直し
+    v["iv_judge_only"], v["iv_genuine"] = str(iv["retry_breakdown"]["judge_only"]), str(iv["retry_breakdown"]["genuine"])
+    v["iv_other"] = str(sum(iv["per_type"][k]["total"] for k in ("scripted_return", "replan", "judge_override")))
+    v["iv_llm_per_run"] = f"{iv['llm']['calls_per_run']:g}"
+    v["iv_llm_in"], v["iv_llm_out"] = f"{iv['llm']['tokens_mean']['input']:.0f}", f"{iv['llm']['tokens_mean']['output']:.0f}"
+    for k in ("0", "1", "2"):
+        sk = iv["success_at_k"][k]
+        v[f"iv_sk{k}"], v[f"iv_sk{k}_ci"] = str(sk["k"]), ci(sk["wilson95"])
+        v[f"iv_k{k}"] = str(int(k))                                       # 許したやり直しの回数（本文の「… 回まで」。手で書かない、10/08）
+    sk2 = iv["success_at_k"]["2"]
+    v["iv_rest"] = str(iv["n"] - sk2["k"])                               # やり直しを許しても 3 個とも片付かなかった（人が仕上げる）作業の数
+    assert sk2["k"] == s7["all_three"] == iv["success_at_k"]["3"]["k"]     # やり直し 2 回までで、3 個とも入った本はすべて数えている
+    # 100 回の作業に直したときの見積もり。10/08 の作者の決定（案 B）で本文の主から外した（今は本文・表で使っていない）
+    v["iv_h100"] = str(round(100 * (1 - sk2["rate"])))                  # 100 回の作業に直したとき、3 個とも片付かず人が仕上げる回数
+    v["iv_h100_lo"], v["iv_h100_hi"] = str(round(100 * (1 - sk2["wilson95"][1]))), str(round(100 * (1 - sk2["wilson95"][0])))
+    v["iv_a100"] = str(round(100 * sk2["rate"]))
+    v["iv_n"] = str(iv["n"])
+    v["iv_base"] = "100"                                                # 「100 回の作業に直すと」の基数（割合を回数で言い直すためのもの）
+    # 手軽さ（冒頭）: 学習 1 回の時間と GPU のメモリ（学習の記録 train_run.json）
+    import datetime
+    tr = _j(ROOT / pathlib.Path(ck["R1v3"]).parent.parent / "train_run.json")
+    dt = datetime.datetime.fromisoformat(tr["ended_at"]) - datetime.datetime.fromisoformat(tr["started_at"])
+    v["train_h"] = f"{dt.total_seconds() / 3600:.1f}"
+    v["train_gib"] = f"{tr['log_summary']['gpu_mem_allocated_max_gib']:.1f}"
+    v["eps_auto"] = str(tr["dataset"]["total_episodes"])
+    assert v["eps_auto"] == v["eps_r"]
+    # RTC の仕組みの指標（4.3 節）
+    rm = rtc_mechanism()
+    a_, e_ = rm[RTC_CMP[0]], rm[RTC_CMP[1]]
+    v["rtc_close_a"], v["rtc_close_e"] = f"{a_['close']:.1f}", f"{e_['close']:.1f}"
+    v["rtc_ratio_a"], v["rtc_ratio_e"] = f"{a_['ratio']:.2f}", f"{e_['ratio']:.2f}"
+    v["rtc_seam_a"], v["rtc_non_a"] = f"{a_['seam']:.0f}", f"{a_['non']:.0f}"
+    v["rtc_seam_e"], v["rtc_non_e"] = f"{e_['seam']:.0f}", f"{e_['non']:.0f}"
+    v["rtc_horizon"] = str(int(CFG["runtime"]["rtc_guidance_horizon"]))
+    rd = _j(RES / "rtc_decision.json")
+    assert int(rd["chosen_horizon"]) == int(CFG["runtime"]["rtc_guidance_horizon"])
+    v["rtc_sel_rows"] = str(int(CFG["runtime"]["exec_interval"]))        # 範囲を選んだときの実行の間隔（default.yaml の runtime）
     # E9（G1〜G3 の監査）・E10（知覚の精度）
     e9 = rep["new"]["E9"]["total"]
     v["e9_trials"] = f"{e9['trials']:,}"
@@ -465,7 +632,7 @@ def pdf_pages(p) -> int:
 
 
 # 原稿の地の文に書いてよい数字（数字が値ではなく名前や固有の決まりの一部であるもの）
-ALLOWED = [r"fig2\.png", r"表 [12]",r"(95|1) パーセンタイル",r"two3", r"Physical AI 応用 1 講座", r"Haiku 4\.5", r"SmolVLM2", r"Apache-2\.0", r"図 [1-4]",
+ALLOWED = [r"fig2\.png", r"表 [1-3]", r"GPU 1 枚", r"学習 1 回", r"[1-3] 番目", r"(95|1) パーセンタイル",r"two3", r"Physical AI 応用 1 講座", r"Haiku 4\.5", r"SmolVLM2", r"Apache-2\.0", r"図 [1-4]",
            r"[12] 回目", r"工夫 [1-6]", r"\b[1-6]\.[1-6](?= )", r"et al\., (19|20)\d\d", r"3 (色|個)", r"95% 信頼区間", r"1 試行", r"[1-6]\. ", r"7 軸", r"画像 2 枚", r"1 行ずつ",
            r"× 3 色", r"A4", r"RGB-D", r"#[0-9a-f]{6}", r"\d+(\.\d+)?(mm|pt|px)", r"viewBox=\"[^\"]*\"", r"\b\d+(\.\d+)?%?\"",
            r"[xy][12]?=\"[^\"]*\"", r"points=\"[^\"]*\"", r"d=\"[^\"]*\"", r"rotate\([^)]*\)", r"\b(width|height|rx|dx|refX|refY|markerWidth|markerHeight)=\"[^\"]*\"",
