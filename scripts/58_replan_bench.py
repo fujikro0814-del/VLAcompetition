@@ -12,11 +12,15 @@ claude-haiku-5-5・claude-sonnet-5-5・claude-opus-5-5 に答えさせ、手の�
         API に問う。**--execute が無ければ、何を何回呼ぶかと見込みの費用を出すだけで、クライアントを作らない（鍵も読まない）**
     58_replan_bench.py score --tag s3 [--models ...] [--repeats 5] [--manual FILE] [--allow-missing] [--write]
         u4_protocol.md 第 5 節の規則で報告を機械で採点し、手の妥当さ・倒した率・手の分布・モデル間の一致を出す（記述だけ）
+        [--scorer 1.0|1.1] [--out-dir DIR]: 採点の版。既定 1.0 は事前登録のまま（score_<tag>.json）。
+        1.1 は回した後の直し（手順書 第 11 節。二次の分析）で score_<tag>_v11.json・sheet_<tag>_v11.json に書く
+    58_replan_bench.py map-manual --tag s3 --manual FILE [--write]
+        1.0 の行の番号で付けた人の採点を 1.1 の番号に写し（manual_<tag>_v11_from_v10.json）、付け直しの要る行を出す
   ask・score は、items --write で書いた items_<tag>.json だけを使う（材料を固定する。無ければ止める）。
 ■ 鍵の注意: decompose._api_key は、環境変数 ANTHROPIC_API_KEY を空にしてもユーザー環境変数（Windows のレジストリ）の鍵を読む。
   そのため ask は --execute を付けたときだけクライアントを作る。試すときは --execute を付けない。
 書くもの: outputs/s4/replan_bench/ 以下だけ（items_*.json・cost_estimate_*.json・cache/・batches/・spend_log.jsonl・failures.jsonl・
-  score_*.json・sheet_*.json）。既存のファイルは書き換えない。記録（outputs/v2eval/）は読むだけ。
+  score_*.json・sheet_*.json・manual_*_v11_from_v10.json）。既存のファイルは書き換えない。記録（outputs/v2eval/）は読むだけ。
 束 1 の記録（S4DE7・S4DRTC・S4DSTART・S4XPL・outputs/s4/d_*）は、関門 1 の表の後に --allow-bundle1 を付けたときだけ読む。
 終了コード: 0 正常（--execute なしの ask は見込みだけ出して 0）、2 エラー、3 前提の食い違い（予算超え・答えが欠けている など）。
 """
@@ -500,6 +504,36 @@ CONT_RE = re.compile(r"入れます|入れ直|試します|続けます|運び�
 LATER_RE = re.compile(r"後に回|後回し|最後|後で")
 
 
+# ---------------------------------------------------------------- 採点の版 1.1（回した後の逸脱。手順書 第 11 節）
+# 1.0 は上の正規表現のまま残す（事前登録の主な結果 score_s3.json を同じに出し直せるように）。
+# 1.1 は、第 6 節の文の規則（「など」）にコードが届いていなかった所だけを直す:
+#   失敗の言い方を足す（c1）、箱の中の言い方を足す（c2）、失敗の節を次の手から外す（c3。c1 を直すと自然に直る）、
+#   行の番号に項目を入れる（同じ入力で真値の違う項目を分ける）。
+SCORER_VERSIONS = ("1.0", "1.1")
+DEFAULT_SCORER = "1.0"
+FAIL_RE_11 = re.compile(FAIL_RE.pattern + r"|終わり(?:ませんでした|ません)|終わってい(?:ません|ない)|入らず|入れず|未完了|"
+                        r"完了し(?:ていません|ていない|ませんでした|なかった)|時間切れ|タイムアウト|"
+                        r"(?:記録|判定)され(?:ませんでした|なかった|ず)|扱いにな(?:りませんでした|らなかった|らず)")
+_Q = r"(?:の\s?)?(?:両方|全部|すべて|全て|三つとも|三つ|三個|[3３]\s?(?:つ|個|色)(?:とも|すべて|全部)?)"   # 数の言い方
+_IN11 = (rf"(?:入っ{_NEG}|入りまし|入り(?=[、，,])|入った|収まっ{_NEG}|そろっ{_NEG}|揃っ{_NEG}|あり(?!ませ)|ある)")
+_ADV = r"(?:すでに|もう|既に)?"
+BOX_RES_11 = [
+    re.compile(rf"箱(?:の中)?(?:に|には){_ADV}{_CL}(?:の立方体)?{_Q}?(?:が|も|だけが)?{_Q}?{_ADV}{_IN11}"),
+    re.compile(rf"{_CL}(?:の立方体)?{_Q}?(?:だけ)?(?:は|が|も)?{_Q}?{_ADV}箱(?:の中)?(?:に|へ)(?:{_IN11}|入れ(?:まし|終え|た|てあ))"),
+    re.compile(rf"{_CL}(?:の立方体)?{_Q}?を{_ADV}箱(?:の中)?に入れ(?:まし|終え|た|てあ)"),
+    re.compile(rf"箱(?:の中)?に(?:入っている|ある)の(?:は|が){_CL}"),
+    re.compile(rf"{_CL}(?:の立方体)?{_Q}?(?:だけ)?(?:は|が|も){_Q}?{_ADV}箱の中(?:です|でした|だ)"),          # 「赤と緑が箱の中です」
+    re.compile(rf"箱(?:の中)?(?:に|には){_CL}(?:の立方体)?(?=、(?:机|手)|が見え)"),                            # 「箱に赤と青、机に緑」
+]
+RULES = {"1.0": {"fail": FAIL_RE, "box": BOX_RES}, "1.1": {"fail": FAIL_RE_11, "box": BOX_RES_11}}
+
+
+def check_scorer(scorer: str) -> str:
+    if scorer not in SCORER_VERSIONS:
+        raise ValueError(f"採点の版は {SCORER_VERSIONS} のどれか（{scorer}）")
+    return scorer
+
+
 def colors_in(s: str) -> list:
     return list(dict.fromkeys(JA2C[ch] for ch in s if ch in JA2C))
 
@@ -525,14 +559,16 @@ def _clauses(t: str, a: int, b: int) -> list:
     return out
 
 
-def parse_report(text: str) -> dict:
-    """報告の中の 3 種類の主張を取り出す（採点の前の段）。曖昧なものは ambiguous の印を付ける。"""
+def parse_report(text: str, scorer: str = DEFAULT_SCORER) -> dict:
+    """報告の中の 3 種類の主張を取り出す（採点の前の段）。曖昧なものは ambiguous の印を付ける。
+    scorer は採点の版（1.0 は事前登録のまま、1.1 は回した後の直し）。"""
+    fail_re, box_res = RULES[check_scorer(scorer)]["fail"], RULES[scorer]["box"]
     t = (text or "").strip()
     named, fail_spans = [], []
     for a, b in _sentences(t):
         cls = _clauses(t, a, b)
         for i, (ca, cb) in enumerate(cls):
-            if not FAIL_RE.search(t[ca:cb]):
+            if not fail_re.search(t[ca:cb]):
                 continue
             cs = colors_in(t[ca:cb])
             k = i
@@ -545,9 +581,9 @@ def parse_report(text: str) -> dict:
     for m in EMPTY_RE.finditer(t):
         empty = True
         box_spans.append(m.span())
-    for rx in BOX_RES:
+    for rx in box_res:
         for m in rx.finditer(t):
-            if any(a <= m.start() < b for a, b in fail_spans) and FAIL_RE.search(m.group(0)):
+            if any(a <= m.start() < b for a, b in fail_spans) and fail_re.search(m.group(0)):
                 continue
             box_cols += colors_in(m.group("c"))
             box_spans.append(m.span())
@@ -583,9 +619,10 @@ def parse_report(text: str) -> dict:
             "skip_colors": list(dict.fromkeys(skip_cols))}
 
 
-def grade_report(text: str, failed: str, truth_box: list, decision: dict, applied_order: list) -> dict:
+def grade_report(text: str, failed: str, truth_box: list, decision: dict, applied_order: list,
+                 scorer: str = DEFAULT_SCORER) -> dict:
     """u4_protocol.md 第 5 節の 3 種類の主張に correct・wrong・none・ambiguous を付け、報告の正しさを出す。"""
-    p = parse_report(text)
+    p = parse_report(text, scorer)
     tb = set(truth_box)
     # 1 終わらなかった色
     if not p["failed_named"]:
@@ -666,11 +703,17 @@ def answer_of(q: dict, fail: dict):
     return None, "missing"
 
 
-def row_id(key: str) -> str:
-    return hashlib.sha256(("row:" + key).encode()).hexdigest()[:12]
+def row_id(key: str, item_id: str = None, scorer: str = DEFAULT_SCORER) -> str:
+    """行の番号。1.0 は鍵だけから作る（同じ入力の項目が同じ番号になる。事前登録のまま）。
+    1.1 は項目も入れる（同じ入力で真値の違う項目を分ける）。"""
+    if check_scorer(scorer) == "1.0":
+        return hashlib.sha256(("row:" + key).encode()).hexdigest()[:12]
+    if not item_id:
+        raise ValueError("採点の版 1.1 の行の番号には項目が要る")
+    return hashlib.sha256(("row11:" + key + "|" + item_id).encode()).hexdigest()[:12]
 
 
-def score_rows(doc: dict, qs: list, manual: dict = None) -> tuple:
+def score_rows(doc: dict, qs: list, manual: dict = None, scorer: str = DEFAULT_SCORER) -> tuple:
     items = {x["item_id"]: x for x in doc["items"]}
     fail = failures()
     rows, missing = [], []
@@ -681,15 +724,17 @@ def score_rows(doc: dict, qs: list, manual: dict = None) -> tuple:
             continue
         it = items[q["item_id"]]
         g = grade_report(out["report"], it["input"]["failed_color"], it["truth"]["box_at_request"], out["decision"],
-                         out["next_order"])
-        rid = row_id(q["key"])
+                         out["next_order"], scorer)
+        rid = row_id(q["key"], q["item_id"], scorer)
         man = (manual or {}).get(rid)
         if man:
             g.update({k: man[k] for k in ("c1", "c2", "c3") if k in man}, manual=True)
             g["correct"] = g["c1"] == "correct" and g["c2"] not in ("wrong", "ambiguous") and g["c3"] not in ("wrong", "ambiguous")
-            g["needs_manual"] = False
+            # 1.0 は人が付けた行を全部「済み」にする（事前登録のまま）。1.1 は ambiguous が残れば人の採点の表に残す
+            g["needs_manual"] = False if scorer == "1.0" else "ambiguous" in (g["c2"], g["c3"])
         raw = (out.get("llm_output") or {})
-        rows.append({"row_id": rid, "item_id": q["item_id"], "model": q["model"], "repeat": q["repeat"], "state": state,
+        extra = {"row_id_v10": row_id(q["key"])} if scorer != "1.0" else {}       # 1.0 の行の番号（人の採点を写すため）
+        rows.append({"row_id": rid, **extra, "item_id": q["item_id"], "model": q["model"], "repeat": q["repeat"], "state": state,
                      "decision": out["decision"], "next_order": out["next_order"], "raw_action": raw.get("action"),
                      "accepted": bool(out["accepted"]), "fallback": bool(out["fallback"]),
                      "fallback_kind": ("llm_failed" if out["rejected"][:1] == ["llm_failed"] else
@@ -697,6 +742,49 @@ def score_rows(doc: dict, qs: list, manual: dict = None) -> tuple:
                      "rejected": out["rejected"], "report": out["report"], "report_source": out["report_source"],
                      "report_rejected": out.get("report_rejected"), "grade": g})
     return rows, missing
+
+
+def map_manual_v11(doc: dict, qs: list, old_manual: dict) -> dict:
+    """1.0 の行の番号で付けた人の採点を、1.1 の行の番号に写す。
+    写すのは、1.1 で ambiguous の主張だけ。さらに (a) 1.0 でもその主張が ambiguous だった（人が規則で判断した値）、
+    (b) c3 か、同じ 1.0 の番号の行の真値（失敗した色・箱の中）が全部同じ、の両方を満たすときだけ。
+    1.0 の人の値のうち ambiguous でなかった主張（c1 など）は機械の値を写したものなので、1.1 には写さない。
+    返り値: {"manual": {新しい番号: {c2/c3, from_v10}}, "relabel": [人が付け直す行], "check": 1.1 の機械の値と人の値の一致}"""
+    r10, _ = score_rows(doc, qs, None, "1.0")
+    r11, _ = score_rows(doc, qs, None, "1.1")
+    items = {x["item_id"]: x for x in doc["items"]}
+
+    def tkey(r):
+        it = items[r["item_id"]]
+        return (it["input"]["failed_color"], tuple(it["truth"]["box_at_request"]))
+    by_old = collections.defaultdict(list)
+    for r in r10:
+        by_old[r["row_id"]].append(r)
+    new_manual, relabel = {}, []
+    check = {f: collections.Counter() for f in ("c2", "c3")}
+    for r in r11:
+        old_id = r["row_id_v10"]
+        lab, olds = (old_manual or {}).get(old_id) or {}, by_old[old_id]
+        same_truth = len({tkey(x) for x in olds}) == 1
+        need = [f for f in ("c2", "c3") if r["grade"][f] == "ambiguous"]
+        got, why = {}, {}
+        for f in ("c2", "c3"):
+            judged = f in lab and all(x["grade"][f] == "ambiguous" for x in olds) and (f == "c3" or same_truth)
+            if f not in need:
+                if judged:                                 # 1.1 の機械で決まった主張は、人の値と照らすだけ
+                    check[f]["agree" if r["grade"][f] == lab[f] else "differ"] += 1
+                continue
+            if judged:
+                got[f] = lab[f]
+            else:
+                why[f] = ("no_label" if f not in lab else "not_ambiguous_in_v10" if not all(
+                    x["grade"][f] == "ambiguous" for x in olds) else "truth_differs_within_v10_row")
+        if got:
+            new_manual[r["row_id"]] = dict(got, from_v10=old_id)
+        if why:
+            relabel.append({"row_id": r["row_id"], "row_id_v10": old_id, "item_id": r["item_id"], "fields": why})
+    return {"manual": new_manual, "relabel": relabel,
+            "check": {f: dict(c) for f, c in check.items()}}
 
 
 def per_model(rows: list) -> dict:
@@ -833,11 +921,16 @@ def cmd_ask(a) -> int:
     return 3 if res["stopped_by_budget"] else 0
 
 
+def score_suffix(scorer: str) -> str:
+    """書くファイルの名の後ろ。1.0 は事前登録のまま（score_<tag>.json）、1.1 は _v11 を付けて別のファイルにする。"""
+    return "" if check_scorer(scorer) == "1.0" else "_v" + scorer.replace(".", "")
+
+
 def cmd_score(a) -> int:
     doc = load_fixed_items(a.tag)
     qs = questions(doc, models_of(a.models), a.repeats)
     manual = json.loads(pathlib.Path(a.manual).read_text(encoding="utf-8")) if a.manual else None
-    rows, missing = score_rows(doc, qs, manual)
+    rows, missing = score_rows(doc, qs, manual, a.scorer)
     if missing and not a.allow_missing:
         log(f"答えの無い問いが {len(missing)} ある（ask の後に採点する。--allow-missing で欠けたまま出す）")
         return 3
@@ -848,19 +941,47 @@ def cmd_score(a) -> int:
            "agreement": agreement(rows), "sonnet_rule": sonnet_rule(pm) if a.tag == "s3" else {"decidable": False,
                                                                                                   "why": "規則は s3 の項目だけで決める"},
            "rows": rows}
+    if a.scorer != "1.0":                                # 1.0 の出力は事前登録のまま（欄を足さない）
+        res["scorer_version"] = a.scorer
+        res["role"] = "secondary"
+        res["deviation_note"] = ("回した後の逸脱（手順書 第 11 節）。主な結果と U4S の判定は採点の版 1.0 の score_<tag>.json のまま。"
+                                 "これは二次の分析で、判定に使わない")
+        res["manual_file"] = rel(a.manual) if a.manual else None
+        if isinstance(res["sonnet_rule"], dict):
+            res["sonnet_rule"] = dict(res["sonnet_rule"], used_for_decision=False,
+                                      note="参考の計算だけ。U4S の判定は 1.0 の結果から決めたまま変えない")
     for m, s in pm.items():
         print(f"{m}: n={s['n']} 受理 {s['valid_action']['rate']} 報告の正しさ {s['report_correct']['rate']} "
               f"{s['report_correct']['wilson95']} 手 {s['actions_final']} 要確認 {s['needs_manual']}")
     print(json.dumps(res["sonnet_rule"], ensure_ascii=False))
     if a.write:
-        OUT.mkdir(parents=True, exist_ok=True)
-        (OUT / f"score_{a.tag}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
+        out = pathlib.Path(a.out_dir) if a.out_dir else OUT
+        out.mkdir(parents=True, exist_ok=True)
+        suf = score_suffix(a.scorer)
+        (out / f"score_{a.tag}{suf}.json").write_text(json.dumps(res, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
         sheet = [{"row_id": r["row_id"], "report": r["report"], "failed_color": doc_item(doc, r["item_id"])["input"]["failed_color"],
                   "truth_box_at_request": doc_item(doc, r["item_id"])["truth"]["box_at_request"],
                   "action": r["decision"], "next_order": r["next_order"], "auto": {k: r["grade"][k] for k in ("c1", "c2", "c3")}}
                  for r in sorted(rows, key=lambda r: r["row_id"]) if r["grade"]["needs_manual"]]
-        (OUT / f"sheet_{a.tag}.json").write_text(json.dumps(sheet, ensure_ascii=False, indent=1), encoding="utf-8")
-        log(f"書いた: score_{a.tag}.json・sheet_{a.tag}.json（人が見る行 {len(sheet)}。モデル名は伏せた）")
+        (out / f"sheet_{a.tag}{suf}.json").write_text(json.dumps(sheet, ensure_ascii=False, indent=1), encoding="utf-8")
+        log(f"書いた: {rel(out)}/score_{a.tag}{suf}.json・sheet_{a.tag}{suf}.json（人が見る行 {len(sheet)}。モデル名は伏せた）")
+    return 0
+
+
+def cmd_map_manual(a) -> int:
+    """1.0 の番号で付けた人の採点を 1.1 の番号に写し、付け直しの要る行を出す（API は使わない。キャッシュだけ）。"""
+    doc = load_fixed_items(a.tag)
+    qs = questions(doc, models_of(a.models), a.repeats)
+    old = json.loads(pathlib.Path(a.manual).read_text(encoding="utf-8"))
+    res = map_manual_v11(doc, qs, old)
+    print(json.dumps({"mapped_rows": len(res["manual"]), "relabel": res["relabel"], "check": res["check"]},
+                     ensure_ascii=False, indent=1))
+    if a.write:
+        out = pathlib.Path(a.out_dir) if a.out_dir else OUT
+        out.mkdir(parents=True, exist_ok=True)
+        p = out / f"manual_{a.tag}_v11_from_v10.json"
+        p.write_text(json.dumps(res["manual"], ensure_ascii=False, indent=1, sort_keys=True), encoding="utf-8")
+        log(f"書いた: {rel(p)}（写した行 {len(res['manual'])}、付け直しの要る行 {len(res['relabel'])}）")
     return 0
 
 
@@ -901,6 +1022,14 @@ def build_parser():
     p.add_argument("--manual", default=None, help="人が付けた採点（{row_id: {c1, c2, c3}}）")
     p.add_argument("--allow-missing", action="store_true")
     p.add_argument("--write", action="store_true")
+    p.add_argument("--scorer", choices=SCORER_VERSIONS, default=DEFAULT_SCORER,
+                   help="採点の版（既定 1.0 = 事前登録。1.1 = 回した後の直し。score_<tag>_v11.json に書く）")
+    p.add_argument("--out-dir", default=None, help="書く場所（既定 outputs/s4/replan_bench。出し直しの照合に使う）")
+    p = sub.add_parser("map-manual", help="1.0 の番号の人の採点を 1.1 の番号に写す（--write で書く）")
+    common(p)
+    p.add_argument("--manual", required=True, help="1.0 の番号で付けた人の採点")
+    p.add_argument("--write", action="store_true")
+    p.add_argument("--out-dir", default=None)
     return ap
 
 
@@ -918,7 +1047,8 @@ def main(argv=None) -> int:
         print("--tag s3 は段階 3 の記録だけ（束 1 の記録は別の tag にする。例: --tag d_e7）", file=sys.stderr)
         return 2
     try:
-        return {"items": cmd_items, "cost": cmd_cost, "ask": cmd_ask, "score": cmd_score}[a.cmd](a)
+        return {"items": cmd_items, "cost": cmd_cost, "ask": cmd_ask, "score": cmd_score,
+                "map-manual": cmd_map_manual}[a.cmd](a)
     except SystemExit as e:                              # 前提の食い違い（項目が無い・束 1 の記録など）は終了コード 3
         if isinstance(e.code, str):
             print(e.code, file=sys.stderr, flush=True)

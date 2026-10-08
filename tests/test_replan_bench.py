@@ -390,12 +390,13 @@ def test_batch_submit_collect_and_retry_once(s58, tmp_path, monkeypatch):
 
 
 # ================================================================ 採点の規則（u4_protocol.md 第 5 節）
-def _grade(s58, text, c, action, truth_box, color="none", order=()):
+def _grade(s58, text, c, action, truth_box, color="none", order=(), scorer="1.0"):
     dec = {"action": action, "color": color, "order": list(order)}
-    return s58.grade_report(text, c["failed"]["color"], truth_box, dec, R4.apply(dec, c))
+    return s58.grade_report(text, c["failed"]["color"], truth_box, dec, R4.apply(dec, c), scorer)
 
 
-def test_every_template_report_scores_correct_against_its_own_action(s58):
+@pytest.mark.parametrize("scorer", ["1.0", "1.1"])
+def test_every_template_report_scores_correct_against_its_own_action(s58, scorer):
     n = 0
     for failed in ("red", "green", "blue"):
         others = [x for x in ("red", "green", "blue") if x != failed]
@@ -407,7 +408,7 @@ def test_every_template_report_scores_correct_against_its_own_action(s58):
                     col = failed if a in ("next", "skip") else "none"
                     order = list(R4.candidates(c)) if a == "reorder" else []
                     t = R4.template_report(a, c, col, order)
-                    g = _grade(s58, t, c, a, list(box), col, order)
+                    g = _grade(s58, t, c, a, list(box), col, order, scorer)
                     assert g["c1"] == "correct" and g["c3"] == "correct" and g["correct"], (a, failed, box, t, g)
                     if a in ("finish", "stop"):
                         assert g["c2"] == "correct", (t, g)
@@ -441,8 +442,140 @@ def test_every_template_report_scores_correct_against_its_own_action(s58):
      ("correct", "none", "ambiguous", False)),
 ])
 def test_scoring_rules_on_synthetic_reports(s58, text, action, color, order, truth, expect):
-    g = _grade(s58, text, ctx(), action, truth, color, order)
-    assert (g["c1"], g["c2"], g["c3"], g["correct"]) == expect, g
+    for scorer in ("1.0", "1.1"):                                                  # 1.1 でも事前の 14 例は同じ
+        g = _grade(s58, text, ctx(), action, truth, color, order, scorer)
+        assert (g["c1"], g["c2"], g["c3"], g["correct"]) == expect, (scorer, g)
+
+
+# ================================================================ 採点の版 1.1（回した後の直し。手順書 第 11 節）
+G = ctx(failed="green", table=("green", "blue"), box=("red",), steps=[{"color": "red", "result": "success", "attempts": 1},
+                                                                       {"color": "green", "result": "timeout", "attempts": 2}])
+
+
+@pytest.mark.parametrize("text", [
+    "緑は2回試しても時間内に終わりませんでした。ここで止まって知らせます。",
+    "緑の立方体は時間内に箱へ入らず、ここで止まって知らせます。",
+    "緑の立方体は時間内に箱へ入らず未完了です。ここで止まって知らせます。",
+    "緑の立方体は時間内に箱へ入らず、片付けは完了していません。ここで止まって知らせます。",
+    "緑は時間切れで箱に入れられませんでした。ここで止まって知らせます。",
+    "緑の手順は時間内に終わったと記録されませんでした。ここで止まって知らせます。",
+    "緑の手順は時間内に終わったと判定されませんでした。ここで止まって知らせます。",
+    "緑の手順は時間内に終わった扱いになりませんでした。ここで止まって知らせます。",
+    "緑は2回目の試行でタイムアウトしました。ここで止まって知らせます。",
+    "緑は箱に入れられず、作業は終わっていません。ここで止まって知らせます。",
+])
+def test_v11_fail_phrasings_name_the_failed_color(s58, text):
+    g10 = _grade(s58, text, G, "stop", ["red"], scorer="1.0")
+    g11 = _grade(s58, text, G, "stop", ["red"], scorer="1.1")
+    assert g11["c1"] == "correct" and g11["c3"] == "correct", g11
+    assert g10["c1"] in ("none", "correct")                                        # 1.0 は事前登録のまま（取りこぼしうる）
+
+
+def test_v10_regexes_are_unchanged(s58):
+    """1.0 は事前登録のまま: 取りこぼしの例は 1.0 では none のまま（主な結果を同じに出し直せる）。"""
+    t = "緑は2回試しても時間内に終わりませんでした。箱には赤と緑が入っており、次は残りの青を箱へ入れます。"
+    g10 = _grade(s58, t, G, "next", ["red"], "blue", scorer="1.0")
+    assert (g10["c1"], g10["c2"], g10["c3"]) == ("none", "wrong", "ambiguous")     # 「終わり」が次の手の finish に漏れる
+    g11 = _grade(s58, t, G, "next", ["red"], "blue", scorer="1.1")
+    assert (g11["c1"], g11["c2"], g11["c3"], g11["correct"]) == ("correct", "wrong", "correct", False)
+    g11 = _grade(s58, t, G, "next", ["red", "green"], "blue", scorer="1.1")        # 真値で緑が箱の中なら 1 は wrong
+    assert (g11["c1"], g11["c2"]) == ("wrong", "correct")
+    assert s58.DEFAULT_SCORER == "1.0" and s58.FAIL_RE is s58.RULES["1.0"]["fail"] and s58.BOX_RES is s58.RULES["1.0"]["box"]
+    with pytest.raises(ValueError):
+        s58.parse_report(t, "2.0")
+
+
+@pytest.mark.parametrize("text, box", [
+    ("カメラでは赤と緑の両方が箱に入っていました。", ["red", "green"]),
+    ("カメラで見ると緑は箱に入っており、今は赤と緑が箱の中です。", ["green", "red"]),
+    ("赤・緑・青の 3 個はすべて箱に入っており、片付けは完了しています。", ["red", "green", "blue"]),
+    ("箱の中には赤・緑・青の3色すべてがあり、作業を終えます。", ["red", "green", "blue"]),
+    ("確認すると赤・緑・青の3つがすべて箱の中にあります。", ["red", "green", "blue"]),
+    ("箱には赤・緑・青の三つがそろっています。", ["red", "green", "blue"]),
+    ("カメラでは箱に赤と青が入り、緑が机の上に残っています。", ["red", "blue"]),
+    ("カメラでは箱に赤と青、机に緑が見えています。", ["red", "blue"]),
+    ("赤だけが箱に入っています。", ["red"]),
+    ("緑は箱に入っていません。", []),                                             # 否定は数えない（1.0 と同じ）
+    ("箱には赤と緑がそろっていません。", []),
+])
+def test_v11_box_phrasings(s58, text, box):
+    p = s58.parse_report(text, "1.1")
+    assert p["box_colors"] == box, p
+
+
+def test_v11_fail_clause_does_not_leak_into_next_action(s58):
+    t = "緑の立方体は時間内に箱へ入らず、赤は箱に入っています。次は青を先に入れ、そのあとで緑をもう一度試します。"
+    o = ("blue", "green")
+    assert _grade(s58, t, G, "reorder", ["red"], order=o, scorer="1.0")["c3"] == "wrong"     # 失敗の節の緑が並びに混ざる
+    g = _grade(s58, t, G, "reorder", ["red"], order=o, scorer="1.1")
+    assert (g["c1"], g["c2"], g["c3"], g["correct"]) == ("correct", "correct", "correct", True)
+    t = "緑の立方体は時間内に箱へ入らず未完了です。赤は箱に入っているので、緑をもう1度入れることを試します。"
+    assert _grade(s58, t, G, "next", ["red"], "green", scorer="1.0")["c3"] == "ambiguous"     # 「完了」が finish に読まれる
+    assert _grade(s58, t, G, "next", ["red"], "green", scorer="1.1")["c3"] == "correct"
+
+
+def test_row_id_v11_includes_item(s58):
+    k = "a" * 64
+    assert s58.row_id(k) == s58.row_id(k, "V3S3/E7_R1v3/run_0000") == s58.row_id(k, "V3S3/E7_R1v3/run_0006", "1.0")
+    assert s58.row_id(k) == __import__("hashlib").sha256(("row:" + k).encode()).hexdigest()[:12]   # 1.0 の作り方のまま
+    a, b = s58.row_id(k, "V3S3/E7_R1v3/run_0000", "1.1"), s58.row_id(k, "V3S3/E7_R1v3/run_0006", "1.1")
+    assert a != b and len(a) == 12 and a != s58.row_id(k)
+    with pytest.raises(ValueError):
+        s58.row_id(k, None, "1.1")
+
+
+def _same_input_two_truths(s58, tmp_path, monkeypatch, report):
+    """入力が同じで真値の違う 2 項目（1.0 では行の番号が同じになる）に、同じ答えを返す。"""
+    _items_file(s58, tmp_path, [_meta(0), _meta(1, truth={"red": 15.0, "green": 60.0})])
+    cli = FakeClient(raw("stop", "none", [], report=report))
+    monkeypatch.setattr(s58, "make_client", lambda: cli)
+    assert s58.main(["ask", "--models", "haiku", "--repeats", "1", "--execute"]) == 0
+    monkeypatch.setattr(s58, "make_client", lambda: (_ for _ in ()).throw(AssertionError("採点でクライアントを作った")))
+
+
+def test_score_v11_separate_files_and_distinct_rows(s58, tmp_path, monkeypatch):
+    from recovla.planner import decompose as D
+    _same_input_two_truths(s58, tmp_path, monkeypatch, "緑を入れられませんでした。箱には赤が入っており、ここで止まって知らせます。")
+    monkeypatch.setattr(D, "client", lambda: (_ for _ in ()).throw(AssertionError("採点でクライアントを作った")))
+    assert s58.main(["score", "--models", "haiku", "--repeats", "1", "--write"]) == 0          # 既定は 1.0
+    v10 = json.loads((s58.OUT / "score_s3.json").read_text(encoding="utf-8"))
+    assert "scorer_version" not in v10 and len({r["row_id"] for r in v10["rows"]}) == 1      # 1.0: 2 項目が同じ番号
+    before = (s58.OUT / "score_s3.json").read_bytes()
+    assert s58.main(["score", "--models", "haiku", "--repeats", "1", "--scorer", "1.1", "--write"]) == 0
+    assert (s58.OUT / "score_s3.json").read_bytes() == before                               # 1.0 のファイルは書き換えない
+    v11 = json.loads((s58.OUT / "score_s3_v11.json").read_text(encoding="utf-8"))
+    assert v11["scorer_version"] == "1.1" and v11["role"] == "secondary"
+    assert v11["sonnet_rule"].get("used_for_decision") is False or not v11["sonnet_rule"]["decidable"]
+    assert len({r["row_id"] for r in v11["rows"]}) == 2                                     # 1.1: 項目ごとに別の番号
+    assert {r["row_id_v10"] for r in v11["rows"]} == {v10["rows"][0]["row_id"]}
+    assert (s58.OUT / "sheet_s3_v11.json").is_file()
+    od = tmp_path / "repro"                                                                 # 出し直しの照合用の書く場所
+    assert s58.main(["score", "--models", "haiku", "--repeats", "1", "--write", "--out-dir", str(od)]) == 0
+    a = json.loads((od / "score_s3.json").read_text(encoding="utf-8"))
+    a.pop("written"), v10.pop("written")
+    assert a == v10
+
+
+def test_map_manual_v11_carries_only_judged_truth_free_claims(s58, tmp_path, monkeypatch):
+    _same_input_two_truths(s58, tmp_path, monkeypatch,
+                           "緑を入れられませんでした。箱は空で、赤は箱に入っており、もう一度緑を入れるか、止まって知らせます。")
+    doc = s58.load_fixed_items("s3")
+    qs = s58.questions(doc, s58.models_of("haiku"), 1)
+    r10, _ = s58.score_rows(doc, qs, None, "1.0")
+    old_id = r10[0]["row_id"]
+    assert all(r["grade"]["c2"] == "ambiguous" and r["grade"]["c3"] == "ambiguous" for r in r10)
+    res = s58.map_manual_v11(doc, qs, {old_id: {"c1": "none", "c2": "correct", "c3": "wrong"}})
+    assert len(res["manual"]) == 2                                                        # c3 は真値によらないので両方へ写す
+    assert all(v == {"c3": "wrong", "from_v10": old_id} for v in res["manual"].values())  # c1 は写さない
+    assert len(res["relabel"]) == 2 and all(x["fields"] == {"c2": "truth_differs_within_v10_row"} for x in res["relabel"])
+    man = tmp_path / "m11.json"
+    man.write_text(json.dumps(res["manual"]), encoding="utf-8")
+    assert s58.main(["score", "--models", "haiku", "--repeats", "1", "--scorer", "1.1", "--manual", str(man), "--write"]) == 0
+    sheet = json.loads((s58.OUT / "sheet_s3_v11.json").read_text(encoding="utf-8"))
+    assert sorted(x["row_id"] for x in sheet) == sorted(x["row_id"] for x in res["relabel"])   # c2 が残る行は表に残す
+    assert "model" not in json.dumps(sheet)
+    assert s58.main(["map-manual", "--models", "haiku", "--repeats", "1", "--manual", str(man), "--write"]) == 0
+    assert (s58.OUT / "manual_s3_v11_from_v10.json").is_file()
 
 
 def test_ambiguous_rows_go_to_manual_sheet_and_manual_grades_apply(s58, tmp_path, monkeypatch):
