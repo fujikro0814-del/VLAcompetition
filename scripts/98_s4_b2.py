@@ -5,7 +5,10 @@
     .venv\\Scripts\\python.exe scripts\\98_s4_b2.py run --setting naive --part ext --gate1 outputs\\s4\\gate1_result.json --dry-run
     .venv\\Scripts\\python.exe scripts\\98_s4_b2.py rotate --gate1 outputs\\s4\\gate1_result.json [--dry-run]
         設定（naive と上位 0〜2 個）x 部分（ext・P1）を、同じ種で塊ごとに交互に回す（目標書_段階4.md 第 4 節。ext は 2 種 = 6 試行、
-        P1 は 5 試行ごと。--block-ext・--block-p1 で変えられる）。同じコマンドで続きから回る。
+        P1 は 5 試行ごと。--block-ext・--block-p1 で変えられる）。同じコマンドで続きから回る。1 つのプロセス（模型は R1v3 の 1 つ）。
+        続けるのは 96 が --max-new で止まったときだけ（Ctrl+C・メモリ待ちの時間切れ・止める合図・エラーでは止まる）。1 巡して完全な
+        試行が増えなければエラー。進み具合は outputs\\s4\\b2\\rotate_<実験>.progress.json（pid 付き、1 分ごとに心拍。
+        96_s4_ops.py wait --progress で見る）。止める合図: <条件>\\STOP、outputs\\s4\\STOP、outputs\\s4\\b2\\rotate_<実験>.STOP。
   部分（条件名 = <設定>_<部分>、実験名の既定 S4B2）:
     ext  自然の試行の延長: --trials natural:191200:23（69 試行。bundle2_rtc_ext）。束 1 の D-RTC の 30 試行（S4DRTC\\<設定>、
          190200〜190209）と合わせて 99 試行にする（合わせるのは 98_s4_b_decide.py b2）
@@ -17,10 +20,12 @@
     （X2 の生成の帯 44404〜44423 は拒む。実験名は S4SMOKE で始める）。
   実行のしかた（D-RTC と同じ）: R1v3、行動の区切り 6 行、安全フィルタなし、単発の試行の制限時間 60 s（30 s の採点が主）、試行ごとに
     世界を作り直す。RTC の設定の当て方は scripts\\98_s4_d_rtc.py の patch96 をそのまま使う（diag_NNNN.npz も同じ形で書く）。
-読むもの: scripts\\98_s4_d_rtc.py・96_s4_resume.py（importlib。書き換えない）、src\\recovla\\diag\\rtc.py、configs\\s4_gates.json、--gate1 の JSON。
+読むもの: scripts\\98_s4_d_rtc.py・96_s4_resume.py・98_s4_b1.py（rotate の共通部。importlib。書き換えない）、src\\recovla\\diag\\rtc.py、
+  configs\\s4_gates.json、--gate1 の JSON。
 書くもの: 96_s4_resume.py run と 98_s4_d_rtc.py run と同じ記録（outputs\\v2eval\\<実験>\\<設定>_<部分>\\）。試行の json に "b2"
   （設定・部分・設定の出どころ・使ったファイルの SHA-256）を足し、P1 の試行は diag.induce・diag.start_state を誘発の値に直す。
-  run.json・resume_spec.json に "b2" を足す。rotate の進み具合は outputs\\s4\\b2\\rotate_<実験>.log.json。
+  run.json・resume_spec.json に "b2" を足す。rotate の進み具合は outputs\\s4\\b2\\rotate_<実験>.progress.json・rotate_<実験>.log.json。
+終了コード: 96_s4_resume.py と同じ（0 全部そろった、1 途中で止まった、2 エラー、3 引数・前提の食い違い）。
 """
 import argparse
 import hashlib
@@ -28,14 +33,14 @@ import importlib.util
 import json
 import pathlib
 import sys
-import time
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 GATES = ROOT / "configs" / "s4_gates.json"
 OUTD = ROOT / "outputs" / "s4" / "b2"
 PARTS = {"ext": {"alloc": "bundle2_rtc_ext", "kind": "natural", "induce": None, "ja": "自然の試行の延長（D-RTC の 30 試行に足して 99）"},
          "P1": {"alloc": "bundle2_p1", "kind": "induced", "induce": "P1", "ja": "把持失敗の誘発"}}
-FILES = ("scripts/98_s4_b2.py", "scripts/98_s4_d_rtc.py", "scripts/96_s4_resume.py", "src/recovla/diag/rtc.py", "configs/s4_gates.json")
+FILES = ("scripts/98_s4_b2.py", "scripts/98_s4_b1.py", "scripts/98_s4_d_rtc.py", "scripts/96_s4_resume.py", "src/recovla/diag/rtc.py",
+         "configs/s4_gates.json")
 
 
 def _load(path: pathlib.Path, name: str):
@@ -200,7 +205,14 @@ def cmd_run(a, extra) -> int:
     return run_condition(m96, ops, v82, a, a.setting, a.part, src, extra)
 
 
+def b1mod():
+    """rotate の共通部（RotateProgress・rotate_loop・refuse_if_live・read_progress）は 98_s4_b1.py のものを使う。"""
+    return _load(ROOT / "scripts" / "98_s4_b1.py", "s4_b1_for_b2")
+
+
 def cmd_rotate(a, extra) -> int:
+    """設定 x 部分を、同じ種で塊ごとに交互に回す（1 つのプロセス。模型は R1v3 の 1 つだけで、RTC の設定は条件ごとに入れ直す
+    ＝98_s4_d_rtc.py の rotate と同じ）。続けるのは 96 が --max-new で止まったときだけ（98_s4_b1.py の rotate_loop）。"""
     settings, src, run_b2 = settings_from_gate1(a.gate1, a.settings)
     if not run_b2:
         print("[b2] 関門 R で条件を満たす設定がない（B2 は回さない。R の「やめる枝」）", flush=True)
@@ -212,35 +224,48 @@ def cmd_rotate(a, extra) -> int:
         for p, s in conds:
             rc = max(rc, run_condition(m96, ops, v82, a, s, p, src, extra + ["--dry-run"]))
         return rc
+    B1 = b1mod()
+    for f in extra:
+        if f.split("=")[0] in B1.ROTATE_FORBIDDEN + FORBIDDEN_EXTRA:
+            raise SystemExit(f"{f} は rotate では渡せない（rotate・98_s4_b2.py が決める）")
     block = {"ext": a.block_ext, "P1": a.block_p1}
-    done = {c: False for c in conds}
+    trials = {p: (a.trials_ext if p == "ext" else a.trials_p1) or default_trials(p) for p in PARTS}
+    for p in PARTS:
+        why = check_band(p, trials[p], a.experiment, a.allow_smoke)
+        if why:
+            raise SystemExit(why)
+    plan = {p: [(seed, tgt) for seed, _, tgt in v82.trial_list(trials[p])] for p in PARTS}
+    name = {f"{s}_{p}": (p, s) for p, s in conds}
     OUTD.mkdir(parents=True, exist_ok=True)
-    lp = OUTD / f"rotate_{a.experiment}.log.json"
-    log = {"experiment": a.experiment, "conditions": [f"{s}_{p}" for p, s in conds], "block": block, "rounds": []}
-    for r in range(10_000):
-        row = {"round": r, "at": time.strftime("%Y-%m-%d %H:%M:%S"), "rc": {}}
-        for p, s in conds:
-            if done[(p, s)]:
-                continue
-            for stop in (ROOT / "outputs" / "v2eval" / a.experiment / f"{s}_{p}" / "STOP", ROOT / "outputs" / "s4" / "STOP"):
-                if stop.is_file():
-                    log["stopped"] = str(stop)
-                    lp.write_text(json.dumps(log, ensure_ascii=False, indent=1), encoding="utf-8")
-                    print(f"[b2] 止める合図 {stop}", flush=True)
-                    return 1
-            rc = run_condition(m96, ops, v82, a, s, p, src, extra, max_new=block[p])
-            row["rc"][f"{s}_{p}"] = rc
-            if rc == 0:
-                done[(p, s)] = True
-            elif rc != 1:
-                log["rounds"].append(row)
-                lp.write_text(json.dumps(log, ensure_ascii=False, indent=1), encoding="utf-8")
-                return rc
-        log["rounds"].append(row)
-        lp.write_text(json.dumps(log, ensure_ascii=False, indent=1), encoding="utf-8")
-        if all(done.values()):
-            return 0
-    return 1
+    prog_p, log_p = OUTD / f"rotate_{a.experiment}.progress.json", OUTD / f"rotate_{a.experiment}.log.json"
+    B1.refuse_if_live(prog_p, ops)
+    d = drtc()
+    shas = (sha256_file(ROOT / "scripts" / "98_s4_d_rtc.py"), sha256_file(pathlib.Path(d.D.__file__)))
+
+    def count(cond):
+        p, s = name[cond]
+        d.patch96(m96, s, False, *shas)                  # check_complete は diag の腕も照らすので、設定ごとに包み直す
+        out = v82.OUT / a.experiment / cond
+        return sum(int(m96.check_complete("run", out, i, {"seed": seed, "target": tgt})[0]) for i, (seed, tgt) in enumerate(plan[p]))
+
+    def call(cond):
+        p, s = name[cond]
+        c = run_condition(m96, ops, v82, a, s, p, src, extra, max_new=block[p])
+        return c, B1.read_progress(v82.OUT / a.experiment / cond / "progress.json")
+
+    def stop_check(cond):
+        for stop in (ROOT / "outputs" / "v2eval" / a.experiment / cond / "STOP", ROOT / "outputs" / "s4" / "STOP",
+                     OUTD / f"rotate_{a.experiment}.STOP"):
+            if stop.is_file():
+                return f"stop_file:{stop}"
+        return ""
+
+    prog = B1.RotateProgress(prog_p, {"experiment": a.experiment, "condition": f"rotate:{a.experiment}", "conditions": list(name),
+                                      "settings": settings, "trials_spec": trials, "total": sum(len(plan[p]) for p, _ in conds),
+                                      "block_trials": block, "isolation": "in_process（模型は R1v3 の 1 つ）",
+                                      "child_progress": {c: str(v82.OUT / a.experiment / c / "progress.json") for c in name},
+                                      "stop_file": str(OUTD / f"rotate_{a.experiment}.STOP")}, m96._write_atomic)
+    return B1.rotate_loop(list(name), {c: len(plan[name[c][0]]) for c in name}, count, call, prog, log_p, stop_check)
 
 
 def cmd_plan(a) -> int:

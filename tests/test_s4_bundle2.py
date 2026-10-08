@@ -6,7 +6,9 @@
   check_g1_boundary.py（importlib）、configs/s4_gates.json（読むだけ）。書くもの: pytest の一時フォルダだけ。
 """
 import importlib.util
+import inspect
 import json
+import os
 import pathlib
 import sys
 import types
@@ -247,33 +249,65 @@ def test_b_reclose_does_not_reset_and_trigger_is_shorter():
 
 
 # ---------------------------------------------------------------- (c) 最後の試みで知覚が箱の中と見ていれば判定を待つ
+OPEN = {"close_after_s": None}                                                     # 方策が指を閉じない（(c) は指が開のときだけ）
+
+
 def test_c_final_wait_when_perception_sees_target_in_box():
     how = {"red": "wait", "green": "ok", "blue": "ok"}
-    ex, *_ = make(how, {"d_early_abort": False}, prt_kw={"box_after": {"red": 40.0}})   # 40 s から知覚は「赤は箱の中」
+    ex, *_ = make(how, {"d_early_abort": False}, prt_kw=dict(OPEN, box_after={"red": 40.0}))   # 40 s から知覚は「赤は箱の中」
     rec = run(ex)
     ev = [e for e in rec["v3"]["events"] if e["kind"] == "final_wait"]
     assert len(ev) == 1 and ev[0]["judged"] is True and ev[0]["attempt"] == 1
     assert rec["steps"][0]["judged_complete"] and rec["stopped"] is None and len(rec["steps"]) == 3
     fw = [r for r in rec["returns"] if r.get("v3") == "final_wait"]
     assert len(fw) == 1 and fw[0]["kind"] == "placed" and fw[0]["judged"]          # 56 は台本の動きとして数える
+    assert rec["v3"]["version"] == V3.VERSION == "v3.1"
 
 
 def test_c_no_wait_when_perception_does_not_see_target_in_box():
     how = {"red": "wait", "green": "ok", "blue": "ok"}
-    ex, *_ = make(how, {"d_early_abort": False})
+    ex, *_ = make(how, {"d_early_abort": False}, prt_kw=OPEN)
     rec = run(ex)
-    assert not [e for e in rec["v3"]["events"] if e["kind"] == "final_wait"]
+    assert not [e for e in rec["v3"]["events"] if e["kind"] in ("final_wait", "final_wait_skipped")]
     assert rec["stopped"] == {"step": 0, "t": rec["stopped"]["t"],
                               "reply": "1 番目の手順（red）を 2 回試して終えられなかったので、止めました"}
 
 
 def test_c_wait_without_judgement_stops_like_current_executor():
     how = {"red": "never", "green": "ok", "blue": "ok"}
-    ex, *_ = make(how, {"d_early_abort": False}, prt_kw={"box_after": {"red": 40.0}})
+    ex, *_ = make(how, {"d_early_abort": False}, prt_kw=dict(OPEN, box_after={"red": 40.0}))
     rec = run(ex)
     ev = [e for e in rec["v3"]["events"] if e["kind"] == "final_wait"]
     assert len(ev) == 1 and ev[0]["judged"] is False and rec["stopped"]["step"] == 0
     assert not rec["steps"][0]["judged_complete"]
+
+
+@pytest.mark.parametrize("prt_kw, judge_kw", [({}, {}),                                    # 方策が指を閉じている（持ったまま）
+                                              (OPEN, {"reclose_every": 1})])                # 指令は開でも、測った開き幅が開でない
+def test_c_not_applied_when_gripper_not_open(prt_kw, judge_kw):
+    """知覚の in_box は水平の位置だけなので、持ったまま箱の上にあっても「箱の中」と見る。指が開でなければ (c) で戻さない。"""
+    how = {"red": "wait", "green": "ok", "blue": "ok"}
+    ex, *_ = make(how, {"d_early_abort": False}, prt_kw=dict(prt_kw, box_after={"red": 40.0}), judge_kw=judge_kw)
+    rec = run(ex)
+    assert not [e for e in rec["v3"]["events"] if e["kind"] == "final_wait"]
+    sk = [e for e in rec["v3"]["events"] if e["kind"] == "final_wait_skipped"]
+    assert len(sk) == 1 and sk[0]["why"] == "gripper_closed" and rec["v3"]["interventions"]["final_wait_skipped"]["gripper_closed"] == 1
+    assert not [r for r in rec["returns"] if r.get("v3") == "final_wait"]
+    assert rec["stopped"]["step"] == 0 and not rec["steps"][0]["judged_complete"]
+
+
+def test_c_not_repeated_after_placed_return():
+    """(b) の戻し（待機位置で wait_s 待つ）が済んで指を閉じていなければ、(c) は同じ待ちを繰り返さない（台本の戻しを 2 回数えない）。"""
+    how = {"red": "never", "green": "never", "blue": "never"}
+    ex, *_ = make(how, {"d_early_abort": False}, prt_kw=dict(OPEN, box_after={"red": 0.0}), judge_kw={"placed": True})
+    rec = run(ex)
+    last = [r for r in rec["returns"] if r["step"] == 0 and r["attempt"] == 1]
+    assert last and last[-1].get("v3") == "placed"                                  # 最後の試みで (b) の戻しが済んでいる
+    assert not [r for r in rec["returns"] if r.get("v3") == "final_wait"]
+    sk = [e for e in rec["v3"]["events"] if e["kind"] == "final_wait_skipped"]
+    assert len(sk) == 1 and sk[0]["why"] == "after_placed_return" and sk[0]["attempt"] == 1
+    n_placed = sum(1 for r in rec["returns"] if r["kind"] == "placed")
+    assert rec["v3"]["interventions"]["scripted_return"] == n_placed == rec["v3"]["interventions"]["by_v3_kind"]["placed"]
 
 
 # ---------------------------------------------------------------- (d) 早めの打ち切りは止まった・閉じないだけ
@@ -387,7 +421,7 @@ def _recs():
     ex, *_ = make({"red": "never", "green": "never", "blue": "never"}, {"c_final_wait": False, "d_early_abort": False},
                   judge_kw={"placed": True, "reclose_every": 4})
     out.append(run(ex))
-    ex, *_ = make({"red": "wait", "green": "ok", "blue": "ok"}, {"d_early_abort": False}, prt_kw={"box_after": {"red": 40.0}})
+    ex, *_ = make({"red": "wait", "green": "ok", "blue": "ok"}, {"d_early_abort": False}, prt_kw=dict(OPEN, box_after={"red": 40.0}))
     out.append(run(ex))
     ex, *_ = make({"red": "never", "green": "ok", "blue": "ok"}, {"c_final_wait": False}, prt_kw={"close_after_s": None})
     out.append(run(ex))
@@ -521,13 +555,137 @@ def test_b1_b2_dry_run_writes_nothing(b1, b2, tmp_path, capsys):
     assert not (ROOT / "outputs" / "v2eval" / exp1).exists() and not (ROOT / "outputs" / "v2eval" / exp2).exists()
 
 
-# ================================================================ 採否の判定（98_s4_b_decide.py）: 2 通りの数え方の一致
+def test_b1_spec_pins_executor_only_for_v3_and_records_version(b1, tmp_path, monkeypatch):
+    r96 = _load(ROOT / "scripts" / "96_s4_resume.py", "s4_resume_b1_spec_t")
+    ops, v82 = r96.load_ops(), r96.load_82(False)
+    seen = {}
+
+    def fake_main(a96, v82_, ops_):                                                  # 回さずに、96 に渡る引数の控えだけを見る
+        seen[a96.b1_arm] = r96.make_spec(a96)
+        return 0
+    monkeypatch.setattr(r96, "cmd_main", fake_main)
+    for arm in ("R1v3_cur", "R1v3_v3", "N1v3_v3"):
+        a = b1.build_parser().parse_args(["run", "--arm", arm, "--gate1", str(_gate1(tmp_path)), "--experiment", "S4B1TESTSPEC"])
+        assert b1.run_arm(r96, ops, v82, a, arm, []) == 0
+    assert seen["R1v3_cur"]["b1_executor_sha256"] is None and seen["R1v3_cur"]["b1_executor_version"] == "current"
+    for arm in ("R1v3_v3", "N1v3_v3"):
+        assert len(seen[arm]["b1_executor_sha256"]) == 64 and seen[arm]["b1_executor_version"] == V3.VERSION
+    assert not (ROOT / "outputs" / "v2eval" / "S4B1TESTSPEC").exists()
+
+
+def test_b1_engine_resets_executor_per_trial(b1):
+    class FakeEngine:
+        def __init__(self, a, v82, cfg, lim, env=None):
+            self.a = a
+
+        def init_task(self):
+            self.make_task = lambda io, setup: _base({"red": "ok", "green": "ok", "blue": "ok"})
+
+        def run_one_task(self, i, seed):
+            if seed % 2 == 0:                                                        # 偶数の種だけ実行器を作る
+                self.make_task(None, None).start("全部片付けて", seed)
+            return {"run": i}, {}, {}
+    r96 = types.SimpleNamespace(Engine=FakeEngine, SPEC_KEYS=("cmd",), run_json_text=lambda *x, **k: "{}")
+    b1.patch96(r96, "R1v3_v3", {"a_goal": None}, {"arm": "R1v3_v3", "executor_version": V3.VERSION})
+    eng = r96.Engine(types.SimpleNamespace(model="R1v3"), None, None, None)
+    eng.init_task()
+    meta, _, _ = eng.run_one_task(0, 191100)
+    assert meta["v3"]["version"] == V3.VERSION and meta["b1"]["api_retry"] is None
+    with pytest.raises(RuntimeError):
+        eng.run_one_task(1, 191101)                                                  # この試行の実行器がない: 前の試行の記録を写さない
+
+
+# ---------------------------------------------------------------- rotate（続けるのは --max-new で止まったときだけ）
+def _writer(p, text):
+    pathlib.Path(p).write_text(text, encoding="utf-8")
+    return True
+
+
+def _rot(b1, tmp_path, script, totals, stop=lambda n: ""):
+    """script: 名前 → 呼び出しごとの (終了コード, 子の stop_reason, 増える完全な本数) の列。"""
+    done = {n: 0 for n in totals}
+    calls = []
+
+    def count(n):
+        return done[n]
+
+    def call(n):
+        c, reason, inc = script[n].pop(0)
+        done[n] = min(totals[n], done[n] + inc)
+        calls.append(n)
+        return c, {"status": {0: "done", 1: "stopped"}.get(c, "error"), "stop_reason": reason}
+    prog = b1.RotateProgress(tmp_path / "rot.progress.json", {"experiment": "X", "condition": "rotate:X", "total": sum(totals.values())},
+                             _writer)
+    try:
+        rc = b1.rotate_loop(list(totals), totals, count, call, prog, tmp_path / "rot.log.json", stop)
+    finally:
+        pr = json.loads((tmp_path / "rot.progress.json").read_text(encoding="utf-8"))
+    return rc, calls, pr
+
+
+def test_rotate_continues_only_on_max_new(b1, tmp_path):
+    script = {"A": [(1, "max_new:2", 2), (0, None, 2)], "B": [(1, "max_new:2", 2), (0, None, 2)]}
+    rc, calls, pr = _rot(b1, tmp_path, script, {"A": 4, "B": 4})
+    assert rc == 0 and calls == ["A", "B", "A", "B"]
+    assert pr["status"] == "done" and pr["done"] == 8 and pr["pid"] == os.getpid() and len(pr["calls"]) == 4
+    assert json.loads((tmp_path / "rot.log.json").read_text(encoding="utf-8"))[0]["stop_reason"] == "max_new:2"
+
+
+@pytest.mark.parametrize("reason", ["KeyboardInterrupt", "memory_timeout", "stop_file:C:\\x\\STOP"])
+def test_rotate_stops_on_other_rc1(b1, tmp_path, reason):
+    rc, calls, pr = _rot(b1, tmp_path, {"A": [(1, reason, 1)], "B": [(1, "max_new:2", 2)]}, {"A": 4, "B": 4})
+    assert rc == 1 and calls == ["A"] and pr["status"] == "stopped" and reason in pr["stop_reason"]
+
+
+def test_rotate_stops_on_error_no_progress_and_stop_file(b1, tmp_path):
+    (tmp_path / "e").mkdir()
+    rc, calls, pr = _rot(b1, tmp_path / "e", {"A": [(3, None, 0)]}, {"A": 2})
+    assert rc == 3 and pr["status"] == "error"
+    (tmp_path / "n").mkdir()
+    with pytest.raises(RuntimeError, match="増えない"):                               # 1 巡して完全な試行が増えない
+        _rot(b1, tmp_path / "n", {"A": [(1, "max_new:2", 0), (1, "max_new:2", 0)]}, {"A": 2})
+    assert json.loads((tmp_path / "n" / "rot.progress.json").read_text(encoding="utf-8"))["status"] == "error"
+    (tmp_path / "s").mkdir()
+    rc, calls, pr = _rot(b1, tmp_path / "s", {"A": [(0, None, 2)]}, {"A": 2}, stop=lambda n: "stop_file:rotate_X.STOP")
+    assert rc == 1 and calls == [] and pr["status"] == "stopped"
+
+
+def test_b1_rotate_child_argv_release_and_refusals(b1, tmp_path):
+    a = b1.build_parser().parse_args(["rotate", "--gate1", "g.json", "--experiment", "S4B1", "--v3-off", "d"])
+    argv = b1.child_argv(a, "N1v3_v3", ["--accept-env-change"], 10)
+    assert argv[0] == sys.executable and argv[2:5] == ["run", "--arm", "N1v3_v3"]
+    assert argv[-3:] == ["--accept-env-change", "--max-new", "10"]
+    ca, extra = b1.build_parser().parse_known_args(argv[2:])                          # 子の引数として読める
+    assert ca.arm == "N1v3_v3" and ca.v3_off == "d" and ca.gate1 == "g.json" and extra == ["--accept-env-change", "--max-new", "10"]
+    # --in-process: 模型が替わるときに前の模型を手放す（Engine が持つ辞書も空になる）
+    b1.SHARED_CACHE.clear()
+    held = b1.SHARED_CACHE.setdefault("R1v3", {"pol": object()})
+    assert b1.release_models("R1v3") == [] and "pol" in held
+    assert b1.release_models("N1v3") == ["R1v3"] and held == {} and "R1v3" not in b1.SHARED_CACHE
+    # rotate が決める引数は渡せない（何も回さず、何も書かない）
+    g = str(_gate1(tmp_path))
+    assert b1.main(["rotate", "--gate1", g, "--experiment", "S4B1TESTROT", "--max-new", "3"]) == 3
+    assert not (b1.OUTD / "rotate_S4B1TESTROT.progress.json").exists()
+
+
+# ================================================================ 採否の判定（98_s4_b_decide.py）: 入口の点検と 2 通りの数え方の一致
 @pytest.fixture(scope="module")
 def dec():
     return _load(ROOT / "scripts" / "98_s4_b_decide.py", "s4_b_decide_t")
 
 
-def _e7_run(d, i, seed, all3, lift, false=False, audit_ok=True):
+TL_TASK = {"step_timeout_s": 30.0, "retry": 1, "task_time_limit_s": 200.0, "source": "96_s4_resume"}
+TL_RUN = {"time_limit_s": 60.0, "source": "96_s4_resume --time-limit-s"}
+V3SET = V3.settings({"a_goal": "ES"})
+
+
+def _cond_files(d, met=True, segs=1):
+    """96 が全部そろったときに書く run.json（env_segments）と G_AUDIT.json。"""
+    (d / "run.json").write_text(json.dumps({"env_segments": [{"env": {}, "trials": []}] * segs}), encoding="utf-8")
+    (d / "G_AUDIT.json").write_text(json.dumps({"met": met}), encoding="utf-8")
+
+
+def _e7_run(d, arm, i, seed, all3, lift, false=False, audit_ok=True, timed_out=False, api_retry=False):
     """3 個の連続タスクの記録 1 本（run_NNNN.json・npz）。2 番目の手順（緑）は t=10 に始まり、12 s に閉じ、15 s に開く。"""
     from recovla.sim import frames
     t = np.round(np.arange(0, 40.0, 0.05), 6)
@@ -547,82 +705,193 @@ def _e7_run(d, i, seed, all3, lift, false=False, audit_ok=True):
               "judged_complete": True, "t_judge": 9.0, "t_end": 10.0},
              {"step": 1, "color": "green", "attempts": [{"attempt": 0, "t_begin": 10.0, "t_judge": 22.0 if all3 else None}],
               "t_start": 10.0, "judged_complete": all3, "t_judge": 22.0 if all3 else None, "t_end": 25.0}]
-    au = {"g1": {"violations": 0}, "g2": {"world_stops": 0, "early_use": 0}, "g3": {"total_violations": 0 if audit_ok else 1}}
+    bad = 0 if audit_ok else 1                                                       # 1 本の試行に G1 と G3 の 2 種類の違反
+    au = {"g1": {"violations": bad}, "g2": {"world_stops": 0, "early_use": 0}, "g3": {"total_violations": bad}}
+    v3 = arm.endswith("_v3")
     m = {"run": i, "seed": seed, "plan": {"steps": ["red", "green", "blue"], "from_cache": True}, "steps": steps, "returns": [],
          "stopped": None if all3 else {"step": 1, "t": 70.0, "reply": "x"}, "truth_success_t": truth, "final_in_box": inb,
-         "all_three_in_box": all(inb.values()), "t_end": 40.0, "timed_out": False, "audit": au}
+         "all_three_in_box": all(inb.values()), "t_end": 40.0, "timed_out": timed_out, "audit": au, "time_limits": TL_TASK,
+         "b1": {"arm": arm, "executor": "v3" if v3 else "current", "executor_version": V3.VERSION if v3 else "current",
+                "api_retry": {"n": 1, "error": "x"} if api_retry else None}}
+    if v3:
+        m["v3"] = {"version": V3.VERSION, "settings": V3SET}
     (d / f"run_{i:04d}.json").write_text(json.dumps(m), encoding="utf-8")
 
 
-def _b1_dirs(root, cur_all3, v3_all3, cur_lift, v3_lift, n=10, false_v3=0, bad_audit=0):
-    base = root / "S4B1"
+def _b1_dirs(root, cur_all3, v3_all3, cur_lift, v3_lift, n=10, false_v3=0, bad_audit=0, exp="S4B1"):
+    base = root / exp
     for arm, all3, lift, nn in (("R1v3_cur", cur_all3, cur_lift, n), ("R1v3_v3", v3_all3, v3_lift, n), ("N1v3_v3", 2, 2, 5)):
         d = base / arm
         d.mkdir(parents=True)
+        bad = bad_audit if arm == "R1v3_cur" else 0
         for i in range(nn):
-            _e7_run(d, i, 191100 + i, i < all3, i < lift, false=(arm == "R1v3_v3" and i < false_v3),
-                    audit_ok=not (arm == "R1v3_cur" and i < bad_audit))
+            _e7_run(d, arm, i, 191100 + i, i < all3, i < lift, false=(arm == "R1v3_v3" and i < false_v3), audit_ok=not i < bad,
+                    timed_out=(arm == "R1v3_v3" and i == 0), api_retry=(arm == "N1v3_v3" and i == 1))
+        _cond_files(d, met=bad == 0)
     return base
 
 
+def _b1_plan(n=10):
+    return {"R1v3_cur": list(range(191100, 191100 + n)), "R1v3_v3": list(range(191100, 191100 + n)),
+            "N1v3_v3": list(range(191100, 191105))}
+
+
 def test_b1_decide_adopts_and_rejects(dec, tmp_path):
-    r = dec.b1_decide(_b1_dirs(tmp_path / "a", 0, 9, 2, 6))
+    r = dec.b1_decide(_b1_dirs(tmp_path / "a", 0, 9, 2, 6), plan=_b1_plan())
     assert r["adopt_v3"] and r["conditions"]["c1"]["value"] == 9 and r["conditions"]["c2"]["value"] == 0.4
     assert r["counts"]["N1v3_v3"]["n"] == 5 and "success_at_k" in r["display"]["N1v3_v3"]
-    r = dec.b1_decide(_b1_dirs(tmp_path / "b", 0, 8, 2, 6))
+    assert r["counts"]["R1v3_v3"]["timed_out"] == 1 and r["counts"]["N1v3_v3"]["api_retries"] == 1   # 第 7 節: 並べて出す
+    md = dec.md_b1(r)
+    assert "timed_out" in md and "API の回し直し" in md
+    r = dec.b1_decide(_b1_dirs(tmp_path / "b", 0, 8, 2, 6), plan=_b1_plan())
     assert not r["adopt_v3"] and not r["conditions"]["c1"]["pass"]                   # +8 は足りない
-    r = dec.b1_decide(_b1_dirs(tmp_path / "c", 0, 9, 2, 4))
+    r = dec.b1_decide(_b1_dirs(tmp_path / "c", 0, 9, 2, 4), plan=_b1_plan())
     assert not r["conditions"]["c2"]["pass"]                                         # 持ち上がり +0.20
-    r = dec.b1_decide(_b1_dirs(tmp_path / "d", 0, 9, 2, 6, false_v3=1))
+    r = dec.b1_decide(_b1_dirs(tmp_path / "d", 0, 9, 2, 6, false_v3=1), plan=_b1_plan())
     assert r["conditions"]["c3"]["value"] == 1 and not r["adopt_v3"]                 # 誤った完了
-    r = dec.b1_decide(_b1_dirs(tmp_path / "e", 0, 9, 2, 6, bad_audit=1))
-    assert r["conditions"]["c4"]["value"] == 1 and not r["adopt_v3"]
+    r = dec.b1_decide(_b1_dirs(tmp_path / "e", 0, 9, 2, 6, bad_audit=1), plan=_b1_plan())
+    assert r["conditions"]["c4"]["value"] == 1 and not r["adopt_v3"]                 # 2 種類の違反のある 1 本は 1 本と数える
+    assert r["counts"]["R1v3_cur"]["audit_bad_trials"] == 1
+
+
+def _mut_meta(base, arm, i, fn):
+    p = base / arm / f"run_{i:04d}.json"
+    m = json.loads(p.read_text(encoding="utf-8"))
+    fn(m)
+    p.write_text(json.dumps(m), encoding="utf-8")
+
+
+B1_BREAKS = {
+    "no_run_json": lambda b: (b / "R1v3_v3" / "run.json").unlink(),
+    "no_g_audit": lambda b: (b / "N1v3_v3" / "G_AUDIT.json").unlink(),
+    "two_env_segments": lambda b: _cond_files(b / "R1v3_cur", segs=2),
+    "arm_label": lambda b: _mut_meta(b, "R1v3_v3", 3, lambda m: m["b1"].update(arm="R1v3_cur")),
+    "cur_has_v3": lambda b: _mut_meta(b, "R1v3_cur", 0, lambda m: m.update(v3={"settings": V3SET})),
+    "v3_settings_differ": lambda b: _mut_meta(b, "N1v3_v3", 2, lambda m: m["v3"]["settings"].update(d_noclose_s=10.0)),
+    "version_differ": lambda b: _mut_meta(b, "N1v3_v3", 2, lambda m: m["b1"].update(executor_version="v3.0")),
+    "time_limit_differ": lambda b: _mut_meta(b, "R1v3_cur", 4, lambda m: m["time_limits"].update(step_timeout_s=20.0)),
+    "seed_differ": lambda b: _mut_meta(b, "R1v3_v3", 9, lambda m: m.update(seed=191199)),
+}
+
+
+@pytest.mark.parametrize("brk", sorted(B1_BREAKS))
+def test_b1_entry_audit_refuses_incomplete(dec, tmp_path, brk):
+    base = _b1_dirs(tmp_path, 0, 9, 2, 6)
+    B1_BREAKS[brk](base)
+    with pytest.raises(dec.Incomplete):
+        dec.b1_decide(base, plan=_b1_plan())
+
+
+def test_b1_main_incomplete_against_plan_and_smoke_rules(dec, tmp_path):
+    _b1_dirs(tmp_path, 0, 9, 2, 6)                                                    # 10 本しかない: 計画（60/60/30）と違う
+    out = tmp_path / "o.json"
+    assert dec.main(["b1", "--root", str(tmp_path), "--out", str(out), "--md", str(tmp_path / "o.md")]) == 3
+    assert not out.exists()
+    assert dec.b1_plan()["R1v3_cur"] == list(range(191100, 191160)) and dec.b1_plan()["N1v3_v3"] == list(range(191100, 191130))
+    assert dec.main(["b1", "--root", str(tmp_path), "--smoke"]) == 2                  # --smoke は S4SMOKE の実験だけ
 
 
 def test_b1_decide_stops_on_mismatch(dec, tmp_path):
-    base = _b1_dirs(tmp_path, 0, 9, 2, 6)
+    base = _b1_dirs(tmp_path, 0, 9, 2, 6, exp="S4SMOKE_B1T")
     p = base / "R1v3_v3" / "run_0000.json"
     m = json.loads(p.read_text(encoding="utf-8"))
     m["all_three_in_box"] = not m["all_three_in_box"]                                # A（all_three_in_box）と B（final_in_box）が食い違う
     p.write_text(json.dumps(m), encoding="utf-8")
-    assert dec.main(["b1", "--root", str(tmp_path), "--out", str(tmp_path / "o.json"), "--md", str(tmp_path / "o.md")]) == 1
+    assert dec.main(["b1", "--root", str(tmp_path), "--experiment", "S4SMOKE_B1T", "--smoke", "--out", str(tmp_path / "o.json"),
+                     "--md", str(tmp_path / "o.md")]) == 1
     assert not (tmp_path / "o.json").exists()
 
 
-def _rtc_trial(d, i, success, t_success, jerky, induce=None):
+def test_dual_tally_paths_do_not_share_listing_or_median(dec, tmp_path):
+    for f in (dec.b1_count_a, dec.b2_count_a):                                      # 呼び出し（"名前("）で見る
+        src = inspect.getsource(f)
+        assert "_files_a(" in src and "_files_b(" not in src and "_median_b(" not in src
+    for f in (dec.b1_count_b, dec.b2_count_b):
+        src = inspect.getsource(f)
+        assert "_files_b(" in src and "_files_a(" not in src and "_median_a(" not in src
+    assert "_median_a(" in inspect.getsource(dec.b2_count_a) and "_median_b(" in inspect.getsource(dec.b2_count_b)
+    for n in ("run_0000.json", "run_0001.json", "run_0000_runtime.json", "run_x.json", "trial_0003.json"):
+        (tmp_path / n).write_text("{}", encoding="utf-8")
+    assert dec._files_a(tmp_path, "run") == dec._files_b(tmp_path, "run") == [tmp_path / "run_0000.json", tmp_path / "run_0001.json"]
+    assert dec._median_a([3.0, None, float("nan"), 1.0, 2.0, 10.0]) == dec._median_b([3.0, None, float("nan"), 1.0, 2.0, 10.0]) == 2.5
+
+
+# ---------------------------------------------------------------- B2
+def _rtc_trial(d, i, seed, success, t_success, jerky, setting, part, induce=None):
     t = np.round(np.arange(0, 60.0, 0.05), 6)
     x = np.stack([0.4 + 0.05 * np.sin(0.3 * t), 0.02 * np.cos(0.2 * t), 0.2 + 0.0 * t], axis=1)
     if jerky:
         x = x + 0.002 * np.sign(np.sin(7.0 * t))[:, None]
     np.savez(d / f"trial_{i:04d}.npz", sim_time=t, x_des=x)
-    m = {"trial": i, "seed": 191200 + i, "success": success, "t_success": t_success if success else None,
-         "time_limits": {"time_limit_s": 60.0}, "induce": induce or {}}
+    m = {"trial": i, "seed": seed, "target": "red", "success": success, "t_success": t_success if success else None,
+         "time_limits": TL_RUN, "induce": induce or {}, "diag": {"arm": setting, "shadow": False}}
+    if part != "natural_drtc":
+        m["b2"] = {"setting": setting, "part": part}
     (d / f"trial_{i:04d}.json").write_text(json.dumps(m), encoding="utf-8")
 
 
-def _b2_dirs(root, nat, rec, jerky):
-    """nat・rec: 設定 → (成功の本数, 本数)。自然は D-RTC 3 本＋延長、P1 は誘発の成立 30 s 以内だけが分母。"""
+def _b2_dirs(root, nat, rec, jerky, exp="S4B2", drtc="S4DRTC"):
+    """nat・rec: 設定 → (成功の本数, 本数)。自然は D-RTC 3 本＋延長、P1 は誘発が 30 s より前に成立した試行だけが分母
+    （40 s の成立と、ちょうど 30.0 s の成立の 2 本は分母に入らない。0155 の 1-1）。"""
     for s in nat:
-        dd = root / "S4DRTC" / s
-        de, dp = root / "S4B2" / f"{s}_ext", root / "S4B2" / f"{s}_P1"
+        dd = root / drtc / s
+        de, dp = root / exp / f"{s}_ext", root / exp / f"{s}_P1"
         for d in (dd, de, dp):
             d.mkdir(parents=True)
         k, n = nat[s]
         for i in range(n):
-            _rtc_trial(dd if i < 3 else de, i if i < 3 else i - 3, i < k, 20.0, jerky[s])
+            if i < 3:
+                _rtc_trial(dd, i, 191200 + i, i < k, 20.0, jerky[s], s, "natural_drtc")
+            else:
+                _rtc_trial(de, i - 3, 191300 + i, i < k, 20.0, jerky[s], s, "ext")
         k, n = rec[s]
         for i in range(n):
-            _rtc_trial(dp, i, i < k, 25.0, jerky[s], induce={"kind": "P1", "established": True, "t_established": 5.0})
-        _rtc_trial(dp, n, True, 25.0, jerky[s], induce={"kind": "P1", "established": True, "t_established": 40.0})   # 分母に入らない
+            _rtc_trial(dp, i, 191400 + i, i < k, 25.0, jerky[s], s, "P1",
+                       induce={"kind": "P1", "established": True, "t_established": 5.0})
+        _rtc_trial(dp, n, 191400 + n, True, 25.0, jerky[s], s, "P1", induce={"kind": "P1", "established": True, "t_established": 40.0})
+        _rtc_trial(dp, n + 1, 191400 + n + 1, False, None, jerky[s], s, "P1",
+                   induce={"kind": "P1", "established": True, "t_established": 30.0})          # ちょうど L 秒: 分母に入らない
+        for d in (dd, de, dp):
+            _cond_files(d)
     return root
 
 
-def test_b2_decide_rules_and_double_count(dec, tmp_path):
+def _strict96(dec):
+    """直した後の 96（t_established < L）の代わり: 本物の 96 の score_condition を L − 1e-6 で呼び、鍵を L に戻す
+    （この合成の記録の成功の時刻は L から離れているので、成功の側は変わらない）。96 の直しが入れば要らない。"""
+    r96 = dec._r96()
+
+    def sc(d, ats):
+        out = r96.score_condition(d, tuple(T - 1e-6 for T in ats))
+        out["at"] = {f"{T:g}": v for T, v in zip(ats, out["at"].values())}
+        return out
+    return types.SimpleNamespace(score_condition=sc)
+
+
+def test_b2_refuses_until_96_scoring_fix(dec, tmp_path):
+    """96 の score_condition が t_established <= L のままなら、B2 は判定しない（未完、終了コード 3、何も書かない）。"""
+    assert dec.score_fix_landed(_strict96(dec))                                     # 直した 96 なら通る（探りの検査）
+    if dec.score_fix_landed(dec._r96()):
+        pytest.skip("96 の採点の直し（枝 s4-scoring-fix）が入っている: この拒否は働かない（判定の検査が本物の 96 で通る）")
+    root = _b2_dirs(tmp_path, nat={"naive": (8, 10), "range10_cap5": (8, 10)}, rec={"naive": (5, 10), "range10_cap5": (5, 10)},
+                    jerky={"naive": True, "range10_cap5": False}, exp="S4SMOKE_B2T")
+    with pytest.raises(dec.Incomplete) as e:
+        dec.b2_decide(root / "S4SMOKE_B2T", root / "S4DRTC", ["range10_cap5"], smoke=True)
+    assert any("t_established" in x for x in e.value.problems)
+    out = tmp_path / "o.json"
+    assert dec.main(["b2", "--root", str(root), "--experiment", "S4SMOKE_B2T", "--settings", "range10_cap5", "--smoke",
+                     "--out", str(out), "--md", str(tmp_path / "o.md")]) == 3
+    assert not out.exists()
+
+
+def test_b2_decide_rules_and_double_count(dec, tmp_path, monkeypatch):
+    monkeypatch.setattr(dec, "_r96", lambda s=_strict96(dec): s)
     root = _b2_dirs(tmp_path, nat={"naive": (8, 10), "range10_cap5": (8, 10), "ZEROS": (7, 10)},
                     rec={"naive": (5, 10), "range10_cap5": (5, 10), "ZEROS": (5, 10)},
                     jerky={"naive": True, "range10_cap5": False, "ZEROS": False})
-    r = dec.b2_decide(root / "S4B2", root / "S4DRTC", ["range10_cap5", "ZEROS"])
-    assert r["counts"]["naive"]["natural"]["n"] == 10 and r["counts"]["naive"]["recovery"]["n"] == 10   # 40 s の成立は分母に入らない
+    r = dec.b2_decide(root / "S4B2", root / "S4DRTC", ["range10_cap5", "ZEROS"], smoke=True)
+    assert r["counts"]["naive"]["natural"]["n"] == 10 and r["counts"]["naive"]["recovery"]["n"] == 10   # 40 s・30.0 s の成立は分母に入らない
+    assert r["counts"]["naive"]["recovery"]["n_trials"] == 12
     assert r["settings"]["range10_cap5"]["pass"] and not r["settings"]["ZEROS"]["conditions"]["c1"]["pass"]   # −0.10 は −0.05 を超える
     assert r["adopt"] == "range10_cap5"
     js = r["counts"]["range10_cap5"]["natural"]["jerk_median"]
@@ -630,22 +899,54 @@ def test_b2_decide_rules_and_double_count(dec, tmp_path):
     # 躍度が naive より小さくなければ採らない
     root2 = _b2_dirs(tmp_path / "x", nat={"naive": (8, 10), "range10_cap5": (8, 10)}, rec={"naive": (5, 10), "range10_cap5": (5, 10)},
                      jerky={"naive": False, "range10_cap5": True})
-    assert dec.b2_decide(root2 / "S4B2", root2 / "S4DRTC", ["range10_cap5"])["adopt"] is None
+    assert dec.b2_decide(root2 / "S4B2", root2 / "S4DRTC", ["range10_cap5"], smoke=True)["adopt"] is None
+    # 計画と照らす（smoke でない）: 本数・種が計画と違えば未完
+    with pytest.raises(dec.Incomplete):
+        dec.b2_decide(root2 / "S4B2", root2 / "S4DRTC", ["range10_cap5"])
+    plan = dec.b2_plan()
+    assert [len(plan[p]) for p in ("natural_drtc", "ext", "P1")] == [30, 69, 50]
+
+
+B2_BREAKS = {
+    "g_audit_not_met": lambda r: _cond_files(r / "S4B2" / "range10_cap5_P1", met=False),
+    "part_label": lambda r: _mut_b2(r / "S4B2" / "range10_cap5_ext", 0, lambda m: m["b2"].update(part="P1")),
+    "drtc_shadow": lambda r: _mut_b2(r / "S4DRTC" / "naive", 1, lambda m: m["diag"].update(shadow=True)),
+    "seed_differ": lambda r: _mut_b2(r / "S4B2" / "range10_cap5_P1", 2, lambda m: m.update(seed=1)),
+    "time_limit_differ": lambda r: _mut_b2(r / "S4B2" / "naive_ext", 0, lambda m: m.update(time_limits={"time_limit_s": 30.0})),
+}
+
+
+def _mut_b2(d, i, fn):
+    p = d / f"trial_{i:04d}.json"
+    m = json.loads(p.read_text(encoding="utf-8"))
+    fn(m)
+    p.write_text(json.dumps(m), encoding="utf-8")
+
+
+@pytest.mark.parametrize("brk", sorted(B2_BREAKS))
+def test_b2_entry_audit_refuses_incomplete(dec, tmp_path, monkeypatch, brk):
+    monkeypatch.setattr(dec, "_r96", lambda s=_strict96(dec): s)
+    root = _b2_dirs(tmp_path, nat={"naive": (8, 10), "range10_cap5": (8, 10)}, rec={"naive": (5, 10), "range10_cap5": (5, 10)},
+                    jerky={"naive": True, "range10_cap5": False})
+    B2_BREAKS[brk](root)
+    with pytest.raises(dec.Incomplete):
+        dec.b2_decide(root / "S4B2", root / "S4DRTC", ["range10_cap5"], smoke=True)
 
 
 def test_b2_decide_stops_on_mismatch(dec, tmp_path, monkeypatch):
+    monkeypatch.setattr(dec, "_r96", lambda s=_strict96(dec): s)
     root = _b2_dirs(tmp_path, nat={"naive": (8, 10), "range10_cap5": (8, 10)}, rec={"naive": (5, 10), "range10_cap5": (5, 10)},
-                    jerky={"naive": True, "range10_cap5": False})
+                    jerky={"naive": True, "range10_cap5": False}, exp="S4SMOKE_B2T")
     orig = dec.b2_count_b
 
     def off_by_one(dirs, horizon):                                                   # B の数え方だけが 1 本ずれた
         r = orig(dirs, horizon)
         return dict(r, k=r["k"] + 1)
     monkeypatch.setattr(dec, "b2_count_b", off_by_one)
-    rc = dec.main(["b2", "--root", str(root), "--settings", "range10_cap5", "--out", str(tmp_path / "o.json"),
-                   "--md", str(tmp_path / "o.md")])
+    rc = dec.main(["b2", "--root", str(root), "--experiment", "S4SMOKE_B2T", "--settings", "range10_cap5", "--smoke",
+                   "--out", str(tmp_path / "o.json"), "--md", str(tmp_path / "o.md")])
     assert rc == 1 and not (tmp_path / "o.json").exists()
     monkeypatch.setattr(dec, "b2_count_b", orig)
     monkeypatch.setattr(dec, "_jerk_b", lambda z, h: dec._jerk_a(z, h) * 1.001)      # 躍度の中央値の相対差 1e-3 も止める
     with pytest.raises(dec.Mismatch):
-        dec.b2_decide(root / "S4B2", root / "S4DRTC", ["range10_cap5"])
+        dec.b2_decide(root / "S4SMOKE_B2T", root / "S4DRTC", ["range10_cap5"], smoke=True)

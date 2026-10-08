@@ -15,7 +15,11 @@
     b_wait_s（既定 2.0 s = configs と同じ。判定の 1 s 静止＋余裕）。configs/default.yaml は変えず、この子の中で上書きする。
 (c) 最後の試みが時間切れ（または (d) の打ち切り）になった時点で、知覚（WorldModel。真値ではない）が「目標の色は箱の中」と
     見ていれば、止める前に待機位置へ戻して wait_s の間だけ完了の判定を待つ（判定が出れば完了、出なければ今の実行器と同じに止まる）。
-    判定の閾値は変えない（(e)）。
+    判定の閾値は変えない（(e)）。ただし指が開いているときだけ（自分の指令が開＝PolicyRuntime.closed が偽、かつ直近の判定で測った
+    開き幅が開＝judge.last["gripper_open"]）。知覚の in_box は水平の位置だけで見るので、持ったままの立方体を箱の上で「箱の中」と
+    見ることがあり、そのまま台本で戻すと落とすため（作者の既定の決定、結果を見る前に固定）。また、同じ試みの中で (b) の戻しが
+    済んだ後に指を一度も閉じていなければ、(b) が同じ待ち（待機位置で wait_s）を済ませているので (c) はしない（同じ戻しを 2 回
+    数えない）。しなかったときは v3.events に final_wait_skipped（why = gripper_closed・after_placed_return）を残す。
 (d) 早めの打ち切り（試みの持ち時間 step_timeout_s を待たずに次へ）は、次の 2 つだけ:
     止まった（stalled）: 試みの始めから d_stall_s 以上たち、直近 d_stall_s の間の指令の手先（x_cmd）の動きが d_stall_move_m 未満
     閉じない（no_close）: 試みの始めから d_noclose_s たっても、指を一度も閉じていない（PolicyRuntime.closed）
@@ -36,6 +40,8 @@ from recovla.runtime.executor import TaskRuntime
 from recovla.runtime.motion import SUBSTEPS, Motion
 from recovla.sim import control
 from recovla.sim.device import pad_state
+
+VERSION = "v3.1"                    # 実行器の版（記録の meta.v3.version・meta.b1.executor_version。(c) の指の条件と (b)→(c) の重複なしを入れた版）
 
 # ---------------------------------------------------------------- 戻し先（diag/e7.py と同じ値。テストで一致を確かめる）
 HOME_Q = (0.0, -0.684, 0.0, -2.907, 0.0, 2.216, 0.785)
@@ -144,6 +150,7 @@ class V3TaskRuntime(TaskRuntime):
         self.goal_state, self.v3_events = None, []
         self._first_goal_done, self._final_wait = False, False
         self._xhist, self._closed_seen, self._kept, self._tag_return = [], False, 0, None
+        self._b_after, self._closed_since_b, self._fw_event = None, False, None
 
     # ------------------------------------------------------------ 判定（(b) の数え方だけ変える。それ以外は TaskRuntime と同じ）
     def _judge(self, t: float) -> None:
@@ -195,6 +202,7 @@ class V3TaskRuntime(TaskRuntime):
     def _track(self, t: float) -> None:
         if self.prt.closed:
             self._closed_seen = True
+            self._closed_since_b = True
         self._xhist.append((t, np.asarray(self.prt.motion.x_cmd, float).copy()))
         keep = t - float(self.v3["d_stall_s"]) - 0.05
         while len(self._xhist) > 2 and self._xhist[1][0] <= keep:
@@ -238,11 +246,16 @@ class V3TaskRuntime(TaskRuntime):
                 self._begin_step(t, self.j, self.attempt + 1)
             return
         if self.v3["c_final_wait"] and bool(self.ret["enabled"]) and self._target_in_box_by_perception():
-            self.v3_events.append({"t": t, "kind": "final_wait", "step": self.j, "attempt": self.attempt})
-            self._final_wait = True
-            self._begin_return(t, "placed", judge_wait=True)
-            self._tag_return = "final_wait"
-            return
+            skip = self._final_wait_skip()
+            if skip:
+                self.v3_events.append({"t": t, "kind": "final_wait_skipped", "why": skip, "step": self.j, "attempt": self.attempt})
+            else:
+                self._fw_event = {"t": t, "kind": "final_wait", "step": self.j, "attempt": self.attempt}
+                self.v3_events.append(self._fw_event)
+                self._final_wait = True
+                self._begin_return(t, "placed", judge_wait=True)
+                self._tag_return = "final_wait"
+                return
         self._step_done(t, False)
 
     def _target_in_box_by_perception(self) -> bool:
@@ -251,6 +264,15 @@ class V3TaskRuntime(TaskRuntime):
             return False
         e = wm.cubes.get(self.steps[-1]["color"])
         return e is not None and e.status in ("seen", "held") and bool(e.in_box)
+
+    def _final_wait_skip(self):
+        """(c) をしない理由（する場合は None）。指が開いていない・(b) の待ちが済んで指を閉じていない。"""
+        last = getattr(self.judge, "last", None) or {}
+        if self.prt.closed or last.get("gripper_open") is not True:
+            return "gripper_closed"
+        if self._b_after == (self.j, self.attempt) and not self._closed_since_b:
+            return "after_placed_return"
+        return None
 
     def _step_done(self, t: float, ok: bool) -> None:
         if not (ok and self.goal_q is not None and self.j + 1 < len(self.plan["steps"])):
@@ -269,12 +291,15 @@ class V3TaskRuntime(TaskRuntime):
         n0 = len(self.returns)
         super()._return_tick(t)
         if len(self.returns) > n0:
-            self.returns[-1]["v3"] = tag
+            row = self.returns[-1]
+            row["v3"] = tag
             self._tag_return = None
+            if tag == "placed":                               # (b) の戻しが済んだ（(c) と重ねないための印）
+                self._b_after, self._closed_since_b = (row["step"], row["attempt"]), False
         if final and self.ret_state is None:
             self._final_wait = False
             ok = bool(step_rec is not None and step_rec.get("judged_complete"))
-            self.v3_events[-1]["judged"] = ok
+            self._fw_event["judged"] = ok
             if not ok:
                 self._step_done(t, False)                     # 判定が出なかった: 今の実行器と同じに止まる
 
@@ -366,11 +391,13 @@ class V3TaskRuntime(TaskRuntime):
                 "by_v3_kind": {k: sum(1 for r in self.returns if r.get("v3") == k)
                                for k in ("placed", "goal", "final_wait", "retry", "retry_goal")},
                 "early_abort": {w: sum(1 for e in self.v3_events if e.get("why") == w) for w in ("stalled", "no_close")},
+                "final_wait_skipped": {w: sum(1 for e in self.v3_events if e.get("kind") == "final_wait_skipped" and e.get("why") == w)
+                                       for w in ("gripper_closed", "after_placed_return")},
                 "placed_kept_on_reclose": self._kept}
 
     def record(self) -> dict:
         d = super().record()
-        d["v3"] = {"settings": dict(self.v3), "goal_q": None if self.goal_q is None else self.goal_q.tolist(),
+        d["v3"] = {"version": VERSION, "settings": dict(self.v3), "goal_q": None if self.goal_q is None else self.goal_q.tolist(),
                    "goal_params": dict(self.gp), "events": self.v3_events, "interventions": self.interventions(),
                    "retreat_settings": dict(self.ret)}
         return d
