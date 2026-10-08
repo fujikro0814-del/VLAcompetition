@@ -77,6 +77,8 @@ def test_real_gates_every_rule_text_is_read():
     assert rules["R.c2"]["a"] == G.Fraction("0.95") and rules["K.b2"]["a"] == G.Fraction("0.364")
     assert rules["R.rank4"]["order_names"] == ["paper_formula_range44_cap5", "range40_cap5", "range10_cap5", "ZEROS"]
     assert GATES["__file__"]["sha256_lf"] == G.POSTED_SHA256          # 改行が CRLF の作業コピーでも掲示の値と一致
+    # 掲示板 0162（改訂 3。bundle6_u4 の行だけ変えた版）の値。0153 の値は cf2e8c96…（gate1.py のコメント）
+    assert (G.POSTED_BOARD, G.POSTED_SHA256) == ("0162", "dcf0dd4c1b2a4f906936bf478f012d3aa6e9a51a81aeb12c6cdcbcf35f33362d")
 
 
 def test_not_machine_readable_list_has_file_lines():

@@ -505,15 +505,17 @@ def s98():
 
 def test_band_check(s98):
     assert s98.band_check(range(191400, 191440)) == ""
-    assert s98.band_check(range(191430, 191441))                                   # 帯の外にはみ出す
+    assert s98.band_check(range(191400, 191500)) == ""                             # 改訂 3 で 100 種（u4_protocol v2）
+    assert s98.band_check(range(191490, 191501))                                   # 帯の外にはみ出す
+    assert s98.band_check(range(191500, 191502))                                   # 帯の外
     assert s98.band_check(range(190300, 190340))                                   # D-E7 の帯は拒む
     assert s98.band_check(range(44400, 44402))                                     # smoke は既定では拒む
     assert s98.band_check(range(44400, 44402), allow_smoke=True) == ""
     g = json.loads((ROOT / "configs" / "s4_gates.json").read_text(encoding="utf-8"))
-    assert next(x for x in g["bands"]["allocations"] if x["id"] == s98.ALLOC)["range"] == [191400, 191439]
+    assert next(x for x in g["bands"]["allocations"] if x["id"] == s98.ALLOC)["range"] == [191400, 191499]
 
 
-@pytest.mark.parametrize("args", [["--arm", "U4", "--trials", "191440:2"], ["--arm", "U0", "--trials", "160000:2"],
+@pytest.mark.parametrize("args", [["--arm", "U4", "--trials", "191500:2"], ["--arm", "U0", "--trials", "160000:2"],
                                   ["--arm", "U4", "--trials", "191400:2", "--exec-interval", "10"]])
 def test_run_refuses_before_loading_anything(s98, args, capsys):
     base = ["--experiment", "S4U4T", "--condition", "X", "--model", "R1v3"]

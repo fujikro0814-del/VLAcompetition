@@ -33,8 +33,11 @@ from fractions import Fraction
 GATES_SCHEMA = "recovery_vla.s4_gates/1"
 INPUT_SCHEMA = "recovery_vla.s4_gate1_input/1"
 RESULT_SCHEMA = "recovery_vla.s4_gate1_result/1"
-# 掲示板 0153 の表の SHA-256（改行を LF にした中身。Windows の作業コピーは CRLF なので両方を出して比べる）
-POSTED_SHA256 = "cf2e8c96a205bf10126bdf647bdbf2e8b9d5a315ebbe881c03bafac82b12940d"
+# 掲示板 0162 の表の SHA-256（改行を LF にした中身。Windows の作業コピーは CRLF なので両方を出して比べる）。
+# 改訂 3（ブロック 13）で bands.allocations の bundle6_u4 の行だけを変えた版。関門の数値・規則の文は 0153 の版と同じ。
+# 掲示板 0153 の値（改訂 3 の前）: cf2e8c96a205bf10126bdf647bdbf2e8b9d5a315ebbe881c03bafac82b12940d
+POSTED_SHA256 = "dcf0dd4c1b2a4f906936bf478f012d3aa6e9a51a81aeb12c6cdcbcf35f33362d"
+POSTED_BOARD = "0162"
 PASS, FAIL, UNDET = "pass", "fail", "undetermined"
 JA = {PASS: "合格", FAIL: "不合格", UNDET: "判定できない"}
 HIT = {PASS: "当たる", FAIL: "当たらない", UNDET: "判定できない"}       # 分岐の規則（when）の読み方
@@ -1034,7 +1037,7 @@ def evaluate(g, inp) -> dict:
     if inp.get("schema") != INPUT_SCHEMA:
         warn.append(f"入力の schema が {INPUT_SCHEMA} でない: {inp.get('schema')!r}")
     if meta.get("sha256_lf") and meta["sha256_lf"] != POSTED_SHA256:
-        warn.append("s4_gates.json の SHA-256 が掲示の値と違う（掲示 0153）")
+        warn.append(f"s4_gates.json の SHA-256 が掲示の値と違う（掲示 {POSTED_BOARD}）")
     R, T, S = eval_R(rules, inp), eval_T(rules, inp), eval_S(rules, inp)
     X, C, K = eval_XPL(rules, inp, g), eval_C(rules, inp, g), eval_K(rules, inp)
     cand = eval_candidates(rules, S, X, T)

@@ -19,7 +19,7 @@
                 移植は 1 条件 1 仕事で、包みが子に --max-new <塊> を渡して種の塊ごとに交互に回す。
 
 サブコマンドと、読むもの・書くもの:
-  plan        読む: configs\\s4_gates.json（帯・制限時間・計算量の倍率）、docs\\目標書_段階4.md（SHA-256 を掲示板 0153 と照らすだけ）、
+  plan        読む: configs\\s4_gates.json（帯・制限時間・計算量の倍率）、docs\\目標書_段階4.md（SHA-256 を掲示板 0153 と最新の掲示 0162 と照らすだけ）、
               outputs\\v2eval\\S4K\\K1・K2\\run.json（物差し K の実測の速さ）、診断のスクリプト（あるかどうかと SHA-256 だけ）。
               書く: outputs\\s4\\bundle1_plan_queue.json（名前の queue は 97_s4_ledger_check.py に種を使用と数えさせないため。
               PLAN_PATH の注）、標準出力に表。
@@ -106,6 +106,11 @@ SMOKE_PLAN_PATH = S4 / "bundle1_smoke_plan.json"
 # 掲示板 0153 に掲示した SHA-256（コミット f4a15bd の版）。計画に照合の結果を残す（違っても止めない。報告に書く）
 BOARD_0153_SHA = {"docs/目標書_段階4.md": "afa069552fbcea7573706e59be3678b8d941da0dd1baf0eece8532e3a961860b",
                   "configs/s4_gates.json": "cf2e8c96a205bf10126bdf647bdbf2e8b9d5a315ebbe881c03bafac82b12940d"}
+# 掲示板 0162 に掲示した SHA-256（改訂 3。s4_gates.json は bundle6_u4 の行だけが 0153 と違う）。これから作る計画（束 2・テスト 1）は
+# こちらと一致するのが正しい（0153 との照合は false になる）。束 1 の計画（bundle1_plan_queue.json）は作り直さない
+BOARD_0162_SHA = {"docs/目標書_段階4.md": "694338887a7a57ec7ffbfc91754f695a94b98b64ad76e022b945e1855da5cbe2",
+                  "configs/s4_gates.json": "dcf0dd4c1b2a4f906936bf478f012d3aa6e9a51a81aeb12c6cdcbcf35f33362d"}
+BOARD_LATEST = ("0162", BOARD_0162_SHA)
 FINAL_STATUS = {"done": 0, "stopped": 1, "interrupted": 1, "memory_timeout": 1, "error": 2}    # 96_s4_ops.FINAL_STATUS と同じ
 DEFAULT_FACTORS = {"A_nat": 1.215, "A_P1": 1.432, "B_P1": 1.795, "A_P2": 1.803, "A_P3": 1.954}   # s4_gates budget_notes.factor_60_over_30
 
@@ -506,9 +511,12 @@ def finish_plan(p: dict) -> dict:
     p["sources"] = {"charter": {"path": "docs/目標書_段階4.md", "sha256": sha256_file(CHARTER)},
                     "gates": {"path": "configs/s4_gates.json", "sha256": sha256_file(GATES)},
                     "board_0153": BOARD_0153_SHA,
+                    "board_latest": {"board": BOARD_LATEST[0], "sha256": BOARD_LATEST[1]},
                     "budget_calc": "outputs\\s4\\rules\\budget60_e7_30_calc.py（R と倍率）、configs\\s4_gates.json budget_notes"}
     p["sources"]["matches_board_0153"] = (p["sources"]["charter"]["sha256"] == BOARD_0153_SHA["docs/目標書_段階4.md"]
                                           and p["sources"]["gates"]["sha256"] == BOARD_0153_SHA["configs/s4_gates.json"])
+    p["sources"]["matches_board_latest"] = (p["sources"]["charter"]["sha256"] == BOARD_LATEST[1]["docs/目標書_段階4.md"]
+                                            and p["sources"]["gates"]["sha256"] == BOARD_LATEST[1]["configs/s4_gates.json"])
     p["decided_before_results"] = DECIDED_BEFORE
     p["deviations_from_task_text"] = DEVIATIONS
     return p
@@ -680,8 +688,8 @@ def cmd_plan(a) -> int:
         print(f"[plan] {_rel(out)} を書けない（ほかのプロセスが開いている）", file=sys.stderr)
         return 2
     print(table_text(p))
-    print(f"\n[plan] {_rel(out)}（SHA-256 {sha256_file(out)[:12]}…）。決まりの文書・s4_gates が掲示板 0153 と一致: "
-          f"{p['sources']['matches_board_0153']}")
+    print(f"\n[plan] {_rel(out)}（SHA-256 {sha256_file(out)[:12]}…）。決まりの文書・s4_gates が最新の掲示（掲示板 "
+          f"{BOARD_LATEST[0]}）と一致: {p['sources']['matches_board_latest']}（掲示板 0153 と一致: {p['sources']['matches_board_0153']}）")
     missing = sorted({j["script"] for j in p["jobs"] if j["enabled"] and not _abs(j["script"]).is_file()})
     if missing:
         print(f"[plan] まだ無いスクリプト: {missing}（bundle は無い仕事を script_missing の失敗にして、ほかを続ける）")

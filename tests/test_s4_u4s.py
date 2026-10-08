@@ -59,17 +59,18 @@ def _no_real_api(tmp_path, monkeypatch):
 # ---------------------------------------------------------------- 帯と拒む場合
 def test_band_check_is_the_same_as_98(s):
     s98 = s.s98
-    for r in (range(191400, 191440), range(191400, 191500), range(191430, 191441), range(190300, 190340),
+    for r in (range(191400, 191440), range(191400, 191500), range(191430, 191441), range(191490, 191501), range(190300, 190340),
               range(44400, 44402), range(44404, 44406), range(160000, 160002)):
         for sm in (False, True):
             assert s.band_check(r, sm) == s98.band_check(r, sm)
     assert s.band_check(range(191400, 191440)) == ""
     assert "X2" in s.band_check(range(44404, 44406), allow_smoke=True)
     assert s.band_check(range(44400, 44402), allow_smoke=True) == ""
-    # 191400:100 は s4_gates.json の bundle6_u4 が改訂 3 で広がるまで拒む（98 と同じ）
+    # 改訂 3 で s4_gates.json の bundle6_u4 が 191400〜191499 に広がった（98 と同じ）。191500 からは拒む
     g = json.loads((ROOT / "configs" / "s4_gates.json").read_text(encoding="utf-8"))
-    al = next(x for x in g["bands"]["allocations"] if x["id"] == s98.ALLOC)["range"]
-    assert (s.band_check(range(191400, 191500)) == "") == (al[0] <= 191400 and al[1] >= 191499)
+    assert next(x for x in g["bands"]["allocations"] if x["id"] == s98.ALLOC)["range"] == [191400, 191499]
+    assert s.band_check(range(191400, 191500)) == ""
+    assert s.band_check(range(191490, 191501)) and s.band_check(range(191500, 191502))
 
 
 def fake_r96(s, monkeypatch, out_root, calls):
@@ -92,7 +93,7 @@ BASE = ["--experiment", "S4U4ST", "--condition", "U4S", "--model", "R1v3"]
 
 @pytest.mark.parametrize("args", [
     ["--trials", "160000:2", "--dry-run"],                                    # 帯の外
-    ["--trials", "191430:20", "--dry-run"],                                   # 帯からはみ出す
+    ["--trials", "191490:20", "--dry-run"],                                   # 帯からはみ出す（改訂 3 の後の帯の端）
     ["--trials", "190300:2", "--dry-run"],                                    # D-E7 の帯
     ["--trials", "44400:2", "--dry-run"],                                     # smoke は --allow-smoke のときだけ
     ["--trials", "44404:2", "--dry-run", "--allow-smoke"],                    # X2 の生成の帯
@@ -120,11 +121,11 @@ def test_run_refuses_condition_names_of_98(s, cond, monkeypatch, tmp_path):
     assert calls == []
 
 
-def test_run_refuses_191400_100_until_charter_rev3(s, monkeypatch, tmp_path):
+def test_run_accepts_191400_100_after_charter_rev3(s, monkeypatch, tmp_path):
     calls = []
     fake_r96(s, monkeypatch, tmp_path, calls)
-    rc = s.cmd_run(BASE + ["--trials", "191400:100", "--dry-run"])
-    assert rc == (0 if s.band_check(range(191400, 191500)) == "" else 3)
+    assert s.cmd_run(BASE + ["--trials", "191400:100", "--dry-run"]) == 0                # 改訂 3 の帯（100 種）
+    assert s.cmd_run(BASE + ["--trials", "191500:2", "--dry-run"]) == 3                  # 帯の外
 
 
 def test_run_needs_api_key_unless_dry_run(s, monkeypatch, tmp_path):
