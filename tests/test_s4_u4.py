@@ -633,7 +633,7 @@ def _u4_metas():
     for i, resp in enumerate([raw(), raw("skip", "red", []), raw("finish", "none", []), raw("stop", "none", [])]):
         rec = run(make_rt({"green", "blue"}, lambda **kw: R4.replan_step(**kw, cli=FakeClient(resp), use_cache=False))[0])
         out.append(meta_of(rec, i, timed_out=(i == 3), t_end=200.0 if i == 3 else 150.0))
-    rec = run(make_rt({"red", "green", "blue"}, R4.replan_step)[0])               # 失敗なし（立て直しなし）
+    rec = run(make_rt({"red", "green", "blue"}, lambda **kw: R4.replan_step(**kw, cli=FakeClient(), use_cache=False))[0])   # 失敗なし（立て直しなし）。本物の API に届かないよう偽のクライアントを渡す
     out.append(meta_of(rec, 4, truth={"red": 10.0, "green": 20.0, "blue": 40.0}, in_box={"red": True, "green": True, "blue": True}))
     return out
 
