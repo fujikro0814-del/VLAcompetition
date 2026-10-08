@@ -48,8 +48,8 @@
 ```
 
 - 個人情報の検査（(9)）の対象: 書き出し先の全テキストのファイル、説明資料の PDF の本文とメタデータ、動画の文字の一覧（`paper\build\video_texts.json`）、送るコミットのコミット文。
-- 探すもの: メールアドレスの形、個人のパス（`C:\Users\<名前>`・`/home/<名前>`・`/Users/<名前>`）、git の設定の user.name・user.email の値。見つけたら exit 1 で、場所（ファイル:行、PDF のページ、動画の文字の番号）を出す。当たった文字は一部を伏せて出す。
-- PDF は pypdf で読む。開発用の環境に入っていなければ `.venv\Scripts\python.exe -m pip install pypdf`。読めないときはその旨を出し、組み上げた HTML（`paper\build\paper.html`）を代わりに調べる。
+- 探すもの: メールアドレスの形、個人のパス（`C:\Users\<名前>`・`/home/<名前>`・`/Users/<名前>`）、個人・端末の名前（`check_submission.py` の PERSONAL）、git の設定の user.name・user.email の値（許すメールアドレス、たとえば GitHub の noreply の中に入っている所は数えない）。送るコミットの作者・コミッタの名前も調べ、ACCOUNT が決まっていれば名前がアカウント名でないコミットで止める。見つけたら exit 1 で、場所（ファイル:行、PDF のページ、動画の文字の番号）を出す。当たった文字は一部を伏せて出す。
+- PDF は pypdf で読む。開発用の環境に入っていない（10/09 の時点で入っていない。.venv に pip はない）ので、提出の前に `.tools\uv\uv.exe pip install --system-certs --python .venv\Scripts\python.exe pypdf` で入れる。読めないときはその旨を出し、組み上げた HTML（`paper\build\paper.html`）を代わりに調べる。
 - 動画の画面の文字は `video_texts.json`（62_video.py が画面に書いた文字の一覧）で調べる。映像の部分に写っている文字はこの一覧に入らないので、最後に動画を目でも通して見る。
 
 ## 3. 履歴の作り直し
@@ -67,6 +67,7 @@ powershell -ExecutionPolicy Bypass -File scripts\push_submission.ps1 -RebuildHis
 
 - -AuthorName・-AuthorEmail は既定が空で、空なら (b)(c) は止まる。-AuthorEmail が noreply の形でなければ止まる。
 - (b) はコミットの作者とコミッタを環境変数（GIT_AUTHOR_* と GIT_COMMITTER_*）でその値に固定し、作った後に `git log --format='%an %ae %cn %ce'` が全部「アカウント名 noreply アカウント名 noreply」かを確かめる。(c) も送る前に同じことを確かめる。違えば止まる。
+- 作り直した後に提出用リポジトリでさらにコミットするときは、先に `git -C C:\PAI\recovery-vla-panda config user.name <アカウント名>`・`git -C C:\PAI\recovery-vla-panda config user.email <noreply>` を設定しておく（`check_submission.py` の (7) は、名前がアカウント名でないコミットで止める）。
 - タグを付けるときは、注釈付きタグの作成者（tagger）も公開されるので、同じ値で付ける: `git -c user.name=<アカウント名> -c user.email=<noreply> tag -a pai-final-v1 -m "提出版"`。(c) はタグの作成者が違えば止まる。
 
 ## 4. public の確認（スクリプトは GitHub の設定を変えない）
@@ -83,7 +84,7 @@ powershell -ExecutionPolicy Bypass -File scripts\push_submission.ps1 -RebuildHis
 ```
 
 - 動画 `paper\build\動画_PAI最終課題_<アカウント名>.mp4` の長さ（ffprobe、なければ OpenCV で読む）が 1〜3 分で、場面の表の合計と合うこと、`configs\demo\video_s3.yaml` の映像の場面の倍速 (t1 − t0) / dur_s がすべて 2 倍以下であることを確かめる。外れたら止まる。
-- タイトルと概要欄の下書きを、画面と `outputs\submission\youtube_title.txt`・`youtube_description.txt`・`youtube.json` に出す。概要欄には、倍速の明記（どの場面が何倍速か）、1 文のアイデア、GitHub の URL の欄、説明資料の要点 3 行が入る。数字は説明資料と同じ値の一覧（`paper\build\values.json`）から差し込む。`60_paper.py` の FORBIDDEN の語に当たれば止まる。
+- タイトルと概要欄の下書きを、画面と `outputs\submission\youtube_title.txt`・`youtube_description.txt`・`youtube.json` に出す。概要欄には、倍速の明記（どの場面が何倍速か）、1 文のアイデア、GitHub の URL の欄、説明資料の要点 3 行が入る。数字は説明資料と同じ値の一覧（`paper\build\values.json`）から差し込む（概要欄に < と > は使えないので、値の中の < > は全角の ＜ ＞ にする。例: p ＜ 0.001）。`60_paper.py` の FORBIDDEN の語に当たれば止まる。
 
 上げるときの設定:
 

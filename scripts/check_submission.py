@@ -14,14 +14,16 @@
      例外は 2 つだけ（ALLOW_CONTEXT: 「通して・通した」、SYMBOL_OK_FILES: 記録の形式の設計文書 docs/interfaces/）
  (5) 入れないもの: 段階 4・作業記録・outputs・models・push の道具・取り込みのスクリプトなどのパスがない
  (6) 100 MB を超えるファイルがない（GitHub の上限。20 MB を超えたら注意だけ）、.json がすべて読める
- (7) 送るコミットの作者・コミッタのメールが GitHub の noreply、コミット文に鍵・手元の文字列・個人の名前がない
+ (7) 送るコミットの作者・コミッタのメールが GitHub の noreply、名前がアカウント名（ACCOUNT が仮の値のときは注意だけ）、
+     コミット文に鍵・手元の文字列・個人の名前がない
  (8) LICENSE がない（注意だけ）。著作権者（= omnicampus のアカウント名）が仮の値（70_export_submission.py の PLACEHOLDER）のまま
      なら止める（--worktree の下見では注意だけ）
  (9) 個人情報（課題の 10/8 版: PDF・コード・動画に氏名・所属・メールアドレスを載せない。omnicampus のアカウント名は可）:
      HEAD（--worktree では作業ツリー）の全テキストのファイル、送るコミットのコミット文、説明資料の PDF の本文とメタデータ（pypdf で
      読む。読めなければその旨を出し、組み上げた HTML paper/build/paper.html を代わりに調べる）、動画の文字の一覧
-     （paper/build/video_texts.json）に、メールアドレスの形・個人のパス（C:\\Users\\<名前>・/home/<名前>・/Users/<名前>）・
-     git の設定の user.name と user.email の値（git config --get で取れれば）がない。許す語は PII_ALLOW（GitHub の noreply・
+     （paper/build/video_texts.json）、送るコミットの作者・コミッタの名前に、メールアドレスの形・個人のパス（C:\\Users\\<名前>・
+     /home/<名前>・/Users/<名前>）・個人・端末の名前（PERSONAL）・git の設定の user.name と user.email の値（git config --get
+     で取れれば。許すメールアドレスの中に入っている所は数えない）がない。許す語は PII_ALLOW（GitHub の noreply・
      共同作成者の行・例示用のドメイン）と、60_paper.py の ACCOUNT・--pii-allow・.local/pii_allow.txt（1 行 1 語）
      --pii-only: (9) だけを、--repo のフォルダの全テキストのファイル（.git を除く）と PDF・動画の文字にかける（.tools の git がなくても回る）
 途中のコミット（upstream..HEAD の HEAD 以外）とコミット文の使わない語は、止めずに件数だけ示す（--strict-history で途中のコミットも止める）。
@@ -235,7 +237,9 @@ def pii_setup(repo, extra_allow):
     if PII_ALLOW_FILE.is_file():
         allow |= {l.strip().lower() for l in PII_ALLOW_FILE.read_text(encoding="utf-8-sig").splitlines()
                   if l.strip() and not l.startswith("#")}
-    terms = []
+    # 個人・端末の名前（PERSONAL のうちパスの型を除く）も、PDF・動画の文字を含めて探す（--pii-only でも）
+    terms = [(f"個人・端末の名前 {p!r}", re.compile(p, re.I)) for p in PERSONAL
+             if "\\" not in p and not pii_allowed(p, allow)]
     exe = git_exe()
     if exe is None:
         notes.append("git がないので、git の設定の user.name・user.email の値は調べていない")
@@ -280,8 +284,11 @@ def scan_pii(where: str, text: str, terms, allow) -> list:
         if (line, m.start()) not in seen:
             seen.add((line, m.start()))
             hits.append({"where": where, "line": line, "kind": kind, "masked": _mask(kind, m)})
+    ok_spans = []                                            # 許すメールアドレス（GitHub の noreply など）の範囲
     for m in re.finditer(EMAIL_RE, text):
-        if not pii_allowed(m.group(0), allow):
+        if pii_allowed(m.group(0), allow):
+            ok_spans.append(m.span())
+        else:
             add("メールアドレス", m)
     for m in re.finditer(HOME_RE, text):
         name = m.group("name")
@@ -289,7 +296,8 @@ def scan_pii(where: str, text: str, terms, allow) -> list:
             add("個人のパス", m)
     for kind, rx in terms:
         for m in rx.finditer(text):
-            add(kind, m)
+            if not any(s <= m.start() and m.end() <= e for s, e in ok_spans):   # noreply の中のユーザー名には当てない
+                add(kind, m)
     return hits
 
 
@@ -298,7 +306,7 @@ def pdf_texts(pdf: pathlib.Path):
     try:
         from pypdf import PdfReader
     except ImportError:
-        return None, "pypdf がない（.venv\\Scripts\\python.exe -m pip install pypdf）"
+        return None, "pypdf がない（.tools\\uv\\uv.exe pip install --system-certs --python .venv\\Scripts\\python.exe pypdf）"
     try:
         r = PdfReader(str(pdf))
         out = [(f"{pdf.name} の {i} ページ", p.extract_text() or "") for i, p in enumerate(r.pages, 1)]
@@ -480,13 +488,21 @@ def main(argv=None) -> int:
             notes.append(f"{a.upstream} がない（fetch していない・初回）: 全コミットを調べる")
         commits = [c for c in git(repo, "rev-list", f"{a.upstream}..HEAD" if has_up else "HEAD").splitlines() if c]
         head = git(repo, "rev-parse", "HEAD").strip()
-        # コミットの作者・コミット文も公開される: メールは GitHub の noreply だけ、文に鍵・個人の名前がない（使わない語は件数だけ）
+        acc = paper_const("ACCOUNT")
+        acc_set = bool(acc.strip()) and acc != export_const("PLACEHOLDER")
+        if not acc_set:
+            notes.append("ACCOUNT が仮の値なので、コミットの作者・コミッタの名前がアカウント名かは確かめていない")
+        # コミットの作者・コミット文も公開される: 名前はアカウント名、メールは GitHub の noreply だけ、文に鍵・個人の名前がない
+        # （使わない語は件数だけ）。名前は出さない（本名のことがあるため）
         for c in commits:
-            meta = git(repo, "show", "-s", "--format=%ae%n%ce", c).split()
-            for e in meta:
+            an, ae, cn, ce = git(repo, "show", "-s", "--format=%an%x00%ae%x00%cn%x00%ce", c).strip("\r\n").split("\x00")
+            for e in (ae, ce):
                 if not e.endswith("@users.noreply.github.com"):
                     problems.append(f"コミット {c[:7]}: 作者・コミッタのメールが GitHub の noreply でない")
                     break
+            if acc_set and (an != acc or cn != acc):
+                problems.append(f"コミット {c[:7]}: 作者・コミッタの名前がアカウント名（60_paper.py の ACCOUNT）でない")
+            pii_hits += scan_pii(f"コミット {c[:7]} の作者・コミッタの名前", an + "\n" + cn, pii_terms, pii_allow)
             msg = git(repo, "show", "-s", "--format=%B", c)
             for k, n in scan_secrets(msg, local_pats).items():
                 if not k.startswith("個人・端末の名前 'fujikro'"):          # GitHub のユーザー名（URL に出るもの）は除く

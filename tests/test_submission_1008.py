@@ -21,7 +21,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 FAKE_MAIL = "taro.yamada@lab.invalid"
 NOREPLY = "12345678+example-user@users.noreply.github.com"
 VALUES = {"eps_auto": "120", "n_normal": "60", "n_recovery": "60", "e3a_pairs": "27", "e3a_xk": "11", "e3a_yk": "3",
-          "e3a_holmeq": "= 0.04", "e7_n": "20", "e7_k": "6"}
+          "e3a_holmeq": "< 0.001", "e7_n": "20", "e7_k": "6"}
 
 
 def _load(path, name):
@@ -158,10 +158,32 @@ def test_pii_git_identity(cs, tmp_path, clean_git, capsys):
     assert NOREPLY.split("+")[0] not in out                        # noreply のアドレスは許す
 
 
+def test_pii_username_inside_noreply_is_allowed(cs, tmp_path, clean_git, capsys):
+    """git の設定の user.name が GitHub のユーザー名のとき、noreply のアドレスの中のユーザー名には当てない。単独なら当てる。"""
+    if cs.git_exe() is None:
+        pytest.skip("git がない")
+    clean_git.write_text("[user]\n\tname = example-user\n\temail = " + NOREPLY + "\n", encoding="utf-8")
+    vt = str(video_texts(tmp_path, ["ok"]))
+    d = export_dir(tmp_path, {"a.md": "作者 " + NOREPLY + "\n"})
+    assert cs.main(["--repo", str(d), "--pii-only", "--pdf", str(tmp_path / "none.pdf"), "--video-texts", vt]) == 0, \
+        capsys.readouterr().out
+    (d / "b.md").write_text("by example-user\n", encoding="utf-8")
+    assert cs.main(["--repo", str(d), "--pii-only", "--pdf", str(tmp_path / "none.pdf"), "--video-texts", vt]) == 1
+    assert "b.md:1 git の設定の user.name の値" in capsys.readouterr().out
+
+
+def test_pii_personal_names_in_video_texts(cs, tmp_path, clean_git, capsys):
+    d = export_dir(tmp_path, {"a.md": "なし\n"})
+    rc = cs.main(["--repo", str(d), "--pii-only", "--pdf", str(tmp_path / "none.pdf"),
+                  "--video-texts", str(video_texts(tmp_path, ["ok", "C:/work/" + cs.PERSONAL[1] + "/x"]))])
+    out = capsys.readouterr().out
+    assert rc == 1 and "video_texts.json の 2 番目の文字:1 個人・端末の名前" in out, out
+
+
 @pytest.fixture()
 def sub_repo(cs, tmp_path, clean_git, monkeypatch):
     """合成の提出用リポジトリ（git）。検査の git は PATH のもの、照合用の文字列は一時ファイルに差し替える。"""
-    exe = shutil.which("git")
+    exe = shutil.which("git") or (str(cs.GIT) if cs.GIT.is_file() else None)      # PATH になければ .tools の git
     if exe is None:
         pytest.skip("git がない")
     monkeypatch.setattr(cs, "GIT", pathlib.Path(exe))
@@ -171,10 +193,10 @@ def sub_repo(cs, tmp_path, clean_git, monkeypatch):
     r = tmp_path / "recovery-vla-panda"
     r.mkdir()
 
-    def commit(files):
+    def commit(files, name="acct01"):
         for rel, text in files.items():
             (r / rel).write_text(text, encoding="utf-8")
-        for args in (["add", "-A"], ["-c", "user.name=acct01", "-c", "user.email=" + NOREPLY, "commit", "-q", "-m", "提出版"]):
+        for args in (["add", "-A"], ["-c", "user.name=" + name, "-c", "user.email=" + NOREPLY, "commit", "-q", "-m", "提出版"]):
             subprocess.run([exe, "-C", str(r), *args], check=True, capture_output=True)
         return cs.main(["--repo", str(r), "--upstream", "origin/main", "--pdf", str(tmp_path / "none.pdf"),
                         "--video-texts", str(video_texts(tmp_path, ["PAI最終課題_acct01"]))])
@@ -189,6 +211,16 @@ def test_check_head_pii_and_license(sub_repo, capsys):
     assert rc == 1
     assert "個人情報: README.md:2 メールアドレス" in out
     assert "LICENSE の著作権者が仮の値" in out
+
+
+def test_check_commit_author_name_is_account(cs, sub_repo, capsys, monkeypatch):
+    real = cs.paper_const
+    monkeypatch.setattr(cs, "paper_const", lambda name: "acct01" if name == "ACCOUNT" else real(name))
+    assert sub_repo({"README.md": "説明\n", "LICENSE": "Copyright (c) 2026 acct01\n"}) == 0, capsys.readouterr().out
+    rc = sub_repo({"README.md": "説明 2\n"}, name="Taro Yamada")
+    out = capsys.readouterr().out
+    assert rc == 1 and "作者・コミッタの名前がアカウント名（60_paper.py の ACCOUNT）でない" in out
+    assert "Taro" not in out                                       # 名前は出さない
 
 
 def test_pii_unreadable_pdf_is_reported(cs, tmp_path, clean_git, capsys):
@@ -234,6 +266,7 @@ def test_youtube_draft_states_speed(ex, tmp_path, capsys):
     assert "・0:31〜1:01 「全部片付けて」の実演（3 個を順に片付ける）: 2.0 倍速" in desc
     assert "https://github.com/example-user/recovery-vla-panda" in desc
     assert "復帰デモあり 11 回、なし 3 回" in desc and "20 配置中 6 配置" in desc     # 値の一覧から差し込む
+    assert "p ＜ 0.001" in desc and "<" not in desc                    # 値の < は全角にする（概要欄に < は使えない）
     assert "{{" not in desc and ex.forbidden_hits(title + desc) == []
     j = json.loads((out / "youtube.json").read_text(encoding="utf-8"))
     assert [r["speed"] for r in j["speeds"]] == [1.0, 2.0] and 60 <= j["video_s"] <= 62

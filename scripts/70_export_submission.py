@@ -540,7 +540,9 @@ def youtube_text(account: str, rows: list, values: dict, idea: str, github_url: 
     title = YT_TITLE.format(account=account)
     if missing:
         return title, None, missing
-    return title, re.sub(r"\{\{(\w+)\}\}", lambda m: str(v[m.group(1)]), YT_TMPL), []
+    # 概要欄に < と > は使えないので、差し込む値の < > は全角にする（p の値「< 0.001」など）
+    fill = lambda m: str(v[m.group(1)]).replace("<", "＜").replace(">", "＞")
+    return title, re.sub(r"\{\{(\w+)\}\}", fill, YT_TMPL), []
 
 
 def forbidden_hits(text: str) -> list:
