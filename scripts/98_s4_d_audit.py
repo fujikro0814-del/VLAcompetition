@@ -267,7 +267,9 @@ def check_env(recs: dict, run_json) -> dict:
 
 
 def _git(root: pathlib.Path, *args) -> bytes:
-    r = subprocess.run(["git", "-C", str(root), *args], capture_output=True, timeout=120)
+    """96_s4_ops._git と同じく、作業場所の .tools\\git\\cmd\\git.exe があればそれを、無ければ PATH の git を使う。"""
+    exe = root / ".tools" / "git" / "cmd" / "git.exe"
+    r = subprocess.run([str(exe) if exe.is_file() else "git", "-C", str(root), *args], capture_output=True, timeout=120)
     if r.returncode != 0:
         raise RuntimeError(f"git {' '.join(args)}: {r.stderr.decode('utf-8', 'replace').strip()[:300]}")
     return r.stdout
