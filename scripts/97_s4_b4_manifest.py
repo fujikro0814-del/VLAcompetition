@@ -13,7 +13,7 @@
     （R4 は A 40・B 60・C 40・通常 240、N4 は通常 380）。
   - R と N の通常デモの集合が同じ: 通常の部分（R1v3 の 240 本）は同じ名前、残り（R4 の復帰・N4 の相手の通常）は（種、色）の
     集合が同じ（30_f.py の layout_targets と同じ数え方）。同じ名前が 2 回出ない。
-  - data.json の ok（本数がそろい、捨てた割合が 10% 以下、ファイルがある）。
+  - data.json の ok（本数がそろい、捨てた割合が 10% 以下か作者承認の例外＝drop_rule_exception、ファイルがある）。
 読むもの: outputs\\f\\data_v3.json、元のマニフェスト、outputs\\s4\\b4\\data.json、scripts\\30_f.py（importlib。layout_targets と変換の引数の決まり）。
 書くもの: outputs\\manifests\\R4_*.json・N4_*.json、outputs\\datasets\\R4_*・N4_*（convert）、outputs\\s4\\b4\\manifest.json・data_b4.json。
 """

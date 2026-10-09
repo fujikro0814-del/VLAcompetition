@@ -101,6 +101,108 @@ def test_choose_takes_both_success_in_order_and_counts():
     assert not res["count_ok"] and res["short_cells"][0]["layout_kind"] == "prefilled_1" and res["stop_drop_rule"]
 
 
+# ---------------------------------------------------------------- verify と捨てた割合の例外（--accept-drop-rule）
+def _verify_setup(tmp_path, monkeypatch, fails, need=5, n_cand=8):
+    """B の枠 1 つ（必要 need・候補 n_cand）。fails = {(種類, 種, 色): 失敗の名前}。成功はエピソードのファイルも作る。"""
+    monkeypatch.setattr(D, "B4", tmp_path)
+    monkeypatch.setattr(D.config, "path", lambda p: pathlib.Path(p))
+    monkeypatch.setattr(D, "stage3_identity", lambda: {"ok": True})
+    cands = [{"seed": 44600 + i, "color": "red", "layout_kind": "empty", "start": "home"} for i in range(n_cand)]
+    rec = {"B": {"empty": {"need": need, "candidates": cands}}}
+    run = tmp_path / "gen" / "S4B4_B_empty"
+    run.mkdir(parents=True)
+    rows = []
+    for c in cands:
+        for k in ("B", "n"):
+            f = fails.get((k, c["seed"], c["color"]))
+            if f:
+                land = f == D.LANDING_FAILURE
+                att = [{"name": f"{k}_{c['seed']}_red_r{i}", "failure": f,
+                        "inject": {"status": "landing_invalid" if land else "confirmed", "reason": "clearance" if land else None}}
+                       for i in range(4)]
+            else:
+                att = [{"name": f"{k}_{c['seed']}_red_r0", "failure": None, "inject": {"status": "confirmed", "reason": None}}]
+                d = run / att[0]["name"]
+                d.mkdir()
+                (d / "meta.json").write_text("{}", encoding="utf-8")
+                (d / "data.npz").write_bytes(b"x")
+            rows.append({"kind": k, "layout_seed": c["seed"], "color": c["color"], "layout_kind": "empty", "success": not f,
+                         "attempts": att})
+    (run / "generation.jsonl").write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
+    (tmp_path / "plan.json").write_text(json.dumps({"need": {"B": need}, "recovery": rec}), encoding="utf-8")
+    (tmp_path / "gen_state.json").write_text(json.dumps({"chunks": {"B_empty": {"run": str(run), "complete": True}}}),
+                                             encoding="utf-8")
+    return lambda: json.loads((tmp_path / "data.json").read_text(encoding="utf-8"))
+
+
+LAND = D.LANDING_FAILURE
+
+
+def test_verify_without_flag_is_unchanged(tmp_path, monkeypatch):
+    read = _verify_setup(tmp_path, monkeypatch, {("B", 44600, "red"): LAND})       # 捨てた 1/6 = 16.7% > 10%
+    assert D.main(["verify"]) == 1
+    d = read()
+    assert d["stop_drop_rule"] and d["count_ok"] and not d["ok"]
+    assert not {"drop_rule_exception", "ok_reason", "dropped_candidates"} & set(d)   # 引数なしは今までと同じ中身
+    read = _verify_setup(tmp_path / "b", monkeypatch, {})
+    assert D.main(["verify"]) == 0 and read()["ok"]
+
+
+def test_verify_accept_drop_rule_applies_when_all_landing(tmp_path, monkeypatch):
+    read = _verify_setup(tmp_path, monkeypatch, {("B", 44600, "red"): LAND, ("B", 44602, "red"): LAND})
+    assert D.main(["verify", "--accept-drop-rule", "0169"]) == 0
+    d = read()
+    assert d["ok"] and d["stop_drop_rule"] and "例外（掲示 0169）" in d["ok_reason"]          # 隠さない
+    ex = d["drop_rule_exception"]
+    assert ex["applied"] and ex["board"] == "0169" and not ex["problems"] and ex["written"]
+    assert ex["by_kind"]["B"]["dropped"] == 2 and ex["by_kind"]["B"]["examined"] == 7 and ex["by_kind"]["B"]["over_limit"]
+    assert [(c["seed"], c["color"], c["layout_kind"]) for c in ex["dropped_candidates"]] == [(44600, "red", "empty"), (44602, "red", "empty")]
+    c = ex["dropped_candidates"][0]
+    assert c["failure"] == LAND and c["inject_reason"] == "clearance" and c["attempts"] == 4 and c["twin_success"]
+    # 上限以下なら例外は使わない（記録もしない）
+    read = _verify_setup(tmp_path / "b", monkeypatch, {})
+    assert D.main(["verify", "--accept-drop-rule", "0169"]) == 0
+    d = read()
+    assert d["ok"] and "drop_rule_exception" not in d and d["ok_reason"].startswith("決まりどおり")
+
+
+@pytest.mark.parametrize("fails,need,why", [
+    ({("B", 44600, "red"): LAND, ("B", 44601, "red"): "script_place_failed"}, 5, "landing でない"),    # 台本の失敗が混じる
+    ({("n", 44600, "red"): "script_place_failed"}, 5, "相手の通常デモが失敗"),                         # 相手が失敗
+    ({("B", 44600 + i, "red"): LAND for i in range(4)}, 5, "本数がそろわない"),                           # 本数不足
+])
+def test_verify_accept_drop_rule_refuses(tmp_path, monkeypatch, fails, need, why):
+    read = _verify_setup(tmp_path, monkeypatch, fails, need=need)
+    assert D.main(["verify", "--accept-drop-rule", "0169"]) == 1
+    d = read()
+    assert not d["ok"] and d["stop_drop_rule"] and not d["drop_rule_exception"]["applied"]
+    assert any(why in p for p in d["drop_rule_exception"]["problems"]) and d["ok_reason"].startswith("例外は効かない")
+
+
+def test_verify_out_and_board_number(tmp_path, monkeypatch):
+    _verify_setup(tmp_path, monkeypatch, {("B", 44600, "red"): LAND})
+    out = tmp_path / "tmp" / "check.json"
+    assert D.main(["verify", "--accept-drop-rule", "0169", "--out", str(out)]) == 0
+    assert json.loads(out.read_text(encoding="utf-8"))["ok"] and not (tmp_path / "data.json").exists()   # 書き先だけに書く
+    for bad in ("169", "abcd", "01690"):
+        with pytest.raises(SystemExit) as e:
+            D.main(["verify", "--accept-drop-rule", bad])
+        assert e.value.code == 2
+
+
+def test_manifest_build_reads_ok_with_exception(tmp_path, monkeypatch):
+    r1, n1 = _base_manifests()
+    monkeypatch.setattr(M, "_sources", lambda: ({}, {"R1": {"sha256": M.EXPECTED_SHA["R1"], "manifest": r1, "path": tmp_path / "r1"},
+                                                    "N1": {"sha256": M.EXPECTED_SHA["N1"], "manifest": n1, "path": tmp_path / "n1"}}))
+    monkeypatch.setattr(M, "B4", tmp_path)
+    data = {"ok": True, "stop_drop_rule": True, "ok_reason": "例外（掲示 0169）", "drop_rule_exception": {"applied": True},
+            "chosen": _chosen()}
+    (tmp_path / "data.json").write_text(json.dumps(data), encoding="utf-8")
+    assert M.main(["build", "--dry-run"]) == 0
+    (tmp_path / "data.json").write_text(json.dumps(dict(data, ok=False)), encoding="utf-8")
+    assert M.main(["build", "--dry-run"]) == 1
+
+
 def test_run_chunks_resumes(tmp_path):
     calls = []
 

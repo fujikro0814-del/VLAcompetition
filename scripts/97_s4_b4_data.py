@@ -8,6 +8,7 @@ configs/s4_gates.json の bundle4_gates・candidate_selection の slip_rule）�
     .venv\\Scripts\\python.exe scripts\\97_s4_b4_data.py gen --smoke --workers 2  # smoke（種 44680〜44683、各種類 1 本ぶん）
     .venv\\Scripts\\python.exe scripts\\97_s4_b4_data.py verify                   # 採る本数の確かめ → outputs\\s4\\b4\\data.json
     .venv\\Scripts\\python.exe scripts\\97_s4_b4_data.py gen --top-up             # 足りない枠だけ、予備の種で候補を足して回す（verify が足りないと言ったとき）
+    .venv\\Scripts\\python.exe scripts\\97_s4_b4_data.py verify --accept-drop-rule 0169   # 捨てた割合の上限を超えたが作者が例外として承認したとき（掲示の番号）
 
 中身（段階 3 の R1v3 のデータ＝scripts\\30_f.py gen-data --rig v3 と同じ関数・同じ決まり。違いは本数と誘発の種類だけ）:
   - 足す本数: 落下（種類 B）30 本・置き損ね（種類 C）20 本。段階 3 の B 30・C 20 と合わせて 60・40 になる（final.md 束 4、
@@ -19,6 +20,10 @@ configs/s4_gates.json の bundle4_gates・candidate_selection の slip_rule）�
   - 同じ配置の通常デモ（N 用の相手）: 復帰の候補と同じ（種、色、配置の種類）で種類 n を作る。復帰と相手の両方が（作り直しを
     含めて）成功した候補を、枠ごとに候補の順に必要数だけ採る（30_f.py の cmd_gen_data と同じ。片方が失敗したら両方から外す）。
   - 止める決まり: 種類ごとの捨てた割合が 30_f.py の DROPPED_STOP（10%）を超えたら、verify が止めて諮る（決裁 0042 と同じ）。
+    作者が例外として承認したら verify --accept-drop-rule <掲示の番号> で通す。効くのは、本数がそろい、ファイルの欠けがなく、
+    捨てた候補の全部が「復帰側の最後の試みが inject_landing_invalid（落とす位置の除外）で、相手の通常デモは成功」のときだけ。
+    data.json に drop_rule_exception（番号・日時・種類ごとの捨てた数と割合・捨てた候補ごとの内訳）を残し、stop_drop_rule は
+    真のまま、ok_reason に「例外（掲示 <番号>）」と書く。
   - 同じ仕組みの確かめ（stage3_identity）: 生成の前に、data_v3.json に記録した設定（inject・expert・scene・sim）とコードの
     SHA-256 の束が今と同じで、記録したコミットから生成・誘発・世界・センサ・設定のファイルが変わっていないことを確かめる
     （違えば gen は止まる。--dry-run は結果を出すだけ）。
@@ -249,7 +254,7 @@ def read_results(state: dict) -> dict:
 def choose(rec_plan: dict, by: dict, drop_stop: float) -> dict:
     def saved(r):
         return r["attempts"][-1]["name"] if r["success"] else None
-    chosen, cells = [], []
+    chosen, cells, drops = [], [], []
     for kind, lk_cells in rec_plan.items():
         for lk, cell in lk_cells.items():
             got, examined, dropped = [], 0, 0
@@ -266,6 +271,7 @@ def choose(rec_plan: dict, by: dict, drop_stop: float) -> dict:
                                 "twin": {"run": by[tk]["_run"], "key": saved(by[tk])}, "start": c["start"]})
                 else:
                     dropped += 1
+                    drops.append({"kind": kind, "layout_kind": lk, "seed": c["seed"], "color": c["color"]})
             chosen += got
             cells.append({"kind": kind, "layout_kind": lk, "need": cell["need"], "got": len(got), "examined": examined,
                           "dropped": dropped, "short": cell["need"] - len(got)})
@@ -278,7 +284,43 @@ def choose(rec_plan: dict, by: dict, drop_stop: float) -> dict:
     stop = any(v["drop_rate"] is not None and v["drop_rate"] > drop_stop for v in by_kind.values())
     short = [c for c in cells if c["short"] > 0]
     return {"chosen": chosen, "cells": cells, "by_kind": by_kind, "stop_drop_rule": stop, "short_cells": short,
-            "count_ok": not short and all(v["got"] == v["need"] for v in by_kind.values())}
+            "count_ok": not short and all(v["got"] == v["need"] for v in by_kind.values()), "dropped_candidates": drops}
+
+
+# ---------------------------------------------------------------- 捨てた割合の決まりの例外（作者承認）
+LANDING_FAILURE = "inject_landing_invalid"        # 落とす位置が使えない配置の除外（台本の失敗ではない）
+BOARD_NO = re.compile(r"^\d{4}$")
+
+
+def drop_exception(res: dict, by: dict, missing: list, board: str, drop_stop: float) -> dict:
+    """捨てた割合の決まりを例外として通せるか。本数がそろい、ファイルの欠けがなく、捨てた候補の全部が
+    「復帰側の最後の試みが landing の失敗で、相手の通常は成功」のときだけ applied を真にする。"""
+    prob = []
+    if not res["count_ok"]:
+        prob.append("本数がそろわない")
+    if missing:
+        prob.append(f"ファイルが {len(missing)} 個欠けている")
+    cands = []
+    for d in res["dropped_candidates"]:
+        r, t = by[(d["kind"], d["seed"], d["color"])], by[("n", d["seed"], d["color"])]
+        att = r.get("attempts") or []
+        last = att[-1] if att else {}
+        inj = last.get("inject") or {}
+        cands.append(dict(d, recovery_success=bool(r["success"]), twin_success=bool(t["success"]),
+                          failure=last.get("failure"), inject_status=inj.get("status"), inject_reason=inj.get("reason"),
+                          attempts=len(att), attempt_failures=[x.get("failure") for x in att],
+                          attempt_inject_reasons=[(x.get("inject") or {}).get("reason") for x in att]))
+        name = f"{d['kind']}_{d['seed']}_{d['color']}"
+        if not r["success"] and last.get("failure") != LANDING_FAILURE:
+            prob.append(f"{name}: 復帰側の失敗が landing でない（{last.get('failure')}）")
+        if not t["success"]:
+            prob.append(f"{name}: 相手の通常デモが失敗")
+    by_kind = {k: {"examined": v["examined"], "dropped": v["dropped"], "drop_rate": v["drop_rate"],
+                   "over_limit": v["drop_rate"] is not None and v["drop_rate"] > drop_stop} for k, v in res["by_kind"].items()}
+    return {"board": board, "written": time.strftime("%Y-%m-%d %H:%M:%S"), "applied": not prob, "problems": prob,
+            "drop_stop": drop_stop, "by_kind": by_kind, "dropped_candidates": cands,
+            "rule": "捨てた候補の全部が、復帰側の最後の試みが inject_landing_invalid で相手の通常が成功のときだけ、"
+                    "作者承認の例外として捨てた割合の決まりを通す（決裁 0042 の『諮る』への答え）"}
 
 
 # ---------------------------------------------------------------- 本体
@@ -392,7 +434,9 @@ def cmd_verify(a) -> int:
     f30 = load_f30()
     plan = _plan(a)
     st = load_state(B4 / ("gen_state_smoke.json" if a.smoke else "gen_state.json"))
-    res = choose(plan["recovery"], read_results(st), f30.DROPPED_STOP)
+    by = read_results(st)
+    res = choose(plan["recovery"], by, f30.DROPPED_STOP)
+    dropped = res.pop("dropped_candidates")
     missing = []
     for c in res["chosen"]:
         for side in ("recovery", "twin"):
@@ -403,12 +447,31 @@ def cmd_verify(a) -> int:
            "stage3_identity": stage3_identity(),
            "missing_files": missing, "ok": res["count_ok"] and not res["stop_drop_rule"] and not missing,
            "drop_stop_rule": f"種類ごとの捨てた割合が {f30.DROPPED_STOP:.0%} を超えたら止めて諮る（30_f.py・決裁 0042）"}
-    _write(B4 / ("data_smoke.json" if a.smoke else "data.json"), out)
-    print(json.dumps({k: out[k] for k in ("by_kind", "short_cells", "stop_drop_rule", "ok")}, ensure_ascii=False, indent=1))
+    show = ["by_kind", "short_cells", "stop_drop_rule", "ok"]
+    if a.accept_drop_rule:                               # 作者承認の例外（引数がなければ今までと同じ）
+        if not res["stop_drop_rule"]:
+            out["ok_reason"] = "決まりどおり（捨てた割合は上限以下。例外は使わない）" if out["ok"] else "本数・ファイルの欠け"
+        else:
+            ex = drop_exception(dict(res, dropped_candidates=dropped), by, missing, a.accept_drop_rule, f30.DROPPED_STOP)
+            out["drop_rule_exception"] = ex
+            out["ok"] = ex["applied"]
+            out["ok_reason"] = (f"例外（掲示 {a.accept_drop_rule}）: 捨てた割合は上限を超えたが、捨てた候補は全部 landing の失敗"
+                                if ex["applied"] else f"例外は効かない（掲示 {a.accept_drop_rule}）: " + " / ".join(ex["problems"][:5]))
+            show.append("drop_rule_exception")
+        show.append("ok_reason")
+    dest = pathlib.Path(a.out) if a.out else B4 / ("data_smoke.json" if a.smoke else "data.json")
+    _write(dest, out)
+    print(json.dumps({k: out[k] for k in show}, ensure_ascii=False, indent=1))
     if not out["ok"]:
         print("本数がそろわない・捨てた割合が多い・ファイルが欠けている。足りない枠は gen --top-up", file=sys.stderr)
         return 1
     return 0
+
+
+def _board_no(s: str) -> str:
+    if not BOARD_NO.match(s):
+        raise argparse.ArgumentTypeError("掲示板の番号は 4 桁の数字（例 0169）")
+    return s
 
 
 def main(argv=None) -> int:
@@ -425,6 +488,10 @@ def main(argv=None) -> int:
             p.add_argument("--workers", type=int, default=8)
             p.add_argument("--dry-run", action="store_true")
             p.add_argument("--top-up", action="store_true")
+        if name == "verify":
+            p.add_argument("--accept-drop-rule", type=_board_no, default=None, metavar="番号",
+                           help="捨てた割合の上限を超えたとき、作者承認の例外として通す（掲示板の番号。例 0169）")
+            p.add_argument("--out", default=None, help="書き先（確かめ用。既定は outputs\\s4\\b4\\data.json）")
     a = ap.parse_args(argv)
     return {"plan": cmd_plan, "gen": cmd_gen, "verify": cmd_verify}[a.cmd](a)
 
