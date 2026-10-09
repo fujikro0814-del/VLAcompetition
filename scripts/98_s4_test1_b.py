@@ -12,7 +12,7 @@ A と共有しないもの（独立の度合い）:
   - Wilson の区間の z は statistics.NormalDist、Newcombe の区間（対あり方法 10・φ の補正あり、対なし方法 10）も自前の式。
   - 介入・success@k・時間（E7）は scripts/56_intervention_s3.py の定義を、ここで書き下した（A は 56 の count_run を呼ぶ）。
   - 中央値は並べ替えて真ん中を取る（A は numpy.median）。
-  - 入口の点検も別に書いた。
+  - 入口の点検も別に書いた。版の照合 (b)（登録版 第 7 節 1、判断の紙の問 5）と案 B の G-P1 の同じ種の対（問 7）も、A と別に書いた。
 同じなのは、読む記録のファイルと、s4_gates.json の帯、決まり（事前登録の案）だけ。
 """
 import argparse
@@ -34,8 +34,21 @@ RUN_RE = re.compile(r"^run_(\d{4})\.json$")
 COLOR_LIST = ["red", "green", "blue"]
 ENV_FIELDS = ["driver", "torch", "torch_cuda", "os_build"]
 MUST = ["h1", "rtc_arm"]                     # P-1・P-3（既定を置かない）
+GATES_POSTED = "7f2f651cafa9cf97b5548324d3fb8ea0bec5e891cca9c8859c7dd9c0347646e9"   # 掲示板 0165（LF）
+REL_GATES = "configs/s4_gates.json"
+REL_ENTRY = "scripts/98_s4_test1_eval.py"
+REL_EXEC_V3 = "src/recovla/runtime/executor_v3.py"
+V3_NAME = "v3.1"
+CKPT_RUNS = {"R1v3": "outputs/train/train_R1v3_20261005-180404_20261005-180404",
+             "N1v3": "outputs/train/train_N1v3_20261005-202158_20261005-202158",
+             "R1v3s1001": "outputs/s4/train/train_R1v3s1001_20261009-002457_20261009-002457",
+             "N1v3s1001": "outputs/s4/train/train_N1v3s1001_20261009-024259_20261009-024259",
+             "R1v3s1002": "outputs/s4/train/train_R1v3s1002_20261009-050112_20261009-050112",
+             "N1v3s1002": "outputs/s4/train/train_N1v3s1002_20261009-071920_20261009-071920"}
+CKPT_TAIL = "/checkpoints/020000/pretrained_model"
+VERSION_FIELDS = ["entry_sha256", "executor_v3_sha256", "rtc_setting", "rtc_module_sha256", "ckpt_sha256"]
 DEFAULTS = {"e7_n": None, "plan": "A", "guard_mode": "point", "ni_margin": 0.10, "h2_layers": ["1001", "1002"],
-            "rtc_p1_n": 50, "e7_band_extended": False, "c4_on_time": None, "p_fill": {}}
+            "rtc_p1_n": 50, "e7_band_extended": False, "c4_on_time": None, "p_fill": {}, "versions": None}
 KNOWN_RETURNS = {"placed": "scripted_return", "retry": "retry", "replan": "replan"}
 
 
@@ -150,6 +163,11 @@ def fill(params):
         raise ValueError("rtc_p1_n の値")
     if q["h1"] and q["e7_n"] not in (100, 150, 200):
         raise ValueError("h1 なら e7_n は 100・150・200")
+    if q["versions"] is not None:
+        if type(q["versions"]) is not dict or [k for k in q["versions"] if k not in VERSION_FIELDS]:
+            raise ValueError("versions の鍵")
+        if type(q["versions"].get("ckpt_sha256") or {}) is not dict:
+            raise ValueError("versions.ckpt_sha256 は辞書")
     return q
 
 
@@ -190,26 +208,27 @@ def plan_conditions(layout, q):
         for side in ("R", "N"):
             cond, model = name_model(layout["p1"][layer][side])
             found[f"p1.{layer}.{side}"] = {"kind": "single", "role": "p1", "dir": os.path.join(base, cond), "model": model,
-                                           "keys": {(162000 + i, "*") for i in range(100)}, "induce": "P1"}
+                                           "keys": {(162000 + i, "*") for i in range(100)}, "induce": "P1", "rtc_arm": False}
     for layer in (layout.get("natural") or {}):
         last = 161065 if layer == "1000" else 161032
         for side in ("R", "N"):
             cond, model = name_model(layout["natural"][layer][side])
             found[f"natural.{layer}.{side}"] = {"kind": "single", "role": "natural", "dir": os.path.join(base, cond), "model": model,
-                                                "keys": {(s, c) for s in range(161000, last + 1) for c in COLOR_LIST}, "induce": None}
+                                                "keys": {(s, c) for s in range(161000, last + 1) for c in COLOR_LIST}, "induce": None,
+                                                "rtc_arm": False}
     rtc = layout.get("rtc") or {}
     if "natural" in rtc:
         cond, model = name_model(rtc["natural"])
         found["rtc.natural"] = {"kind": "single", "role": "natural", "dir": os.path.join(base, cond), "model": model,
-                                "keys": {(s, c) for s in range(161000, 161066) for c in COLOR_LIST}, "induce": None}
+                                "keys": {(s, c) for s in range(161000, 161066) for c in COLOR_LIST}, "induce": None, "rtc_arm": True}
     if "p1" in rtc:
         cond, model = name_model(rtc["p1"])
         found["rtc.p1"] = {"kind": "single", "role": "p1", "dir": os.path.join(base, cond), "model": model,
-                           "keys": {(162000 + i, "*") for i in range(int(q["rtc_p1_n"]))}, "induce": "P1"}
+                           "keys": {(162000 + i, "*") for i in range(int(q["rtc_p1_n"]))}, "induce": "P1", "rtc_arm": True}
     if "p1_n" in rtc:
         cond, model = name_model(rtc["p1_n"])
         found["rtc.p1_n"] = {"kind": "single", "role": "p1", "dir": os.path.join(base, cond), "model": model,
-                             "keys": {(162000 + i, "*") for i in range(100)}, "induce": "P1"}
+                             "keys": {(162000 + i, "*") for i in range(100)}, "induce": "P1", "rtc_arm": True}
     for spec in found.values():
         spec["experiment"] = layout["experiment"]
     return found
@@ -309,6 +328,121 @@ def inspect(name, spec, q):
         hi = 160199
     if any(not (lo <= s <= hi) for s, _ in keys):
         why.append("band")
+    return why
+
+
+# ================================================================ 版の照合 (b)（自前）
+def single_value(vals):
+    """全部が同じなら、その値。違う・空なら None。"""
+    keys = set()
+    for v in vals:
+        keys.add(json.dumps(v, sort_keys=True))
+    if len(keys) != 1:
+        return None
+    return vals[0]
+
+
+def must_check_versions(specs, q):
+    if q["versions"] is not None:
+        return True
+    for spec in specs.values():
+        if os.path.isdir(spec["dir"]):
+            for r in list_records(spec["dir"], spec["kind"] == "single"):
+                if "t1" in r:
+                    return True
+    return False
+
+
+def versions_of(name, spec, q):
+    """(理由の列, 要約)。"""
+    why = []
+    out = {"entry_sha256": None, "ckpt_sha256": None, "executor_v3_sha256": None, "rtc_setting": None}
+    want = q["versions"] or {}
+    if not want:
+        why.append("no_versions_param")
+    recs = list_records(spec["dir"], spec["kind"] == "single") if os.path.isdir(spec["dir"]) else []
+    if len(recs) == 0 or any(type(r.get("t1")) is not dict for r in recs):
+        why.append("no_t1")
+        return why, out
+    t1 = [r["t1"] for r in recs]
+    fsha = [x.get("files_sha256") or {} for x in t1]
+    for f in fsha:
+        if f.get(REL_GATES) != GATES_POSTED:
+            why.append("gates_sha")
+            break
+    e = single_value([f.get(REL_ENTRY) for f in fsha])
+    if e is None:
+        why.append("entry_mixed")
+    elif e != want.get("entry_sha256"):
+        why.append("entry_not_posted")
+    out["entry_sha256"] = e
+    for x in t1:
+        if x.get("role") != name:
+            why.append("t1_role")
+            break
+    model = spec["model"]
+    cpath = single_value([(x.get("ckpt") or {}).get("path") for x in t1])
+    if cpath is None or model not in CKPT_RUNS or cpath != CKPT_RUNS[model] + CKPT_TAIL:
+        why.append("ckpt_path")
+    csha = single_value([(x.get("ckpt") or {}).get("sha256") for x in t1])
+    if csha is None or csha != (want.get("ckpt_sha256") or {}).get(model):
+        why.append("ckpt_sha")
+    out["ckpt_sha256"] = csha
+    if spec["kind"] == "task":
+        if spec.get("v3"):
+            if any("v3" not in r for r in recs) or single_value([(r.get("v3") or {}).get("settings") for r in recs]) is None:
+                why.append("v3_settings")
+            for r in recs:
+                if (r.get("b1") or {}).get("executor_version") != V3_NAME:
+                    why.append("v3_version")
+                    break
+            xs = single_value([((r.get("b1") or {}).get("files_sha256") or {}).get(REL_EXEC_V3) for r in recs])
+            if xs is None or xs != want.get("executor_v3_sha256"):
+                why.append("executor_v3_sha")
+            out["executor_v3_sha256"] = xs
+        else:
+            for r in recs:
+                if (r.get("b1") or {}).get("executor_version") != "current":
+                    why.append("current_version")
+                    break
+    elif spec.get("rtc_arm"):
+        st = single_value([(x.get("rtc") or {}).get("setting") for x in t1])
+        bad = st is None or st != want.get("rtc_setting")
+        for r in recs:
+            if (r.get("diag") or {}).get("arm") != st:
+                bad = True
+        if bad:
+            why.append("rtc_setting")
+        mod = single_value([(x.get("rtc") or {}).get("module_sha256") for x in t1])
+        if mod is None or mod != want.get("rtc_module_sha256"):
+            why.append("rtc_module_sha")
+        out["rtc_setting"] = st
+    else:
+        for x, r in zip(t1, recs):
+            if x.get("rtc") is not None or (r.get("diag") or {}).get("arm") not in (None, "naive"):
+                why.append("rtc_mark_on_naive")
+                break
+    return why, out
+
+
+def versions_across(checks, specs):
+    why = []
+    entries = set()
+    by_model = {}
+    v3s = set()
+    for name, c in checks.items():
+        v = c.get("versions") or {}
+        entries.add(v.get("entry_sha256"))
+        by_model.setdefault(specs[name]["model"], set()).add(v.get("ckpt_sha256"))
+        if v.get("executor_v3_sha256"):
+            v3s.add(v["executor_v3_sha256"])
+    if len(entries) != 1:
+        why.append("entry_across")
+    for m in by_model:
+        if len(by_model[m]) != 1:
+            why.append(f"ckpt_across:{m}")
+    if len(v3s) > 1:
+        why.append("executor_v3_across")
     return why
 
 
@@ -467,6 +601,7 @@ def run_b(layout, params):
     q = fill(params)
     specs = plan_conditions(layout, q)
     checks = {}
+    do_versions = must_check_versions(specs, q)
     for name in specs:
         w = inspect(name, specs[name], q)
         heads = []
@@ -474,10 +609,20 @@ def run_b(layout, params):
             heads = sorted({str((r.get("env") or {}).get("git_head"))
                             for r in list_records(specs[name]["dir"], specs[name]["kind"] == "single")})
         checks[name] = {"ok": len(w) == 0, "problems": w, "git_heads": heads}
+        if do_versions:
+            vw, vs = versions_of(name, specs[name], q)
+            checks[name]["problems"] = w + vw
+            checks[name]["ok"] = len(w) == 0 and len(vw) == 0
+            checks[name]["versions"] = vs
+    vcheck = {"done": do_versions, "ok": None, "problems": []}
+    if do_versions and len(checks) > 0:
+        vcheck["problems"] = versions_across(checks, specs)
+        vcheck["ok"] = len(vcheck["problems"]) == 0 and all(v["ok"] for v in checks.values())
     missing = [x for x in needed(q) if x not in checks]
-    complete = not missing and all(v["ok"] for v in checks.values())
+    complete = not missing and all(v["ok"] for v in checks.values()) and len(vcheck["problems"]) == 0
     res = {"schema": "recovery_vla.s4_test1_result/1", "status": "complete" if complete else "incomplete", "params": q,
-           "checks": checks, "missing_conditions": missing, "primary": None, "holm": None, "secondary": None, "face_switch": None}
+           "checks": checks, "missing_conditions": missing, "version_check": vcheck, "primary": None, "holm": None,
+           "secondary": None, "face_switch": None}
     if not complete:
         return res
     D = {k: v["dir"] for k, v in specs.items()}
@@ -555,17 +700,26 @@ def face(prim, D, q):
         nat_new, nat_old, p1_new, p1_old = D["rtc.natural"], D["natural.1000.R"], D["rtc.p1"], D["p1.1000.R"]
     g = nat_compare(nat_new, nat_old, LIMIT_30)
     x, y = rate_after_induce(p1_new, LIMIT_30), rate_after_induce(p1_old, LIMIT_30)
-    gp = newcombe_indep(x["k"], x["n"], y["k"], y["n"])
+    gp = newcombe_indep(x["k"], x["n"], y["k"], y["n"])                 # 各腕の分母（記述だけ）
+    pr = layer_counts(p1_new, p1_old, LIMIT_30)                        # 同じ種で両方とも成立した対
+    pci = newcombe_pair(pr["both"], pr["b"], pr["c"], pr["neither"])
+    pd = None if pr["pairs"] == 0 else (pr["b"] - pr["c"]) / pr["pairs"]
     nd = (g["a_k"] - g["b_k"]) / g["pairs"] if g["pairs"] else None
     gci = g["newcombe_a_minus_b"]["ci95"] if g["newcombe_a_minus_b"] else None
     if q["guard_mode"] == "point":
         ok_nat = nd is not None and nd + 0.05 >= -TINY
-        ok_p1 = gp is not None and gp["diff"] + 0.10 >= -TINY
+        ok_p1 = pd is not None and pd + 0.10 >= -TINY
     else:
         ok_nat = gci is not None and gci[0] + 0.05 >= -TINY
-        ok_p1 = gp is not None and gp["ci95"][0] + 0.10 >= -TINY
+        ok_p1 = pci is not None and pci["ci95"][0] + 0.10 >= -TINY
+    if q["plan"] == "A":
+        ok_p1 = True                           # 同じ記録どうし（構造上 0）
     c2 = {"plan": q["plan"], "mode": q["guard_mode"], "g_nat_diff": nd, "g_nat_ci95": gci,
-          "g_p1_diff": gp["diff"] if gp else None, "g_p1_ci95": gp["ci95"] if gp else None,
+          "g_p1_count": "paired" if q["plan"] == "B" else "structural",
+          "g_p1_pairs": pr["pairs"], "g_p1_b": pr["b"], "g_p1_c": pr["c"], "g_p1_diff": pd,
+          "g_p1_ci95": pci["ci95"] if pci else None,
+          "g_p1_unpaired": {"imp_k": x["k"], "imp_n": x["n"], "base_k": y["k"], "base_n": y["n"],
+                            "diff": gp["diff"] if gp else None, "ci95": gp["ci95"] if gp else None},
           "g_nat": bool(ok_nat), "g_p1": bool(ok_p1), "pass": bool(ok_nat and ok_p1)}
     has1 = "H1" in prim
     c3 = {"by": "H1", "present": has1, "pass": bool(has1 and prim["H1"]["established"])}

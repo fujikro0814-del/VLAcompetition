@@ -14,6 +14,13 @@ truth_success_t の最大。
 入口の点検（0155 の 2 節）を満たさない条件が 1 つでもあれば status = "incomplete" とし、検定・判定は出さない（None）。
 条件をまたぐ点検（2-5 の HEAD の間の照らし合わせ、2-6 の台帳）は入口（scripts/98_s4_test1.py）が 1 回だけ行う。
 H3 の腕: 案 A は種 1000 の naive の P1（p1.1000.R 対 p1.1000.N）、案 B は RTC の設定の P1（rtc.p1 対 rtc.p1_n。事前登録の案 12-2）。
+版の照合 (b)（登録版 第 7 節 1 の (b-1)〜(b-5)、判断の紙の問 5）: params.versions（「枝の確定」の掲示の値）があるか、どれかの試行に
+起動の入口（scripts/98_s4_test1_eval.py）の印 "t1" があれば、条件ごとに s4_gates.json の SHA-256（LF）が掲示の値（0165）、入口の版・
+保存点のパスと SHA-256・v3 の設定と版（v3.1）と executor_v3.py の SHA-256・RTC の設定名と rtc.py の SHA-256 がそれぞれ 1 種類で
+掲示の値と同じこと、naive の条件に RTC の印がないことを確かめ、条件をまたいで入口の版・同じモデルの保存点・v3 の版が 1 種類であることを
+確かめる（version_check）。満たさなければ未完。どちらも無い（入口を通っていない合成の記録）ときは照らさず、1 枚に「照らしていない」と書く。
+案 B の G-P1（登録版 12-3、判断の紙の問 7）: 両方の腕で誘発が 30 s より前に成立した同じ種の対で、差 (b − c)/対の数、区間は Newcombe の
+対あり（束 4 の paired_guard と同じ）。対が 0 なら満たさない。各腕の分母の差（対なし）は記述として並べる。案 A は構造上 0 で満たす。
 """
 import importlib.util
 import json
@@ -35,10 +42,25 @@ GATES = ROOT / "configs" / "s4_gates.json"
 E7_LIMITS = {"step_timeout_s": 30.0, "retry": 1, "task_time_limit_s": 200.0}
 SINGLE_LIMIT_S = 60.0
 ENV_KEYS = ("driver", "torch", "torch_cuda", "os_build")        # 96_s4_resume.ENV_STOP_KEYS と同じ
+POSTED_GATES_SHA256 = "7f2f651cafa9cf97b5548324d3fb8ea0bec5e891cca9c8859c7dd9c0347646e9"   # 掲示板 0165（LF）
+GATES_KEY = "configs/s4_gates.json"
+ENTRY_KEY = "scripts/98_s4_test1_eval.py"
+EXEC_V3_KEY = "src/recovla/runtime/executor_v3.py"
+V3_VERSION = "v3.1"
+# 登録版 第 5 節のチェックポイント（2 万手）
+REGISTERED_CKPT = {
+    "R1v3": "outputs/train/train_R1v3_20261005-180404_20261005-180404/checkpoints/020000/pretrained_model",
+    "N1v3": "outputs/train/train_N1v3_20261005-202158_20261005-202158/checkpoints/020000/pretrained_model",
+    "R1v3s1001": "outputs/s4/train/train_R1v3s1001_20261009-002457_20261009-002457/checkpoints/020000/pretrained_model",
+    "N1v3s1001": "outputs/s4/train/train_N1v3s1001_20261009-024259_20261009-024259/checkpoints/020000/pretrained_model",
+    "R1v3s1002": "outputs/s4/train/train_R1v3s1002_20261009-050112_20261009-050112/checkpoints/020000/pretrained_model",
+    "N1v3s1002": "outputs/s4/train/train_N1v3s1002_20261009-071920_20261009-071920/checkpoints/020000/pretrained_model",
+}
+VERSION_KEYS = ("entry_sha256", "executor_v3_sha256", "rtc_setting", "rtc_module_sha256", "ckpt_sha256")
 # h1（P-1）と rtc_arm（P-3）は結果で埋まる所なので既定を置かない（params に必ず書く）
 PARAM_REQUIRED = ("h1", "rtc_arm")
 PARAM_DEFAULTS = {"e7_n": None, "plan": "A", "guard_mode": "point", "ni_margin": 0.10, "h2_layers": ["1001", "1002"],
-                  "rtc_p1_n": 50, "e7_band_extended": False, "c4_on_time": None, "p_fill": {}}
+                  "rtc_p1_n": 50, "e7_band_extended": False, "c4_on_time": None, "p_fill": {}, "versions": None}
 
 
 # ================================================================ 読み込み
@@ -64,6 +86,12 @@ def params_with_defaults(params: dict) -> dict:
         raise ValueError("guard_mode は point か interval")
     if p["h1"] and p["e7_n"] not in (100, 150, 200):
         raise ValueError("h1 が真なら e7_n（P-4）は 100・150・200 のどれか")
+    v = p["versions"]
+    if v is not None:
+        if not isinstance(v, dict) or set(v) - set(VERSION_KEYS):
+            raise ValueError(f"versions は {list(VERSION_KEYS)} の辞書")
+        if not isinstance(v.get("ckpt_sha256") or {}, dict):
+            raise ValueError("versions.ckpt_sha256 は {モデル: SHA-256}")
     return p
 
 
@@ -101,25 +129,26 @@ def conditions(layout: dict, p: dict) -> list:
         for side in ("R", "N"):
             c, m = _entry(arms[side])
             out.append((f"p1.{layer}.{side}", "single", "p1", root / c, m, {(s, "*") for s in range(162000, 162100)},
-                        {"induce": "P1"}))
+                        {"induce": "P1", "rtc_arm": False}))
     for layer, arms in (layout.get("natural") or {}).items():
         hi = 161065 if layer == "1000" else 161032
         for side in ("R", "N"):
             c, m = _entry(arms[side])
             out.append((f"natural.{layer}.{side}", "single", "natural", root / c, m,
-                        {(s, col) for s in range(161000, hi + 1) for col in COLORS}, {"induce": None}))
+                        {(s, col) for s in range(161000, hi + 1) for col in COLORS}, {"induce": None, "rtc_arm": False}))
     rtc = layout.get("rtc") or {}
     if "natural" in rtc:
         c, m = _entry(rtc["natural"])
         out.append(("rtc.natural", "single", "natural", root / c, m, {(s, col) for s in range(161000, 161066) for col in COLORS},
-                    {"induce": None}))
+                    {"induce": None, "rtc_arm": True}))
     if "p1" in rtc:
         c, m = _entry(rtc["p1"])
         out.append(("rtc.p1", "single", "p1", root / c, m, {(s, "*") for s in range(162000, 162000 + int(p["rtc_p1_n"]))},
-                    {"induce": "P1"}))
+                    {"induce": "P1", "rtc_arm": True}))
     if "p1_n" in rtc:                                   # 案 B だけ: N1v3＋RTC の設定の P1（162000〜162099）
         c, m = _entry(rtc["p1_n"])
-        out.append(("rtc.p1_n", "single", "p1", root / c, m, {(s, "*") for s in range(162000, 162100)}, {"induce": "P1"}))
+        out.append(("rtc.p1_n", "single", "p1", root / c, m, {(s, "*") for s in range(162000, 162100)},
+                    {"induce": "P1", "rtc_arm": True}))
     return out
 
 
@@ -231,6 +260,97 @@ def check_condition_items(name, kind, role, d: pathlib.Path, model, keys: set, m
     bad = [s for s, _ in got if not (lo <= s <= hi)]
     if bad:
         prob.append(f"{name}: テストの帯 {lo}〜{hi} の外の種 {bad[0]}（{len(bad)} 本）")
+    return prob
+
+
+# ================================================================ 版の照合 (b)（登録版 第 7 節 1、判断の紙の問 5）
+def version_needed(conds: list, p: dict) -> bool:
+    """params.versions があるか、どれかの試行に入口の印 "t1" があれば照らす。"""
+    if p["versions"] is not None:
+        return True
+    for _, kind, _, d, _, _, _ in conds:
+        if d.is_dir() and any("t1" in r for r in _records(d, kind)):
+            return True
+    return False
+
+
+def _one(values: list):
+    """全部が同じ 1 つの値ならその値、そうでなければ None（空も None）。"""
+    u = {json.dumps(v, sort_keys=True) for v in values}
+    return values[0] if len(u) == 1 else None
+
+
+def version_items(name, kind, d: pathlib.Path, model, mark: dict, p: dict) -> tuple:
+    """(満たさない点の文の列, 条件の版の要約)。"""
+    recs = _records(d, kind) if d.is_dir() else []
+    ver = p["versions"] or {}
+    prob, summ = [], {"entry_sha256": None, "ckpt_sha256": None, "executor_v3_sha256": None, "rtc_setting": None}
+    if not ver:
+        prob.append(f"{name}: params.versions（「枝の確定」の掲示の値）が無い")
+    t1s = [r.get("t1") for r in recs]
+    if not recs or any(not isinstance(t, dict) for t in t1s):
+        prob.append(f"{name}: 起動の入口の印 t1 の無い試行がある")
+        return prob, summ
+    fs = [t.get("files_sha256") or {} for t in t1s]
+    if any(f.get(GATES_KEY) != POSTED_GATES_SHA256 for f in fs):
+        prob.append(f"{name}: (b-1) s4_gates.json の SHA-256 が掲示の値（0165）でない試行がある")
+    ent = _one([f.get(ENTRY_KEY) for f in fs])
+    if ent is None:
+        prob.append(f"{name}: (b-5) 入口の SHA-256 が無いか 2 種類以上")
+    elif ver.get("entry_sha256") != ent:
+        prob.append(f"{name}: (b-5) 入口の SHA-256 が掲示の値と違う")
+    summ["entry_sha256"] = ent
+    if any(t.get("role") != name for t in t1s):
+        prob.append(f"{name}: 入口の役の印（t1.role）が条件と違う")
+    path = _one([(t.get("ckpt") or {}).get("path") for t in t1s])
+    sha = _one([(t.get("ckpt") or {}).get("sha256") for t in t1s])
+    if path is None or path != REGISTERED_CKPT.get(model):
+        prob.append(f"{name}: (b-4) 保存点のパスが登録版 第 5 節のもの（{REGISTERED_CKPT.get(model)}）でないか 2 種類以上")
+    if sha is None or sha != (ver.get("ckpt_sha256") or {}).get(model):
+        prob.append(f"{name}: (b-4) 保存点の SHA-256 が無いか 2 種類以上か、掲示の値と違う")
+    summ["ckpt_sha256"] = sha
+    if kind == "task":
+        b1s = [r.get("b1") or {} for r in recs]
+        if mark.get("v3"):
+            st_ = _one([(r.get("v3") or {}).get("settings") for r in recs])
+            if st_ is None or any("v3" not in r for r in recs):
+                prob.append(f"{name}: (b-2) v3.settings が無いか 2 種類以上")
+            if any(b.get("executor_version") != V3_VERSION for b in b1s):
+                prob.append(f"{name}: (b-2) b1.executor_version が {V3_VERSION} でない試行がある")
+            ex = _one([(b.get("files_sha256") or {}).get(EXEC_V3_KEY) for b in b1s])
+            if ex is None or ex != ver.get("executor_v3_sha256"):
+                prob.append(f"{name}: (b-2) executor_v3.py の SHA-256 が無いか 2 種類以上か、掲示の値と違う")
+            summ["executor_v3_sha256"] = ex
+        elif any(b.get("executor_version") != "current" for b in b1s):
+            prob.append(f"{name}: (b-2) 今の実行器の腕の b1.executor_version が current でない")
+    elif mark.get("rtc_arm"):
+        rs = _one([(t.get("rtc") or {}).get("setting") for t in t1s])
+        if rs is None or rs != ver.get("rtc_setting") or any((r.get("diag") or {}).get("arm") != rs for r in recs):
+            prob.append(f"{name}: (b-3) RTC の設定名が無いか 2 種類以上か、掲示の値と違う")
+        ms = _one([(t.get("rtc") or {}).get("module_sha256") for t in t1s])
+        if ms is None or ms != ver.get("rtc_module_sha256"):
+            prob.append(f"{name}: (b-3) RTC の設定（rtc.py）の SHA-256 が無いか 2 種類以上か、掲示の値と違う")
+        summ["rtc_setting"] = rs
+    elif any(t.get("rtc") is not None or (r.get("diag") or {}).get("arm") not in (None, "naive") for t, r in zip(t1s, recs)):
+        prob.append(f"{name}: (b-3) naive の条件に RTC の設定の印がある")
+    return prob, summ
+
+
+def version_cross(checks: dict, models: dict) -> list:
+    """条件をまたぐ版の照合: 入口の版が全条件で 1 種類、同じモデルの保存点が同じ、v3 の腕の executor_v3.py が 1 種類。"""
+    prob = []
+    vs = {n: c.get("versions") or {} for n, c in checks.items()}
+    if len({v.get("entry_sha256") for v in vs.values()}) != 1:
+        prob.append("入口の版（files_sha256）が条件によって違う")
+    by = {}
+    for n, v in vs.items():
+        by.setdefault(models[n], set()).add(v.get("ckpt_sha256"))
+    for m, s in sorted(by.items(), key=lambda x: str(x[0])):
+        if len(s) != 1:
+            prob.append(f"モデル {m} の保存点の SHA-256 が条件によって違う")
+    ex = {v["executor_v3_sha256"] for v in vs.values() if v.get("executor_v3_sha256")}
+    if len(ex) > 1:
+        prob.append("v3 の腕の executor_v3.py の SHA-256 が条件によって違う")
     return prob
 
 
@@ -362,12 +482,20 @@ def analyze(layout: dict, params: dict) -> dict:
     p = params_with_defaults(params)
     conds = conditions(layout, p)
     checks = {}
+    vneed = version_needed(conds, p)
     for name, kind, role, d, model, keys, mark in conds:
         pr, heads = check_condition(name, kind, role, d, model, keys, mark, p, layout["experiment"])
         checks[name] = {"ok": not pr, "problems": pr, "git_heads": heads}
+        if vneed:
+            vp, vs = version_items(name, kind, d, model, mark, p)
+            checks[name].update(ok=not pr and not vp, problems=pr + vp, versions=vs)
+    vc = {"done": vneed, "ok": None, "problems": []}
+    if vneed and checks:
+        vc["problems"] = version_cross(checks, {n: m for n, _, _, _, m, _, _ in conds})
+        vc["ok"] = not vc["problems"] and all(c["ok"] for c in checks.values())
     missing = [x for x in required_conditions(p) if x not in checks]
-    status = "complete" if all(c["ok"] for c in checks.values()) and not missing else "incomplete"
-    res = {"schema": SCHEMA, "status": status, "params": p, "checks": checks, "missing_conditions": missing,
+    status = "complete" if all(c["ok"] for c in checks.values()) and not missing and not vc["problems"] else "incomplete"
+    res = {"schema": SCHEMA, "status": status, "params": p, "checks": checks, "missing_conditions": missing, "version_check": vc,
            "primary": None, "holm": None, "secondary": None, "face_switch": None}
     if status != "complete":
         return res
@@ -436,16 +564,25 @@ def face_switch(prim: dict, dirs: dict, p: dict) -> dict:
         base_n, base_p, imp_n, imp_p = dirs["natural.1000.R"], dirs["p1.1000.R"], dirs["rtc.natural"], dirs["rtc.p1"]
     gn = natural_pairs(imp_n, base_n, L_MAIN)
     ra, rb = recovery_rate(imp_p, L_MAIN), recovery_rate(base_p, L_MAIN)
-    gp = newcombe_unpaired(ra["k"], ra["n"], rb["k"], rb["n"])
+    gu = newcombe_unpaired(ra["k"], ra["n"], rb["k"], rb["n"])          # 各腕の分母の差（記述）
+    gq = p1_layer(imp_p, base_p, L_MAIN)                                 # 同じ種の対（b＝改良版だけ復帰、c＝段階 3 の構成だけ）
+    gpn = newcombe_paired(gq["both"], gq["b"], gq["c"], gq["neither"])
+    p1_diff = (gq["b"] - gq["c"]) / gq["pairs"] if gq["pairs"] else None
     nat_diff = (gn["a_k"] - gn["b_k"]) / gn["pairs"] if gn["pairs"] else None
     if p["guard_mode"] == "point":
         g_nat = nat_diff is not None and nat_diff >= -0.05 - EPS
-        g_p1 = gp is not None and gp["diff"] >= -0.10 - EPS
+        g_p1 = p1_diff is not None and p1_diff >= -0.10 - EPS
     else:
         g_nat = gn["newcombe_a_minus_b"] is not None and gn["newcombe_a_minus_b"]["ci95"][0] >= -0.05 - EPS
-        g_p1 = gp is not None and gp["ci95"][0] >= -0.10 - EPS
+        g_p1 = gpn is not None and gpn["ci95"][0] >= -0.10 - EPS
+    if p["plan"] == "A":                                # 改良版と段階 3 の構成が同じ記録: 構造上 0 で満たす（登録版 12-3）
+        g_p1 = True
     c2 = {"plan": p["plan"], "mode": p["guard_mode"], "g_nat_diff": nat_diff, "g_nat_ci95": (gn["newcombe_a_minus_b"] or {}).get("ci95"),
-          "g_p1_diff": None if gp is None else gp["diff"], "g_p1_ci95": None if gp is None else gp["ci95"],
+          "g_p1_count": "structural" if p["plan"] == "A" else "paired",
+          "g_p1_pairs": gq["pairs"], "g_p1_b": gq["b"], "g_p1_c": gq["c"], "g_p1_diff": p1_diff,
+          "g_p1_ci95": None if gpn is None else gpn["ci95"],
+          "g_p1_unpaired": {"imp_k": ra["k"], "imp_n": ra["n"], "base_k": rb["k"], "base_n": rb["n"],
+                            "diff": None if gu is None else gu["diff"], "ci95": None if gu is None else gu["ci95"]},
           "g_nat": bool(g_nat), "g_p1": bool(g_p1), "pass": bool(g_nat and g_p1)}
     h1 = prim.get("H1")
     c3 = {"by": "H1", "present": h1 is not None, "pass": bool(h1 is not None and h1["established"])}
@@ -457,10 +594,14 @@ def face_switch(prim: dict, dirs: dict, p: dict) -> dict:
 # ================================================================ 要約（Markdown）
 def summary_md(res: dict) -> str:
     o = ["# テスト 1 の判定（1 枚）", "", f"- 状態: {'そろった（判定した）' if res['status'] == 'complete' else '未完（判定しない）'}"]
+    vc = res.get("version_check") or {}
+    o.append("- 版の照合 (b): " + ("照らしていない（params.versions も入口の印 t1 も無い）" if not vc.get("done")
+                                  else ("満たす" if vc.get("ok") else "満たさない")))
     if res["status"] != "complete":
         o += ["", "## 入口の点検で満たさなかったもの", ""]
         o += [f"- {pr}" for c in res["checks"].values() for pr in c["problems"]]
         o += [f"- 条件がない: {x}" for x in res["missing_conditions"]]
+        o += [f"- 版の照合（条件をまたぐ）: {x}" for x in vc.get("problems") or []]
         o += [f"- 条件をまたぐ点検: {x}" for x in (res.get("entry_audit") or {}).get("problems", [])]
         return "\n".join(o) + "\n"
     o += ["", "## 主要評価項目（Holm、α = 0.05）", "", "| 項目 | 組 | b | c | p | Holm 補正後の p | 成立 |", "|---|---|---|---|---|---|---|"]
@@ -477,7 +618,8 @@ def summary_md(res: dict) -> str:
     o += ["", "## 掲示板 0157 の条件", "",
           f"- 条件 1（H3）: {'満たす' if fs['c1']['pass'] else '満たさない'}",
           f"- 条件 2（守り、案 {fs['c2']['plan']}・{fs['c2']['mode']}）: {'満たす' if fs['c2']['pass'] else '満たさない'}"
-          f"（自然の差 {fs['c2']['g_nat_diff']}、把持失敗の復帰の差 {fs['c2']['g_p1_diff']}）",
+          f"（自然の差 {fs['c2']['g_nat_diff']}、把持失敗の復帰の差 {fs['c2']['g_p1_diff']}"
+          f"{'（構造上 0）' if fs['c2']['g_p1_count'] == 'structural' else '（同じ種の対 ' + str(fs['c2']['g_p1_pairs']) + ' 組で数えた）'}）",
           f"- 条件 3（H1）: {'満たす' if fs['c3']['pass'] else '満たさない'}",
           f"- 条件 4（日程）: {'人が確かめる' if fs['c4']['pass'] is None else ('満たす' if fs['c4']['pass'] else '満たさない')}",
           f"- 切り替え: {'条件 4 の確かめ待ち' if fs['switch'] is None else ('切り替える' if fs['switch'] else '切り替えない')}"]

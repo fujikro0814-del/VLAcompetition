@@ -14,9 +14,13 @@
       の定義）で、いちばん古い HEAD にあるファイルが後の HEAD で変わっていないことを git で確かめる。
   2-6 台帳: 97_s4_ledger_check.py の build_report（または --ledger-json の結果。点検する記録のどれよりも新しいこと）で
       parse_errors が 0。
+  (b-1) 今の configs/s4_gates.json の SHA-256（LF）が掲示の値（0165）と同じ（記録の側の値は A・B の版の照合が照らす）。
+  (b-5) HEAD の間の照合の「子が読み込むファイル」に、起動の入口 98_s4_test1_eval.py と、それが読み込む 98_s4_b1.py・98_s4_d_rtc.py を
+      含める（読み込んだ 98_s4_d_audit の写しにだけ足す。元のファイルは変えない）。
 params の P-n・作者の判断（D1〜D7）の値は、結果の JSON の params にそのまま残る。
 """
 import argparse
+import hashlib
 import importlib.util
 import json
 import math
@@ -29,6 +33,9 @@ REL = 1e-9
 ABS = 1e-12
 P_KEYS = {"p", "p_holm", "mcnemar_p", "p_all_layers"}             # p 値の鍵（相対だけで照らす）
 LEDGER = ROOT / "docs" / "種の台帳.md"
+GATES = ROOT / "configs" / "s4_gates.json"
+POSTED_GATES_SHA256 = "7f2f651cafa9cf97b5548324d3fb8ea0bec5e891cca9c8859c7dd9c0347646e9"   # 掲示板 0165（LF）
+ENTRY_CHILD_SCRIPTS = ("scripts/98_s4_test1_eval.py", "scripts/98_s4_b1.py", "scripts/98_s4_d_rtc.py")
 
 EXAMPLE_LAYOUT = {
     "_note": ("条件名（outputs/v2eval/<experiment>/<条件>）。model を書けば試行の json のモデル名と照らす。rtc は RTC の腕を置く"
@@ -40,11 +47,14 @@ EXAMPLE_LAYOUT = {
            "1001": {"R": "P1_R1v3s1001", "N": "P1_N1v3s1001"}, "1002": {"R": "P1_R1v3s1002", "N": "P1_N1v3s1002"}},
     "natural": {"1000": {"R": "nat_R1v3", "N": "nat_N1v3"}, "1001": {"R": "nat_R1v3s1001", "N": "nat_N1v3s1001"},
                 "1002": {"R": "nat_R1v3s1002", "N": "nat_N1v3s1002"}},
-    "rtc": {"natural": "nat_R1v3_rtc", "p1": "P1_R1v3_rtc"},
+    "rtc": {"natural": "nat_R1v3_rtc", "p1": "P1_R1v3_rtc", "p1_n": {"cond": "P1_N1v3_rtc", "model": "N1v3"}},
 }
 EXAMPLE_PARAMS = {
-    "h1": True, "e7_n": 150, "rtc_arm": True, "plan": "A", "guard_mode": "point", "ni_margin": 0.10, "h2_layers": ["1001", "1002"],
-    "rtc_p1_n": 50, "e7_band_extended": False, "c4_on_time": None,
+    "h1": True, "e7_n": 150, "rtc_arm": True, "plan": "B", "guard_mode": "point", "ni_margin": 0.10, "h2_layers": ["1001", "1002"],
+    "rtc_p1_n": 100, "e7_band_extended": False, "c4_on_time": None,
+    "versions": {"entry_sha256": "<枝の確定の掲示の値>", "executor_v3_sha256": "<同>", "rtc_setting": "<同（例 ZEROS）>",
+                 "rtc_module_sha256": "<同>", "ckpt_sha256": {"R1v3": "<同>", "N1v3": "<同>", "R1v3s1001": "<同>", "N1v3s1001": "<同>",
+                                                             "R1v3s1002": "<同>", "N1v3s1002": "<同>"}},
     "p_fill": {"P-1": "B1 を採った（例）", "P-2": "ES（例）", "P-3": "B2 を採らない（例）", "P-4": 150, "P-6": "naive",
                "P-7": "1001・1002 とも 2 万手", "_note": "結果で埋まる所（P-1〜P-10）と作者の判断（D1〜D8）を、出どころとともに書く"},
 }
@@ -71,7 +81,8 @@ def _flatten(x, path="", out=None):
 
 
 def _skip(path: str) -> bool:
-    return path.startswith("checks.") and ".problems" in path
+    """理由の文は実装ごとに違うので照らさない（条件ごとの点検と、版の照合の条件をまたぐ点検。合否は照らす）。"""
+    return (path.startswith("checks.") and ".problems" in path) or path.startswith("version_check.problems")
 
 
 def compare(a: dict, b: dict) -> list:
@@ -118,6 +129,8 @@ def check_heads(heads: dict) -> dict:
         return {"ok": False, "heads": sorted(heads), "note": "HEAD の無い試行がある"}
     try:
         au = _load_script("98_s4_d_audit.py", "s4_audit_for_test1")
+        if hasattr(au, "CHILD_SCRIPTS"):                # 起動の入口とそれが読み込むものも「子が読み込むファイル」に入れる（(b-5)）
+            au.CHILD_SCRIPTS = tuple(dict.fromkeys(tuple(au.CHILD_SCRIPTS) + ENTRY_CHILD_SCRIPTS))
         order = au.order_heads(ROOT, {h: [i] for h, i in heads.items()})
         cmp = au.compare_heads(ROOT, order, "S4T1")
     except Exception as e:                              # noqa: BLE001
@@ -157,6 +170,17 @@ def check_ledger(ledger_json, dirs: list) -> dict:
     return {"ok": n == 0, "source": src, "parse_errors": n}
 
 
+def check_gates_now(path: pathlib.Path = GATES) -> dict:
+    """(b-1) 今の s4_gates.json の SHA-256（LF にそろえて計算）が掲示の値（0165）と同じか。"""
+    try:
+        now = hashlib.sha256(pathlib.Path(path).read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+    except OSError as e:
+        return {"ok": False, "posted": POSTED_GATES_SHA256, "note": f"s4_gates.json を読めない: {type(e).__name__}"}
+    ok = now == POSTED_GATES_SHA256
+    return {"ok": ok, "posted": POSTED_GATES_SHA256, "board": "0165", "now_lf": now,
+            "note": "掲示の値と一致" if ok else "今の s4_gates.json が掲示の値（0165）と違う"}
+
+
 def cross_audit(res: dict, layout: dict, ledger_json=None) -> dict:
     """A・B が一致した結果に、条件をまたぐ点検を足す。満たさなければ未完にして、検定・判定を消す。"""
     heads = {}
@@ -165,7 +189,7 @@ def cross_audit(res: dict, layout: dict, ledger_json=None) -> dict:
             heads.setdefault(h, len(heads))
     base = pathlib.Path(layout["root"]) / layout["experiment"]
     dirs = [base / (v if isinstance(v, str) else v["cond"]) for v in _layout_conds(layout)]
-    ea = {"versions": check_heads(heads), "ledger": check_ledger(ledger_json, dirs)}
+    ea = {"versions": check_heads(heads), "ledger": check_ledger(ledger_json, dirs), "gates_sha256": check_gates_now()}
     ea["problems"] = [f"{k}: {v.get('note') or v}" for k, v in ea.items() if not v["ok"]]
     out = dict(res, entry_audit=ea)
     if ea["problems"] and out["status"] == "complete":
