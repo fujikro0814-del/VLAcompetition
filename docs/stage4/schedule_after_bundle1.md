@@ -2,6 +2,7 @@
 
 - 書いた日: 2026-10-08 19:30 ごろ（束 1 の本番の途中。成績は見ていない）。
 - 状態: 案。作者の承認と、下の「先に要る答え」がそろってから使う。時刻はどれも見込み（推測）。
+- 追記（2026-10-09 14 時ごろ）: 実際は束 1 が 10/09 00:14 に終わり、束 3 の学習が 09:37 に終わり、束 2 の本番が 13:13・13:15 に 2 本並行で始まった（掲示板 0162・0167）。GPU が空くのは束 2 の後（B1 は 10/10 00〜02 時ごろ）。D2 は前倒し（0158）。テスト 1 の日程の最新は `docs/stage4/prereg_test1_v1_draft.md` 第 5 節と `docs/stage4/d2_decision_sheet.md`。この文書の表は書き換えない。
 - 読んだもの: `docs/目標書_段階4.md`（第 8-6・11・12 節）、`configs/s4_gates.json`（`budget_notes`）、掲示板 0153〜0157、`docs/stage4/seed_replication.md`、`docs/stage4/ops.md`、`docs/stage4/vlm_bench_protocol.md`、final.md（束 2・束 3・テスト 1・束 4・第 4 節の日程）、引き継ぎのメモ。
 - 関係する案: テスト 1 の事前登録 v1 の草案 `docs/stage4/prereg_test1_v1_draft.md`、決まりの改訂 3 の差分 `docs/stage4/charter_rev3_patch.md`。
 
