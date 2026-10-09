@@ -11,10 +11,16 @@
   条件ごとの合否・HEAD・保存点の SHA-256・環境と、足りない条件・条件をまたぐ点検の合否を照らす（理由の文は照らさない）。
 条件をまたぐ入口の点検（A・B が一致した後に、ここで 1 回だけ。満たさなければ未完）:
   2-5 版: 全条件の試行の HEAD が 2 つ以上なら、98_s4_d_audit.py の order_heads・compare_heads（子が読み込むファイル）で、いちばん古い
-      HEAD にあるファイルが後の HEAD で変わっていないことを git で確かめる（98_s4_b4_eval.py は試行の b4.files_sha256 を A・B が照らす）。
+      HEAD にあるファイルが後の HEAD で変わっていないことを git で確かめる。子のファイルには 98_s4_b4_eval.py を足す（読み込んだ
+      98_s4_d_audit の写しの FAMILY_SCRIPT に "B4" を足す。98_s4_d_audit.py は書き換えない）。
+      試行の b4.files_sha256（98_s4_b4_eval.py・96・82・98_s4_b1・s4_gates.json）が段階の全条件で 1 種類かは A・B が照らす。
+  掲示の値: 今の configs/s4_gates.json（改行を LF にした SHA-256）と、記録の b4.files_sha256 の configs/s4_gates.json が、掲示板 0165 の
+      値（改訂 4、7f2f651c…）と一致する（記録の側は A・B も照らす）。
   2-6 台帳: 97_s4_ledger_check.py の build_report（または --ledger-json。記録より新しいこと）で parse_errors が 0。
+  記述だけの条件（関門 2 の置き損ね）のうち A・B が使わなかったものは、HEAD の照合に入れない。
 """
 import argparse
+import hashlib
 import importlib.util
 import json
 import math
@@ -29,6 +35,10 @@ REL = 1e-9
 ABS = 1e-12
 P_KEYS = {"p", "p_holm"}
 LEDGER = ROOT / "docs" / "種の台帳.md"
+B4_CHILD = "scripts/98_s4_b4_eval.py"
+GATES = ROOT / "configs" / "s4_gates.json"
+GATES_KEY = "configs/s4_gates.json"
+POSTED_GATES_SHA256 = "7f2f651cafa9cf97b5548324d3fb8ea0bec5e891cca9c8859c7dd9c0347646e9"   # 掲示板 0165（改訂 4。LF）
 EXAMPLE_PARAMS = {
     "guard_mode": "point", "h2_in_family": True, "g3_with_r1v3s1001": True,
     "ckpt_sha256": {"_note": "掲示した保存点の SHA-256（P-2）。書けば記録の値と照らす（空なら照らさない）"},
@@ -100,6 +110,7 @@ def check_heads(heads: list, use_git: bool = True) -> dict:
         return {"ok": False, "heads": heads, "note": "HEAD が 2 つ以上（--no-git では照らさない）"}
     try:
         au = _load(ROOT / "scripts" / "98_s4_d_audit.py", "s4_audit_for_b4")
+        au.FAMILY_SCRIPT = dict(au.FAMILY_SCRIPT, B4=B4_CHILD)          # 読み込んだ写しだけに足す
         order = au.order_heads(ROOT, {h: [i] for i, h in enumerate(heads)})
         cmp = au.compare_heads(ROOT, order, "B4")
     except Exception as e:                              # noqa: BLE001
@@ -139,16 +150,34 @@ def check_ledger(ledger_json, dirs: list) -> dict:
     return {"ok": n == 0, "source": src, "parse_errors": n}
 
 
+def check_gates_sha(res: dict, gates_path: pathlib.Path = GATES) -> dict:
+    """今の s4_gates.json（LF にした SHA-256。gate1.py と同じ）と、記録の b4.files_sha256 の値が掲示の値と一致するか。"""
+    try:
+        now = hashlib.sha256(gates_path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+    except OSError as e:
+        return {"ok": False, "posted": POSTED_GATES_SHA256, "note": f"s4_gates.json を読めない: {type(e).__name__}"}
+    rec = ((res.get("cross") or {}).get("files_sha256") or {}).get(GATES_KEY)
+    out = {"posted": POSTED_GATES_SHA256, "board": "0165", "now_lf": now, "records": rec}
+    if now != POSTED_GATES_SHA256:
+        return dict(out, ok=False, note="今の s4_gates.json が掲示の値（0165）と違う")
+    if rec != POSTED_GATES_SHA256:
+        return dict(out, ok=False, note="記録の s4_gates.json の SHA-256 が掲示の値（0165）と違うか、無い")
+    return dict(out, ok=True, note="今のファイルと記録が掲示の値と一致")
+
+
 def cross_audit(res: dict, layout: dict, ledger_json=None, use_git: bool = True) -> dict:
     """A・B が一致した結果に、条件をまたぐ点検を足す。満たさなければ未完にして、判定を消す。"""
+    skip = set((res.get("optional") or {}).get("excluded") or [])       # 使わなかった記述だけの条件
     heads = []
     for name in sorted(res["checks"]):
+        if name in skip:
+            continue
         for h in res["checks"][name].get("git_heads") or []:
             if h not in heads:
                 heads.append(h)
     base = pathlib.Path(layout["root"]) / layout["experiment"]
     dirs = [base / v["cond"] for v in (layout.get("conds") or {}).values()]
-    ea = {"versions": check_heads(heads, use_git), "ledger": check_ledger(ledger_json, dirs)}
+    ea = {"versions": check_heads(heads, use_git), "gates_sha256": check_gates_sha(res), "ledger": check_ledger(ledger_json, dirs)}
     ea["problems"] = [f"{k}: {v.get('note') or v}" for k, v in ea.items() if not v["ok"]]
     out = dict(res, entry_audit=ea)
     if ea["problems"] and out["status"] == "complete":

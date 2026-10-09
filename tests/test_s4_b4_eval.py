@@ -31,12 +31,13 @@ B = _load("98_s4_b4_b.py", "t_b4_b")
 CK = _load("98_s4_b4_check.py", "t_b4_check")
 
 ENV = {"driver": "610.88", "torch": "2.5.1", "torch_cuda": "12.4", "os_build": "26100.1", "git_head": "abc123"}
-FILES = {"scripts/98_s4_b4_eval.py": "f" * 64}
+FILES = {"scripts/98_s4_b4_eval.py": "f" * 64, "configs/s4_gates.json": A.POSTED_GATES_SHA256}
 SHA = {m: (str(i) * 64)[:64] for i, m in enumerate(EV.MODELS)}
 
 
 # ---------------------------------------------------------------- 合成の記録
-def write_cond(root, phase, experiment, cond, part, model, outcome, *, drop=(), env=None, sha=None, audit=True, limit=60.0):
+def write_cond(root, phase, experiment, cond, part, model, outcome, *, drop=(), env=None, sha=None, audit=True, limit=60.0,
+               files=None):
     """outcome(seed, target) -> (established, t_established, success, t_success)。"""
     lo, hi = EV.PHASES[phase]["parts"][part]["band"]
     d = root / experiment / cond
@@ -53,7 +54,8 @@ def write_cond(root, phase, experiment, cond, part, model, outcome, *, drop=(), 
                     "induce": {"kind": EV.PART_INDUCE[part], "established": est, "t_established": te},
                     "runtime": {"mode": "naive", "exec_interval": 6, "safety_filter": False},
                     "env": dict(env or ENV),
-                    "b4": {"phase": phase, "part": part, "model": model, "ckpt": {"sha256": sha or SHA[model]}, "files_sha256": FILES}}
+                    "b4": {"phase": phase, "part": part, "model": model, "ckpt": {"sha256": sha or SHA[model]},
+                           "files_sha256": FILES if files is None else files}}
             (d / f"trial_{i:04d}.json").write_text(json.dumps(meta), encoding="utf-8")
             i += 1
     (d / "run.json").write_text(json.dumps({"time_limits": {"time_limit_s": limit}, "env_segments": [{"env": {}}]}), encoding="utf-8")
@@ -73,14 +75,18 @@ def rnd_outcome(seed, p_est=0.8, p_ok=0.4):
     return f
 
 
-def build_phase(tmp, phase, rates=None, **kw):
+def build_phase(tmp, phase, rates=None, per=None, skip=(), **kw):
+    """per: {条件名: write_cond の引数（その条件だけ）}。skip: 書かない条件名。"""
     root = tmp / "v2eval"
     lay = EV.layout_of(phase, root=str(root))
     for name, v in lay["conds"].items():
+        if name in skip:
+            continue
         part, model = name.split(".", 1)
         p_ok = (rates or {}).get(name, 0.4)
         seed = 7 if part == "nat" else zlib.crc32(name.encode())       # 自然は R4・R1v3 で同じ結果（対の差 0）
-        write_cond(root, phase, lay["experiment"], v["cond"], part, model, rnd_outcome(seed, p_ok=p_ok), **kw)
+        write_cond(root, phase, lay["experiment"], v["cond"], part, model, rnd_outcome(seed, p_ok=p_ok),
+                   **dict(kw, **(per or {}).get(name, {})))
     return lay
 
 
@@ -440,6 +446,214 @@ def test_params_validation():
         B.fill({"h2_in_family": 1})
     with pytest.raises(ValueError):
         A.analyze({"phase": "X", "root": ".", "experiment": "E", "conds": {}}, {})
+
+
+# ---------------------------------------------------------------- 点検の指摘・作者の判断（10/09）の直し
+def test_files_sha_must_be_one_kind_across_conditions(tmp_path):
+    """条件の中では 1 種類でも、条件をまたいで入口のスクリプトの版が違えば未完（A・B とも）。"""
+    other = dict(FILES, **{"scripts/98_s4_b4_eval.py": "e" * 64})
+    lay = build_phase(tmp_path, "G3", per={"P2.R4s1001": {"files": other}})
+    a, b, diffs = CK.run_check(lay, {})
+    assert not diffs and a["status"] == b["status"] == "incomplete" and a["result"] is None
+    assert a["checks"]["P2.R4s1001"]["ok"] and a["checks"]["P1.R4s1001"]["ok"]
+    assert not a["cross"]["ok"] and a["cross"]["files_sha256"] is None and b["cross"]["files_sha256"] is None
+    # そろっていれば cross に 1 つの組が残る
+    lay2 = build_phase(tmp_path / "ok", "G3")
+    a2, b2, d2 = CK.run_check(lay2, {})
+    assert not d2 and a2["cross"]["files_sha256"] == FILES == b2["cross"]["files_sha256"]
+    # 試行に files_sha256 が無い → 条件の点検で未完
+    lay3 = build_phase(tmp_path / "none", "G3", per={"P1.N4s1001": {"files": {}}})
+    a3, b3, d3 = CK.run_check(lay3, {})
+    assert not d3 and not a3["checks"]["P1.N4s1001"]["ok"] and not b3["checks"]["P1.N4s1001"]["ok"]
+
+
+def test_gates_sha_must_match_posted(tmp_path):
+    assert A.POSTED_GATES_SHA256 == B.GATES_POSTED == CK.POSTED_GATES_SHA256
+    assert A.POSTED_GATES_SHA256.startswith("7f2f651c")
+    # 記録の s4_gates.json の値が掲示と違う → A・B とも未完
+    bad = dict(FILES, **{"configs/s4_gates.json": "d" * 64})
+    lay = build_phase(tmp_path, "G3", files=bad)
+    a, b, diffs = CK.run_check(lay, {})
+    assert not diffs and a["status"] == b["status"] == "incomplete"
+    assert all(not c["ok"] for c in a["checks"].values())
+    # 入口: 今のファイルは掲示の値と一致する。違うファイル・記録が無ければ満たさない
+    good = {"cross": {"files_sha256": dict(FILES)}}
+    assert CK.check_gates_sha(good)["ok"]
+    assert not CK.check_gates_sha({"cross": {"files_sha256": None}})["ok"]
+    g2 = tmp_path / "g.json"
+    g2.write_bytes(CK.GATES.read_bytes() + b" ")
+    r = CK.check_gates_sha(good, g2)
+    assert not r["ok"] and "今の" in r["note"]
+    # CRLF にしても LF にそろえて照らす（gate1.py と同じ）
+    g3 = tmp_path / "g3.json"
+    g3.write_bytes(CK.GATES.read_bytes().replace(b"\n", b"\r\n"))
+    assert CK.check_gates_sha(good, g3)["ok"]
+
+
+def test_heads_check_adds_b4_child_without_editing_audit(monkeypatch):
+    seen = {}
+
+    class FakeAudit:
+        FAMILY_SCRIPT = {"E7": "scripts/98_s4_d_e7.py"}
+
+        def order_heads(self, root, heads):
+            return list(heads)
+
+        def compare_heads(self, root, order, fam):
+            seen["fam"], seen["script"] = fam, self.FAMILY_SCRIPT.get(fam)
+            return {"changed": [], "added_only": []}
+
+    monkeypatch.setattr(CK, "_load", lambda path, name: FakeAudit())
+    assert CK.check_heads(["a", "b"])["ok"]
+    assert seen == {"fam": "B4", "script": "scripts/98_s4_b4_eval.py"}
+    # 98_s4_d_audit.py そのものは変えていない（既存の家族の動きは同じ）
+    au = _load("98_s4_d_audit.py", "t_b4_audit_real")
+    assert "B4" not in au.FAMILY_SCRIPT
+    assert set(au.FAMILY_SCRIPT) == {"RTC", "E7", "ST", "XPL", "RC", "X2"}
+
+
+def test_paired_guards_count_same_seed_pairs(tmp_path):
+    """守りの P1 は同じ種で両方とも 30 s より前に成立した対で数える（作者の判断 10/09）。"""
+    def f_R(s, tgt):                                       # R4: 種 166000〜166049 だけ成立、全部成功
+        return (s < 166050), (5.0 if s < 166050 else None), True, 10.0
+
+    def f_N(s, tgt):                                       # N4: 全部成立、偶数の種だけ成功
+        return True, 5.0, s % 2 == 0, (10.0 if s % 2 == 0 else None)
+
+    root = tmp_path / "v2eval"
+    lay = EV.layout_of("T2", root=str(root))
+    for name, v in lay["conds"].items():
+        part, model = name.split(".", 1)
+        f = (f_R if model == "R4" else f_N) if part == "P1" else rnd_outcome(9)
+        write_cond(root, "T2", "S4T2", v["cond"], part, model, f)
+    a, b, diffs = CK.run_check(lay, {})
+    assert not diffs and a["status"] == "complete"
+    for g in (a["result"]["secondary"]["guards"], b["result"]["secondary"]["guards"]):
+        rn = g["p1_r4_minus_n4"]
+        assert (rn["pairs"], rn["b"], rn["c"], rn["both"], rn["neither"]) == (50, 25, 0, 25, 0)
+        assert rn["diff"] == pytest.approx(0.5)            # 各腕の割合の差なら 1.0 − 0.5 = 0.5 だが、分母は対の 50
+        assert rn["x_k"] == 50 and rn["y_k"] == 25 and "x" not in rn
+    from recovla.eval import stats as S
+    d, lo, hi = S.paired_diff_ci(25, 25, 0, 0)
+    assert a["result"]["secondary"]["guards"]["p1_r4_minus_n4"]["newcombe95"] == pytest.approx([lo, hi], rel=1e-12)
+    assert b["result"]["secondary"]["guards"]["p1_r4_minus_n4"]["newcombe95"] == pytest.approx([lo, hi], rel=1e-9)
+    md = A.summary_md(dict(a, entry_audit={"problems": []}))
+    assert "対 50、b 25、c 0" in md
+    # 関門 2・関門 3 も同じ形（対の数を持つ）
+    lay2 = build_phase(tmp_path / "g2", "G2")
+    r2 = CK.run_check(lay2, {})[0]["result"]
+    assert "pairs" in r2["guards"]["p1_r4_vs_r1v3"] and "pairs" in r2["guards"]["p1_r4_minus_n4"]
+    lay3 = build_phase(tmp_path / "g3", "G3")
+    r3 = CK.run_check(lay3, {})[0]["result"]
+    assert "pairs" in r3["p1_r4_minus_n4"] and "x" in r3["direction"]      # 向き（落下）は各腕の分母のまま
+
+
+def test_natural_pairs_disagree_newcombe_matches(tmp_path):
+    """自然の 2 腕の結果が食い違うとき、対ありの Newcombe の区間が A・B・recovla.eval.stats で一致する。"""
+    from recovla.eval import stats as S
+
+    def f_x(s, tgt):
+        ok = (s + len(tgt)) % 3 != 0
+        return False, None, ok, (20.0 if ok else None)
+
+    def f_y(s, tgt):
+        ok = (s * 7 + len(tgt)) % 4 == 0
+        return False, None, ok, (25.0 if ok else None)
+
+    root = tmp_path / "v2eval"
+    lay = EV.layout_of("G2", root=str(root))
+    for name, v in lay["conds"].items():
+        part, model = name.split(".", 1)
+        f = (f_x if model == "R4" else f_y) if part == "nat" else rnd_outcome(11)
+        write_cond(root, "G2", "S4B4G2", v["cond"], part, model, f)
+    a, b, diffs = CK.run_check(lay, {})
+    assert not diffs and a["status"] == "complete"
+    na, nb = a["result"]["guards"]["natural"], b["result"]["guards"]["natural"]
+    assert na["pairs"] == 198 and na["x_only"] > 0 and na["y_only"] > 0
+    n11 = na["x_k"] - na["x_only"]
+    n00 = 198 - n11 - na["x_only"] - na["y_only"]
+    d, lo, hi = S.paired_diff_ci(n11, na["x_only"], na["y_only"], n00)
+    assert na["newcombe95"] == pytest.approx([lo, hi], rel=1e-12)
+    assert nb["newcombe95"] == pytest.approx(na["newcombe95"], rel=1e-9)
+    assert na["diff"] == pytest.approx(d) and lo < d < hi
+
+
+def test_g2_p3_missing_or_bad_is_not_incomplete(tmp_path):
+    """関門 2 の置き損ね（P3）は記述だけ。欠けても・点検を満たさなくても未完にしない（作者の判断 10/09）。"""
+    lay = build_phase(tmp_path / "a", "G2", skip=("P3.N4",))
+    a, b, diffs = CK.run_check(lay, {})
+    assert not diffs and a["status"] == b["status"] == "complete"
+    assert a["missing_conditions"] == [] and a["optional"] == b["optional"]
+    assert a["optional"]["missing"] == ["P3.N4"] and a["optional"]["used"] == ["P3.R4", "P3.R1v3"]
+    p3 = a["result"]["p3"]
+    assert p3["used"] == ["R4", "R1v3"] and p3["not_used"] == ["N4"] and set(p3["rates"]) == {"R4", "R1v3"}
+    md = A.summary_md(dict(a, entry_audit={"problems": []}))
+    assert "P3.N4" in md and "置き損ね（P3。記述だけ" in md and "30 s" in md
+    # P3 の 1 条件が点検を満たさない（G_AUDIT が無い）、もう 1 つは保存点が判定の条件と違う → 使わない。未完にしない
+    lay2 = build_phase(tmp_path / "b", "G2", per={"P3.R1v3": {"audit": False}, "P3.R4": {"sha": "9" * 64}})
+    a2, b2, d2 = CK.run_check(lay2, {})
+    assert not d2 and a2["status"] == "complete" and a2["optional"]["excluded"] == ["P3.R4", "P3.R1v3"]
+    assert a2["result"]["p3"]["used"] == ["N4"]
+    # 入口の HEAD の照合は使わなかった条件を入れない
+    a2["checks"]["P3.R4"]["git_heads"] = ["zzz"]
+    ea = CK.cross_audit(a2, lay2, ledger_json=str(tmp_path / "no_ledger.json"), use_git=False)["entry_audit"]
+    assert ea["versions"]["ok"]
+    # 判定に使う条件（P1）が欠ければ未完のまま
+    lay3 = build_phase(tmp_path / "c", "G2", skip=("P1.N4",))
+    a3 = CK.run_check(lay3, {})[0]
+    assert a3["status"] == "incomplete" and not a3["checks"]["P1.N4"]["ok"] and a3["result"] is None
+
+
+def test_driver_other_than_61088_warns_but_does_not_stop(tmp_path):
+    lay = build_phase(tmp_path, "G3", env=dict(ENV, driver="560.94"))
+    a, b, diffs = CK.run_check(lay, {})
+    assert not diffs and a["status"] == "complete"
+    assert a["cross"]["driver"] == "560.94" and a["cross"]["driver_warning"] is True and b["cross"]["driver_warning"] is True
+    assert "警告" in A.summary_md(dict(a, entry_audit={"problems": []}))
+    lay2 = build_phase(tmp_path / "ok", "G3")
+    a2 = CK.run_check(lay2, {})[0]
+    assert a2["cross"]["driver"] == "610.88" and a2["cross"]["driver_warning"] is False
+    assert "警告" not in A.summary_md(dict(a2, entry_audit={"problems": []}))
+    # 入口: ドライバだけ違う → 止めない。記録と今の環境が違う → 止める（96 の --accept-env-change で進む）
+    out = tmp_path / "v2"
+    write_cond(out, "T2", "S4T2", "P2_R4", "P2", "R4", rnd_outcome(1), env=dict(ENV, driver="560.94"))
+    r96 = types.SimpleNamespace(read_env=lambda ops: dict(ENV, driver="560.94"), env_brief=lambda c: "env")
+    v82 = types.SimpleNamespace(OUT=out)
+    ns = lambda extra: types.SimpleNamespace(experiment="S4T2", extra=extra)        # noqa: E731
+    assert EV.phase_env_gate(r96, None, v82, ns([]), "T2", ["P2_R4"]) == 0
+    r96b = types.SimpleNamespace(read_env=lambda ops: dict(ENV), env_brief=lambda c: "env")
+    assert EV.phase_env_gate(r96b, None, v82, ns([]), "T2", ["P2_R4"]) == 3
+    assert EV.phase_env_gate(r96b, None, v82, ns(["--accept-env-change"]), "T2", ["P2_R4"]) == 0
+
+
+def test_forbidden_extra_rejects_abbreviations():
+    for f in ("--induc", "--induce=P1", "--time-limit", "--time-limit-s=30", "--mod", "--trial", "--no-saf", "--exec", "--diag"):
+        assert EV.forbidden_flag(f, EV.FORBIDDEN_EXTRA), f
+    # 96 の run の通してよい引数は拒まない
+    for f in ("--dry-run", "--min-free-gb", "--min-free-gb=8", "--accept-env-change", "--accept-spec-change", "--max-new",
+              "--mem-timeout-min", "--min-commit-free-gb", "--ignore-quiet", "--quiet-window", "--allow-82-change",
+              "--stop-file", "--progress-file", "30", "-x"):
+        assert not EV.forbidden_flag(f, EV.FORBIDDEN_EXTRA), f
+    rot = ("--max-new", "--progress-file", "--stop-file") + EV.FORBIDDEN_EXTRA
+    assert EV.forbidden_flag("--max", rot) and EV.forbidden_flag("--progress", rot)
+    with pytest.raises(SystemExit, match="決める"):
+        EV.run_condition(None, None, None, types.SimpleNamespace(), "T2", "P2_R4", ["--induc", "P3"])
+    assert EV.has_flag(["--accept-env"], "--accept-env-change", len("--accept-e"))
+    assert not EV.has_flag(["--accept-"], "--accept-env-change", len("--accept-e"))
+
+
+def test_summary_md_t2_order_and_sixty(tmp_path):
+    lay = build_phase(tmp_path, "T2")
+    a = CK.run_check(lay, {})[0]
+    md = A.summary_md(dict(a, entry_audit={"problems": []}))
+    keys = ["| H1 |", "| H2 |", "## 守り", "## 置き損ね", "## 60 s の採点", "## 曲線の材料"]
+    pos = [md.index(k) for k in keys]
+    assert pos == sorted(pos), pos
+    assert "H1 の形（R4 対 R1v3）" in md and "60 s R4 対 N4" in md and "| P2.R4 |" in md
+    lay2 = build_phase(tmp_path / "g2", "G2")
+    md2 = A.summary_md(dict(CK.run_check(lay2, {})[0], entry_audit={"problems": []}))
+    assert md2.index("## 守り") < md2.index("## 狙い") < md2.index("## 置き損ね") < md2.index("## 結論")
+    assert "- R1v3: 30 s" in md2 and "60 s" in md2
 
 
 def test_rotate_tag_splits_progress_files():

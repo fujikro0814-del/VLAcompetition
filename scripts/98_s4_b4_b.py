@@ -12,6 +12,8 @@ A と共有しないもの（独立の度合い）:
     （A は recovla.eval.stats）。
   - 入口の点検・帯の表・数え方も別に書いた（関門 2・3 の帯は事前登録 v2 の草案 12-2 の表から、テスト 2 は s4_gates.json を読む）。
 同じなのは、読む記録のファイルと、s4_gates.json の帯、決まり（事前登録 v2 の草案・s4_gates.json の bundle4_gates・掲示板 0155・0165）だけ。
+作者の判断（10/09）: 守りの P1 の差と関門 3 の R4s1001 − N4s1001 は同じ種で両方とも誘発が成立した対で数える。関門 2 の置き損ね（P3）は
+欠けても未完にしない。ドライバが 610.88 と違っても止めず、警告として残す。
 """
 import argparse
 import json
@@ -41,6 +43,10 @@ TEST2_IDS = [("nat", "test2_natural", ["R4", "R1v3"]), ("P1", "test2_P1", ["R4",
              ("P2", "test2_drop", ["R4", "N4", "R1v3"]), ("P3", "test2_misplace", ["R4", "N4", "R1v3"])]
 INDUCE_OF = {"nat": None, "P1": "P1", "P2": "P2", "P3": "P3"}
 LIMIT_SINGLE = 60.0
+DESCRIPTIVE_PART = {"G2": "P3"}          # 関門 2 の置き損ねは記述だけ（欠けても未完にしない。作者の判断 10/09）
+DRIVER_WANT = "610.88"                  # 違っても止めない。1 枚に警告
+GATES_REL = "configs/s4_gates.json"
+GATES_POSTED = "7f2f651cafa9cf97b5548324d3fb8ea0bec5e891cca9c8859c7dd9c0347646e9"   # 掲示板 0165（改訂 4）
 
 
 def read_json(path):
@@ -162,8 +168,12 @@ def plan_of(phase):
     return out
 
 
+def is_descriptive(phase, name):
+    return DESCRIPTIVE_PART.get(phase) == name.split(".")[0]
+
+
 def needed(phase, q):
-    names = list(plan_of(phase))
+    names = [n for n in plan_of(phase) if not is_descriptive(phase, n)]
     if phase == "G3" and not q["g3_with_r1v3s1001"]:
         names = [n for n in names if n != "P2.R1v3s1001"]
     return names
@@ -172,7 +182,7 @@ def needed(phase, q):
 def inspect(phase, name, folder, model, experiment, q):
     part, lo, hi = plan_of(phase)[name]
     issues = []
-    res = {"ok": False, "problems": issues, "git_heads": [], "ckpt_sha256": None, "env": None, "n": 0}
+    res = {"ok": False, "problems": issues, "git_heads": [], "ckpt_sha256": None, "env": None, "files_sha256": None, "n": 0}
     if not os.path.isdir(folder):
         issues.append(f"{name}: フォルダがない")
         return res
@@ -258,11 +268,23 @@ def inspect(phase, name, folder, model, experiment, q):
         issues.append(f"{name}: git_head")
     res["git_heads"] = sorted(heads)
     per_file = {}
+    key_sets = set()
+    lacking = False
     for r in recs:
-        for f, v in ((r.get("b4") or {}).get("files_sha256") or {}).items():
+        fs = (r.get("b4") or {}).get("files_sha256") or {}
+        if not fs:
+            lacking = True
+        key_sets.add(tuple(sorted(fs)))
+        for f, v in fs.items():
             per_file.setdefault(f, set()).add(v)
-    if [f for f, v in per_file.items() if len(v) != 1]:
+    if lacking:
+        issues.append(f"{name}: ファイルの SHA-256 なし")
+    elif [f for f, v in per_file.items() if len(v) != 1] or len(key_sets) > 1:
         issues.append(f"{name}: ファイルの SHA-256")
+    elif recs:
+        res["files_sha256"] = {f: list(per_file[f])[0] for f in sorted(per_file)}
+        if res["files_sha256"].get(GATES_REL) != GATES_POSTED:
+            issues.append(f"{name}: s4_gates.json の SHA-256 が掲示と違う")
     cks = set()
     for r in recs:
         cks.add(((r.get("b4") or {}).get("ckpt") or {}).get("sha256"))
@@ -291,9 +313,19 @@ def across(checks, model_of):
             models[m] = None
             issues.append(f"{m}: 保存点")
     envs = set(c["env"] for c in checks.values())
+    drv = None
     if None in envs or len(envs) != 1:
         issues.append("環境")
-    return {"ok": len(issues) == 0, "problems": issues, "models": models, "env_kinds": len(envs)}
+    else:
+        drv = json.loads(list(envs)[0])["driver"]
+    # 使ったファイルの SHA-256 は段階の全条件で 1 種類
+    files_all = [c["files_sha256"] for c in checks.values()]
+    same_files = all(f is not None for f in files_all) and all(f == files_all[0] for f in files_all)
+    if not same_files:
+        issues.append("ファイル")
+    return {"ok": len(issues) == 0, "problems": issues, "models": models, "env_kinds": len(envs),
+            "files_sha256": dict(files_all[0]) if same_files and files_all else None,
+            "driver": drv, "driver_expected": DRIVER_WANT, "driver_warning": drv != DRIVER_WANT}
 
 
 # ================================================================ 数える（自前）
@@ -381,6 +413,23 @@ def guard_rate(fx, fy, part, lim, thr, mode="point"):
             "threshold": thr, "mode": mode, "pass": bool(ok)}
 
 
+def guard_pair(fx, fy, lim, thr, mode="point"):
+    """守りの P1（作者の判断 10/09）: 同じ種で両方の腕とも誘発が lim より前に成立した対の差 (b − c) / 対の数。"""
+    t = paired_induced(fx, fy, lim)
+    n = t["pairs"]
+    ci = newcombe_pair(t["both"], t["b"], t["c"], t["neither"])
+    d = None if n == 0 else (t["b"] - t["c"]) / n
+    if d is None:
+        ok = False
+    elif mode == "point":
+        ok = d >= thr - TINY
+    else:
+        ok = ci[0] >= thr - TINY
+    return {"pairs": n, "b": t["b"], "c": t["c"], "both": t["both"], "neither": t["neither"],
+            "x_k": t["both"] + t["b"], "y_k": t["both"] + t["c"], "diff": d, "newcombe95": ci,
+            "threshold": thr, "mode": mode, "pass": bool(ok)}
+
+
 def guard_nat(fx, fy, lim, thr, mode="point"):
     g = paired_natural(fx, fy, lim)
     if mode == "point":
@@ -404,13 +453,17 @@ def rate_table(D):
 # ================================================================ 段階ごと
 def b_gate2(D):
     g = {"natural": guard_nat(D["nat.R4"], D["nat.R1v3"], T30, -0.05),
-         "p1_r4_vs_r1v3": guard_rate(D["P1.R4"], D["P1.R1v3"], "P1", T30, -0.10),
-         "p1_r4_minus_n4": guard_rate(D["P1.R4"], D["P1.N4"], "P1", T30, 0.20)}
+         "p1_r4_vs_r1v3": guard_pair(D["P1.R4"], D["P1.R1v3"], T30, -0.10),
+         "p1_r4_minus_n4": guard_pair(D["P1.R4"], D["P1.N4"], T30, 0.20)}
     gp = g["natural"]["pass"] and g["p1_r4_vs_r1v3"]["pass"] and g["p1_r4_minus_n4"]["pass"]
     aim = guard_rate(D["P2.R4"], D["P2.R1v3"], "P2", T30, 0.15)
     aim["pairs"] = paired_induced(D["P2.R4"], D["P2.R1v3"], T30)
-    rates3 = {}
+    rates3, used3, skip3 = {}, [], []
     for m in ["R4", "N4", "R1v3"]:
+        if "P3." + m not in D:
+            skip3.append(m)
+            continue
+        used3.append(m)
         rates3[m] = {lim_key(L): arm_rate(D["P3." + m], "P3", L) for L in (T30, T60)}
     if gp and aim["pass"]:
         nxt = "test2"
@@ -419,12 +472,13 @@ def b_gate2(D):
     else:
         nxt = "no_test2"
     return {"guards": g, "guards_pass": bool(gp), "aim": aim,
-            "p3": {"label": "記述だけ（関門 2 の判定に使わない。掲示板 0165）", "rates": rates3}, "rates": rate_table(D),
+            "p3": {"label": "記述だけ（関門 2 の判定に使わない。掲示板 0165）", "used": used3, "not_used": skip3, "rates": rates3},
+            "rates": rate_table(D),
             "decision": {"pass": bool(gp and aim["pass"]), "next": nxt}}
 
 
 def b_gate3(D, q):
-    rn = guard_rate(D["P1.R4s1001"], D["P1.N4s1001"], "P1", T30, 0.20)
+    rn = guard_pair(D["P1.R4s1001"], D["P1.N4s1001"], T30, 0.20)
     dr = None
     if q["g3_with_r1v3s1001"]:
         dr = guard_rate(D["P2.R4s1001"], D["P2.R1v3s1001"], "P2", T30, 0.0)
@@ -454,8 +508,8 @@ def b_test2(D, q):
             v["established"] = None
     mode = q["guard_mode"]
     guards = {"natural": guard_nat(D["nat.R4"], D["nat.R1v3"], T30, -0.05, mode),
-              "p1_r4_vs_r1v3": guard_rate(D["P1.R4"], D["P1.R1v3"], "P1", T30, -0.10, mode),
-              "p1_r4_minus_n4": guard_rate(D["P1.R4"], D["P1.N4"], "P1", T30, 0.20, mode)}
+              "p1_r4_vs_r1v3": guard_pair(D["P1.R4"], D["P1.R1v3"], T30, -0.10, mode),
+              "p1_r4_minus_n4": guard_pair(D["P1.R4"], D["P1.N4"], T30, 0.20, mode)}
     p3 = {"label": "副次・族の外（Holm の補正をしない。基準を置かない）"}
     for L in (T30, T60):
         p3[lim_key(L)] = {"R4_vs_R1v3": paired_induced(D["P3.R4"], D["P3.R1v3"], L),
@@ -482,21 +536,36 @@ def run_b(layout, params):
         D[name] = os.path.join(base, v["cond"])
         model_of[name] = v["model"]
     want = needed(phase, q)
-    checks = {}
+    desc = [n for n in plan if is_descriptive(phase, n)]
+    checks, core = {}, {}
     for name in want:
         if name in D:
+            core[name] = checks[name] = inspect(phase, name, D[name], model_of[name], layout["experiment"], q)
+    for name in desc:
+        if name in D and os.path.isdir(D[name]):
             checks[name] = inspect(phase, name, D[name], model_of[name], layout["experiment"], q)
     missing = [n for n in want if n not in D]
-    if checks:
-        cr = across(checks, model_of)
+    if core:
+        cr = across(core, model_of)
     else:
-        cr = {"ok": False, "problems": ["条件なし"], "models": {}, "env_kinds": 0}
-    done = bool(checks) and all(c["ok"] for c in checks.values()) and not missing and cr["ok"]
+        cr = {"ok": False, "problems": ["条件なし"], "models": {}, "env_kinds": 0, "files_sha256": None,
+              "driver": None, "driver_expected": DRIVER_WANT, "driver_warning": True}
+    done = bool(core) and all(c["ok"] for c in core.values()) and not missing and cr["ok"]
+    # 記述だけの条件は、点検と条件をまたぐ点検（判定に使う条件と合わせて）を満たすものだけ使う
+    opt = {"used": [], "missing": [], "excluded": []}
+    for name in desc:
+        if name not in checks:                  # 計画に無いか、フォルダが無い
+            opt["missing"].append(name)
+            continue
+        trial = dict(core)
+        trial[name] = checks[name]
+        good = checks[name]["ok"] and bool(core) and across(trial, model_of)["ok"]
+        opt["used" if good else "excluded"].append(name)
     out = {"schema": "recovery_vla.s4_b4_result/1", "phase": phase, "status": "complete" if done else "incomplete", "params": q,
-           "checks": checks, "missing_conditions": missing, "cross": cr, "result": None}
+           "checks": checks, "missing_conditions": missing, "optional": opt, "cross": cr, "result": None}
     if not done:
         return out
-    Du = {n: D[n] for n in want}
+    Du = {n: D[n] for n in want + opt["used"]}
     if phase == "G2":
         out["result"] = b_gate2(Du)
     elif phase == "G3":

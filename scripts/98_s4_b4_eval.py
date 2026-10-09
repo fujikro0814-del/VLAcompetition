@@ -41,9 +41,12 @@
   保存点の SHA-256: pretrained_model の中のファイルを相対パスの順に並べ、「相対パス<TAB>ファイルの SHA-256」の行をつないだものの
     SHA-256（ckpt_digest）。試行の json の "b4"、run.json の "b4"、resume_spec.json の b4_ckpt_sha256 に残す（再開のとき保存点が
     違えば 96 の控えの照合で止まる）。--expect R4=<SHA-256>（掲示した値。事前登録 v2 の P-2）を付ければ、違うときに起動しない。
-環境の照合（96 の条件ごとの照合に足す）: 回の始めに、段階の全条件の完全な記録の env（ドライバ・torch・CUDA・OS）と今の環境、
-  ドライバの版 610.88（事前登録 v2 の草案 第 5 節）を照らす。違えば止める（終了コード 3。--accept-env-change のときだけ進め、
-  96 が環境の区切りを書く。報告で分ける）。
+環境の照合（96 の条件ごとの照合に足す）: 回の始めに、段階の全条件の完全な記録の env（ドライバ・torch・CUDA・OS）と今の環境を
+  照らす。違えば止める（終了コード 3。96 の --accept-env-change のときだけ進め、96 が環境の区切りを書く。報告で分ける）。
+  ドライバの版が 610.88（事前登録 v2 の草案 第 5 節）と違うだけなら止めず、警告を出して続ける（作者の判断 10/09）。版は試行の env に
+  残り、集計の 1 枚に警告として出る。
+引数の拒み方: モデル・帯・実行のしかた・誘発・制限時間の引数は、省略形（--induc・--time-limit など）も前方一致で拒む。
+smoke の種 44680〜44683 は、データ生成の smoke（97_s4_b4_data.py --smoke）と兼用してよい（作者の判断 10/09）。
 読むもの: scripts\\96_s4_resume.py・82_v2_eval.py（importlib。96 経由）、98_s4_b1.py（rotate の共通部）、configs\\s4_gates.json、
   outputs\\s4\\b4_wrap\\・seed_wrap\\ の postcheck_*.json、保存点のファイル。
 書くもの: 96_s4_resume.py run と同じ記録（outputs\\v2eval\\<実験>\\<条件>\\）。試行の json と run.json に "b4"（段階・部分・モデル・保存点の
@@ -71,7 +74,7 @@ CKPT_SUB = ("checkpoints", "020000", "pretrained_model")
 R1V3_RUN = "train_R1v3_20261005-180404_20261005-180404"           # 事前登録 v2 の草案 第 5 節・99_s4_train_seed.EXISTING_RUN
 EXPECTED_DRIVER = "610.88"                                        # 事前登録 v2 の草案 第 5 節
 ENV_KEYS = ("driver", "torch", "torch_cuda", "os_build")          # 96_s4_resume.ENV_STOP_KEYS と同じ
-SMOKE_SEEDS = (44680, 44683)                                      # 依頼 12: smoke は 44680〜44683 だけ
+SMOKE_SEEDS = (44680, 44683)                                      # 依頼 12: smoke は 44680〜44683 だけ（データ生成の smoke と兼用。10/09）
 FIXED = ["--mode", "naive", "--exec-interval", "6", "--no-safety", "--time-limit-s", "60"]
 
 # 保存点の出どころ。kind: b4 = 99_s4_train_b4.py、b3 = 99_s4_train_seed.py（束 3）、s3 = 82 の CKPT（段階 3）
@@ -358,6 +361,19 @@ FORBIDDEN_EXTRA = ("--model", "--mode", "--exec-interval", "--induce", "--ablate
                    "--diag-ik", "--diag-no-gravcomp")
 
 
+def forbidden_flag(f: str, names) -> bool:
+    """f（--名前 か --名前=値）が names のどれかに当たるか。argparse の省略形（--induc・--time-limit など）も前方一致で拒む。"""
+    if not f.startswith("--"):
+        return False
+    name = f.split("=", 1)[0]
+    return len(name) > 2 and any(x.startswith(name) for x in names)
+
+
+def has_flag(extra: list, flag: str, min_len: int) -> bool:
+    """extra に flag（省略形を含む。min_len 文字以上の前方一致）があるか。"""
+    return any(x.startswith("--") and len(x.split("=", 1)[0]) >= min_len and flag.startswith(x.split("=", 1)[0]) for x in extra)
+
+
 def split_cond(phase: str, cond: str) -> tuple:
     for c, part, m in conditions(phase):
         if c == cond:
@@ -376,7 +392,7 @@ def build_96_argv(a, phase: str, part: str, model: str, trials: str, max_new: in
 
 def run_condition(r96, ops, v82, a, phase: str, cond: str, extra: list, max_new: int = None) -> int:
     for f in extra:
-        if f.split("=")[0] in FORBIDDEN_EXTRA:
+        if forbidden_flag(f, FORBIDDEN_EXTRA):
             raise SystemExit(f"{f} は 98_s4_b4_eval.py が決める（モデル・帯・naive・6 行・安全フィルタなし・60 s・誘発）")
     part, model = split_cond(phase, cond)
     trials = a.trials or default_trials(phase, part)
@@ -388,7 +404,7 @@ def run_condition(r96, ops, v82, a, phase: str, cond: str, extra: list, max_new:
     info = {"script": "98_s4_b4_eval.py", "phase": phase, "phase_ja": PHASES[phase]["ja"], "part": part, "model": model,
             "model_ja": MODELS[model]["ja"], "induce": PART_INDUCE[part],
             "ckpt": {k: ck[k] for k in ("path", "run", "postcheck", "source", "sha256", "expected_sha256")},
-            "files_sha256": {p: sha256_file(ROOT / p) for p in FILES}}
+            "files_sha256": {p: sha256_file(ROOT / p) for p in FILES}, "driver_expected": EXPECTED_DRIVER}
     patch96(r96, info)
     a96 = r96.build_parser().parse_args(build_96_argv(a, phase, part, model, trials, max_new) + list(extra))
     print(f"[b4] {phase} {cond}: {MODELS[model]['ja']}・{part}（{a.experiment}\\{cond} {trials}、保存点 {ck['path']} "
@@ -408,13 +424,17 @@ def _env(a):
 
 
 def phase_env_gate(r96, ops, v82, a, phase: str, conds: list) -> int:
-    """段階の全条件の記録と今の環境を照らす。食い違いがあり --accept-env-change が無ければ 3。"""
+    """段階の全条件の記録と今の環境を照らす。記録との食い違いがあり --accept-env-change（96 の引数）が無ければ 3。
+    ドライバが 610.88 と違うだけなら止めない（警告を出す。版は試行の env と 1 枚に残る。作者の判断 10/09）。"""
     cur = r96.read_env(ops)
     mm = env_mismatch(cur, record_envs([v82.OUT / a.experiment / c for c in conds]))
     print(f"[b4] 環境: {r96.env_brief(cur)}", flush=True)
-    if mm:
-        print(f"[b4] 環境の食い違い（段階の全条件・ドライバ {EXPECTED_DRIVER}）: {json.dumps(mm, ensure_ascii=False)}", flush=True)
-        if "--accept-env-change" not in a.extra:
+    if "driver" in mm:
+        print(f"[b4] 警告: ドライバが {mm['driver']['now']}（決めた版 {EXPECTED_DRIVER} と違う）。止めずに続ける。1 枚に警告として出る",
+              flush=True)
+    if "records" in mm:
+        print(f"[b4] 環境の食い違い（段階の全条件の記録と今）: {json.dumps(mm['records'], ensure_ascii=False)}", flush=True)
+        if not has_flag(a.extra, "--accept-env-change", len("--accept-e")):
             print("[b4] 本番なら止める（dry-run は続けて見せる）。続けるなら --accept-env-change（96 が環境の区切りを書く。報告で分ける）",
                   file=sys.stderr, flush=True)
             return 3
@@ -496,7 +516,7 @@ def cmd_rotate(a, extra) -> int:
         return rc
     B1 = b1mod()
     for f in extra:
-        if f.split("=")[0] in B1.ROTATE_FORBIDDEN + FORBIDDEN_EXTRA:
+        if forbidden_flag(f, tuple(B1.ROTATE_FORBIDDEN) + FORBIDDEN_EXTRA):
             raise SystemExit(f"{f} は rotate では渡せない（rotate・98_s4_b4_eval.py が決める）")
     plan = {c: [(seed, tgt) for seed, _, tgt in v82.trial_list(trials[c])] for c, _, _ in conds}
     part_of = {c: p for c, p, _ in conds}

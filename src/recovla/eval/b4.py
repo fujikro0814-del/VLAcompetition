@@ -8,10 +8,13 @@ H1・H2・Holm・副次）を、記録から出す。実装 B（scripts/98_s4_b4
 A の作り: ファイルは pathlib の glob で列挙、検定は scipy.stats（binomtest・norm）、対の差の区間は recovla.eval.stats.paired_diff_ci
 （Newcombe の方法 10、φ の補正あり）、単一の割合は recovla.eval.stats.wilson_interval。
 時刻の境界（掲示板 0155 の 1）: 誘発の成立は t_established < L（ちょうど L は入れない）、成功は t_success <= L。
-割合の差（守り・狙い）は、各腕で L より前に誘発が成立した試行を分母にした割合の差（事前登録 v2 の草案 12-2）。自然は 198 対の対の差。
+狙い（落下）の差は、各腕で L より前に誘発が成立した試行を分母にした割合の差（事前登録 v2 の草案 12-2）。
+守りの P1 の差（R4 − R1v3、R4 − N4）と関門 3 の R4s1001 − N4s1001 は、同じ種で両方の腕とも L より前に誘発が成立した対で数える
+（(b − c) / 対の数、Newcombe の対ありの区間。作者の判断 10/09。テスト 1 の test1.p1_layer と同じ）。自然は 198 対の対の差。
 入口の点検（0155 の 2 節）を満たさない条件が 1 つでもあれば status = "incomplete" とし、検定・判定は出さない（result = None）。
-条件をまたぐ点検のうち、同じモデルの保存点の SHA-256 と環境は A・B がそれぞれ行い、git の HEAD の照らし合わせと台帳は入口
-（scripts/98_s4_b4_check.py）が 1 回だけ行う。
+ただし関門 2 の置き損ね（P3）は記述だけなので、欠けても・点検を満たさなくても未完にしない（使わずに 1 枚に注記する。作者の判断 10/09）。
+条件をまたぐ点検のうち、同じモデルの保存点の SHA-256・使ったファイルの SHA-256・環境は A・B がそれぞれ行い、git の HEAD の
+照らし合わせと台帳は入口（scripts/98_s4_b4_check.py）が 1 回だけ行う。ドライバが 610.88 と違っても止めず、1 枚に警告として出す。
 置き損ね（P3）は族に入れない（掲示板 0165）。Holm の族は H1・H2（params.h2_in_family が偽なら H1 だけ）。
 """
 import json
@@ -43,6 +46,12 @@ REQUIRED = {"G2": ["nat.R4", "nat.R1v3", "P1.R4", "P1.N4", "P1.R1v3", "P2.R4", "
             "G3": ["P1.R4s1001", "P1.N4s1001", "P2.R4s1001", "P2.R1v3s1001"],
             "T2": ["nat.R4", "nat.R1v3", "P1.R4", "P1.N4", "P1.R1v3", "P2.R4", "P2.N4", "P2.R1v3", "P3.R4", "P3.N4", "P3.R1v3"]}
 INDUCE = {"nat": None, "P1": "P1", "P2": "P2", "P3": "P3"}
+# 記述だけの条件（欠けても未完にしない）
+OPTIONAL = {"G2": ["P3.R4", "P3.N4", "P3.R1v3"]}
+EXPECTED_DRIVER = "610.88"
+# s4_gates.json の掲示の SHA-256（改訂 4、掲示板 0165。改行は LF）
+GATES_KEY = "configs/s4_gates.json"
+POSTED_GATES_SHA256 = "7f2f651cafa9cf97b5548324d3fb8ea0bec5e891cca9c8859c7dd9c0347646e9"
 
 
 # ================================================================ 読み込み
@@ -71,7 +80,7 @@ def bands(phase: str) -> dict:
 
 
 def required(phase: str, p: dict) -> list:
-    need = list(REQUIRED[phase])
+    need = [n for n in REQUIRED[phase] if n not in OPTIONAL.get(phase, [])]
     if phase == "G3" and not p["g3_with_r1v3s1001"]:
         need.remove("P2.R1v3s1001")
     return need
@@ -96,7 +105,7 @@ def check_condition(phase: str, name: str, d: pathlib.Path, model: str, experime
     part = name.split(".", 1)[0]
     lo, hi = bands(phase)[part]
     prob = []
-    out = {"ok": False, "problems": prob, "git_heads": [], "ckpt_sha256": None, "env": None, "n": 0}
+    out = {"ok": False, "problems": prob, "git_heads": [], "ckpt_sha256": None, "env": None, "files_sha256": None, "n": 0}
     if not d.is_dir():
         prob.append(f"{name}: フォルダがない {d}")
         return out
@@ -166,8 +175,14 @@ def check_condition(phase: str, name: str, d: pathlib.Path, model: str, experime
     for r in recs:
         for k, v in ((r.get("b4") or {}).get("files_sha256") or {}).items():
             fsha.setdefault(k, set()).add(v)
-    if any(len(v) > 1 for v in fsha.values()):
+    if any(not (r.get("b4") or {}).get("files_sha256") for r in recs):
+        prob.append(f"{name}: 使ったファイルの SHA-256 の無い試行がある")
+    elif any(len(v) > 1 for v in fsha.values()) or any(set(r["b4"]["files_sha256"]) != set(fsha) for r in recs):
         prob.append(f"{name}: 使ったファイルの SHA-256 が 2 種類以上")
+    elif recs:
+        out["files_sha256"] = {k: next(iter(v)) for k, v in sorted(fsha.items())}
+        if out["files_sha256"].get(GATES_KEY) != POSTED_GATES_SHA256:
+            prob.append(f"{name}: 記録の {GATES_KEY} の SHA-256 が掲示の値（0165）と違うか、無い")
     ck = {((r.get("b4") or {}).get("ckpt") or {}).get("sha256") for r in recs}
     if not recs or None in ck or len(ck) != 1:
         prob.append(f"{name}: 保存点の SHA-256 が無いか 2 種類以上")
@@ -181,8 +196,15 @@ def check_condition(phase: str, name: str, d: pathlib.Path, model: str, experime
 
 
 def cross_check(checks: dict, models: dict) -> dict:
-    """同じモデルの保存点の SHA-256 が条件をまたいで同じか、環境が段階の全条件で 1 種類か。"""
+    """同じモデルの保存点の SHA-256 が条件をまたいで同じか、使ったファイル（入口のスクリプト・96・82・s4_gates.json など）の
+    SHA-256 が段階の全条件で 1 種類か、環境が段階の全条件で 1 種類か。ドライバの版は 1 枚に残す（610.88 と違えば警告）。"""
     prob = []
+    fs = {json.dumps(c["files_sha256"], sort_keys=True) if c["files_sha256"] else None for c in checks.values()}
+    files = None
+    if len(fs) != 1 or None in fs:
+        prob.append("使ったファイルの SHA-256 が条件によって違うか、分からない")
+    else:
+        files = json.loads(next(iter(fs)))
     by_model = {}
     for name, c in checks.items():
         by_model.setdefault(models[name], set()).add(c["ckpt_sha256"])
@@ -195,9 +217,13 @@ def cross_check(checks: dict, models: dict) -> dict:
         else:
             out_models[m] = next(iter(v))
     envs = {c["env"] for c in checks.values()}
+    driver = None
     if len(envs) != 1 or None in envs:
         prob.append("環境（ドライバ・torch・CUDA・OS）が条件によって違うか、分からない")
-    return {"ok": not prob, "problems": prob, "models": out_models, "env_kinds": len(envs)}
+    else:
+        driver = json.loads(next(iter(envs))).get("driver")
+    return {"ok": not prob, "problems": prob, "models": out_models, "env_kinds": len(envs), "files_sha256": files,
+            "driver": driver, "driver_expected": EXPECTED_DRIVER, "driver_warning": driver != EXPECTED_DRIVER}
 
 
 # ================================================================ 検定・区間
@@ -296,6 +322,21 @@ def rate_diff(dX, dY, part, L, thr: float, mode: str = "point") -> dict:
             "pass": bool(ok)}
 
 
+def paired_guard(dX, dY, L, thr: float, mode: str = "point") -> dict:
+    """守りの P1 の差（作者の判断 10/09）: 同じ種で両方の腕とも誘発が L より前に成立した対の、成功の割合の差 (b − c) / 対の数と
+    Newcombe の対ありの区間。点推定（mode=interval なら区間の下限）で判定。"""
+    g = induced_pairs(dX, dY, L)
+    n, b, c = g["pairs"], g["b"], g["c"]
+    nc = newcombe_paired(g["both"], b, c, g["neither"])
+    diff = (b - c) / n if n else None
+    if mode == "point":
+        ok = diff is not None and diff >= thr - EPS
+    else:
+        ok = nc is not None and nc["ci95"][0] >= thr - EPS
+    return {"pairs": n, "b": b, "c": c, "both": g["both"], "neither": g["neither"], "x_k": g["both"] + b, "y_k": g["both"] + c,
+            "diff": diff, "newcombe95": None if nc is None else nc["ci95"], "threshold": thr, "mode": mode, "pass": bool(ok)}
+
+
 def nat_guard(dX, dY, L, thr: float, mode: str = "point") -> dict:
     g = natural_pairs(dX, dY, L)
     if mode == "point":
@@ -312,20 +353,22 @@ def all_rates(dirs: dict) -> dict:
 # ================================================================ 段階ごと
 def gate2(dirs: dict) -> dict:
     g = {"natural": nat_guard(dirs["nat.R4"], dirs["nat.R1v3"], L_MAIN, THRESH["g_nat"]),
-         "p1_r4_vs_r1v3": rate_diff(dirs["P1.R4"], dirs["P1.R1v3"], "P1", L_MAIN, THRESH["g_p1"]),
-         "p1_r4_minus_n4": rate_diff(dirs["P1.R4"], dirs["P1.N4"], "P1", L_MAIN, THRESH["g_rn"])}
+         "p1_r4_vs_r1v3": paired_guard(dirs["P1.R4"], dirs["P1.R1v3"], L_MAIN, THRESH["g_p1"]),
+         "p1_r4_minus_n4": paired_guard(dirs["P1.R4"], dirs["P1.N4"], L_MAIN, THRESH["g_rn"])}
     guards_ok = all(v["pass"] for v in g.values())
     aim = rate_diff(dirs["P2.R4"], dirs["P2.R1v3"], "P2", L_MAIN, THRESH["aim"])
     aim["pairs"] = induced_pairs(dirs["P2.R4"], dirs["P2.R1v3"], L_MAIN)
-    p3 = {"label": "記述だけ（関門 2 の判定に使わない。掲示板 0165）",
-          "rates": {m: {f"{L:g}": rate(dirs[f"P3.{m}"], "P3", L) for L in (L_MAIN, L_SUB)} for m in ("R4", "N4", "R1v3")}}
+    used = [m for m in ("R4", "N4", "R1v3") if f"P3.{m}" in dirs]
+    p3 = {"label": "記述だけ（関門 2 の判定に使わない。掲示板 0165）", "used": used,
+          "not_used": [m for m in ("R4", "N4", "R1v3") if m not in used],
+          "rates": {m: {f"{L:g}": rate(dirs[f"P3.{m}"], "P3", L) for L in (L_MAIN, L_SUB)} for m in used}}
     nxt = "test2" if guards_ok and aim["pass"] else ("research_guard" if not guards_ok else "no_test2")
     return {"guards": g, "guards_pass": guards_ok, "aim": aim, "p3": p3, "rates": all_rates(dirs),
             "decision": {"pass": bool(guards_ok and aim["pass"]), "next": nxt}}
 
 
 def gate3(dirs: dict, p: dict) -> dict:
-    rn = rate_diff(dirs["P1.R4s1001"], dirs["P1.N4s1001"], "P1", L_MAIN, THRESH["g_rn"])
+    rn = paired_guard(dirs["P1.R4s1001"], dirs["P1.N4s1001"], L_MAIN, THRESH["g_rn"])          # 関門 2 の守り 3 と同じ数え方
     direction = None
     if p["g3_with_r1v3s1001"]:
         x = rate_diff(dirs["P2.R4s1001"], dirs["P2.R1v3s1001"], "P2", L_MAIN, 0.0)
@@ -351,8 +394,8 @@ def test2(dirs: dict, p: dict) -> dict:
             v["p_holm"], v["established"] = None, None
     mode = p["guard_mode"]
     guards = {"natural": nat_guard(dirs["nat.R4"], dirs["nat.R1v3"], L_MAIN, THRESH["g_nat"], mode),
-              "p1_r4_vs_r1v3": rate_diff(dirs["P1.R4"], dirs["P1.R1v3"], "P1", L_MAIN, THRESH["g_p1"], mode),
-              "p1_r4_minus_n4": rate_diff(dirs["P1.R4"], dirs["P1.N4"], "P1", L_MAIN, THRESH["g_rn"], mode)}
+              "p1_r4_vs_r1v3": paired_guard(dirs["P1.R4"], dirs["P1.R1v3"], L_MAIN, THRESH["g_p1"], mode),
+              "p1_r4_minus_n4": paired_guard(dirs["P1.R4"], dirs["P1.N4"], L_MAIN, THRESH["g_rn"], mode)}
     p3 = {"label": "副次・族の外（Holm の補正をしない。基準を置かない）"}
     for L in (L_MAIN, L_SUB):
         p3[f"{L:g}"] = {"R4_vs_R1v3": induced_pairs(dirs["P3.R4"], dirs["P3.R1v3"], L),
@@ -380,17 +423,28 @@ def analyze(layout: dict, params: dict) -> dict:
         models[name] = v["model"]
         if name.split(".", 1)[1] != v["model"]:
             raise ValueError(f"{name} のモデル {v['model']} が条件名と違う")
-    use = [n for n in dirs if n in required(phase, p)]
-    for name in use:
+    need, opt = required(phase, p), OPTIONAL.get(phase, [])
+    use = [n for n in dirs if n in need]
+    have_opt = [n for n in opt if n in dirs and dirs[n].is_dir()]           # 記述だけの条件は、フォルダが無ければ「欠け」
+    for name in use + have_opt:
         checks[name] = check_condition(phase, name, dirs[name], models[name], layout["experiment"], p)
-    missing = [n for n in required(phase, p) if n not in dirs]
-    cross = cross_check(checks, models) if checks else {"ok": False, "problems": ["条件がない"], "models": {}, "env_kinds": 0}
-    status = "complete" if checks and all(c["ok"] for c in checks.values()) and not missing and cross["ok"] else "incomplete"
+    missing = [n for n in need if n not in dirs]
+    req = {n: checks[n] for n in use}
+    cross = cross_check(req, models) if req else {"ok": False, "problems": ["条件がない"], "models": {}, "env_kinds": 0,
+                                                  "files_sha256": None, "driver": None, "driver_expected": EXPECTED_DRIVER,
+                                                  "driver_warning": True}
+    status = "complete" if req and all(c["ok"] for c in req.values()) and not missing and cross["ok"] else "incomplete"
+    # 記述だけの条件: 欠け・点検を満たさない・条件をまたぐ点検を満たさないものは使わない（未完にしない）
+    optional = {"used": [], "missing": [n for n in opt if n not in have_opt], "excluded": []}
+    for n in opt:
+        if n in checks:
+            ok = checks[n]["ok"] and req and cross_check(dict(req, **{n: checks[n]}), models)["ok"]
+            optional["used" if ok else "excluded"].append(n)
     res = {"schema": SCHEMA, "phase": phase, "status": status, "params": p, "checks": checks, "missing_conditions": missing,
-           "cross": cross, "result": None}
+           "optional": optional, "cross": cross, "result": None}
     if status != "complete":
         return res
-    d = {n: dirs[n] for n in use}
+    d = {n: dirs[n] for n in use + optional["used"]}
     res["result"] = gate2(d) if phase == "G2" else (gate3(d, p) if phase == "G3" else test2(d, p))
     return res
 
@@ -404,35 +458,70 @@ def _diff(v):
     return "—" if v.get("diff") is None else f"{100 * v['diff']:+.1f} ポイント"
 
 
+def _ci(v):
+    ci = v.get("newcombe95")
+    return "" if not ci else f"、95% 区間 {100 * ci[0]:+.1f}〜{100 * ci[1]:+.1f}"
+
+
+def _guard_lines(g: dict, ok_word: str, ng_word: str) -> list:
+    """守りの 3 行。P1 は同じ種で両方の腕とも誘発が 30 s より前に成立した対で数える（作者の判断 10/09）。"""
+    nat, p1, rn = g["natural"], g["p1_r4_vs_r1v3"], g["p1_r4_minus_n4"]
+    return [f"- 自然の成功 R4 − R1v3: {_diff(nat)}（{nat['pairs']} 対{_ci(nat)}、基準 −5 ポイント）→ {ok_word if nat['pass'] else ng_word}",
+            f"- 把持失敗の復帰 R4 − R1v3: {_diff(p1)}（対 {p1['pairs']}、b {p1['b']}、c {p1['c']}{_ci(p1)}、基準 −10 ポイント）"
+            f"→ {ok_word if p1['pass'] else ng_word}",
+            f"- 把持失敗の復帰 R4 − N4: {_diff(rn)}（対 {rn['pairs']}、b {rn['b']}、c {rn['c']}{_ci(rn)}、基準 +20 ポイント）"
+            f"→ {ok_word if rn['pass'] else ng_word}",
+            "- 把持失敗の分母: 同じ種で両方の腕とも誘発が 30 s より前に成立した対（b は R4 だけ成功、c は相手だけ成功）。"]
+
+
+def _rate_txt(x):
+    return f"{_pct(x['rate'])}（{x['k']}/{x['n']}）"
+
+
 def summary_md(res: dict) -> str:
     title = {"G2": "関門 2", "G3": "関門 3", "T2": "テスト 2"}[res["phase"]]
     o = [f"# 束 4 {title}の判定（1 枚）", "", f"- 状態: {'そろった（判定した）' if res['status'] == 'complete' else '未完（判定しない）'}"]
+    cr = res.get("cross") or {}
+    if cr.get("driver") is not None or cr.get("env_kinds"):
+        drv = cr.get("driver") or "分からない（環境が 1 種類でない）"
+        o.append(f"- ドライバ: {drv}（決めた版 {cr.get('driver_expected', EXPECTED_DRIVER)}）"
+                 + ("。**警告: 決めた版と違う（止めずに回した。報告で分ける）**" if cr.get("driver_warning") else ""))
+    opt = res.get("optional") or {}
+    if opt.get("missing") or opt.get("excluded"):
+        o.append(f"- 注記: 記述だけの条件のうち使わなかったもの（判定には使わない。未完にしない）: 欠け {opt.get('missing') or 'なし'}、"
+                 f"点検を満たさない {opt.get('excluded') or 'なし'}")
     if res["status"] != "complete":
         o += ["", "## 入口の点検で満たさなかったもの", ""]
-        o += [f"- {pr}" for c in res["checks"].values() for pr in c["problems"]]
+        o += [f"- {pr}" for n, c in res["checks"].items() if n not in opt.get("excluded", []) for pr in c["problems"]]
         o += [f"- 条件がない: {x}" for x in res["missing_conditions"]]
         o += [f"- 条件をまたぐ点検: {x}" for x in res["cross"]["problems"]]
         o += [f"- 条件をまたぐ点検（入口）: {x}" for x in (res.get("entry_audit") or {}).get("problems", [])]
         return "\n".join(o) + "\n"
     r = res["result"]
     if res["phase"] == "G2":
-        g = r["guards"]
-        o += ["", "## 守り（全部満たす。30 s、点推定）", "",
-              f"- 自然の成功 R4 − R1v3: {_diff(g['natural'])}（{g['natural']['pairs']} 対、基準 −5 ポイント）→ {'満たす' if g['natural']['pass'] else '割った'}",
-              f"- 把持失敗の復帰 R4 − R1v3: {_diff(g['p1_r4_vs_r1v3'])}（基準 −10 ポイント）→ {'満たす' if g['p1_r4_vs_r1v3']['pass'] else '割った'}",
-              f"- 把持失敗の復帰 R4 − N4: {_diff(g['p1_r4_minus_n4'])}（基準 +20 ポイント）→ {'満たす' if g['p1_r4_minus_n4']['pass'] else '割った'}",
-              "", "## 狙い（落下の 30 s の復帰）", "",
-              f"- R4 {_pct(r['aim']['x']['rate'])}（{r['aim']['x']['k']}/{r['aim']['x']['n']}）、R1v3 {_pct(r['aim']['y']['rate'])}"
-              f"（{r['aim']['y']['k']}/{r['aim']['y']['n']}）、差 {_diff(r['aim'])}（基準 +15 ポイント）→ {'届いた' if r['aim']['pass'] else '届かない'}",
-              "", "- 分母: 各腕で誘発が 30 s より前に成立した試行（自然は 198 対）。置き損ね（P3）は記述だけ。",
+        o += ["", "## 守り（全部満たす。30 s、点推定）", ""] + _guard_lines(r["guards"], "満たす", "割った")
+        o += ["", "## 狙い（落下の 30 s の復帰）", "",
+              f"- R4 {_rate_txt(r['aim']['x'])}、R1v3 {_rate_txt(r['aim']['y'])}、差 {_diff(r['aim'])}（基準 +15 ポイント）"
+              f"→ {'届いた' if r['aim']['pass'] else '届かない'}",
+              "- 分母: 各腕で誘発が 30 s より前に成立した試行。"
+              f"（参考: 同じ種で両方とも成立した対 {r['aim']['pairs']['pairs']}、b {r['aim']['pairs']['b']}、c {r['aim']['pairs']['c']}）",
+              "", "## 置き損ね（P3。記述だけ、判定に使わない）", ""]
+        p3 = r["p3"]
+        o += [f"- {m}: 30 s {_rate_txt(p3['rates'][m]['30'])}、60 s {_rate_txt(p3['rates'][m]['60'])}" for m in p3["used"]]
+        if p3["not_used"]:
+            o.append(f"- 使わなかった（欠けか点検を満たさない）: {'・'.join(p3['not_used'])}")
+        o += ["- 分母: 各腕で誘発が L より前に成立した試行。",
               "", f"## 結論: {({'test2': 'テスト 2 へ進む（事前登録 v2 の登録の後）', 'research_guard': '守りを割った。研究の道で原因を調べる（テスト 2 は回さない）', 'no_test2': '狙いに届かない。テスト 2 へ進まない'})[r['decision']['next']]}"]
     elif res["phase"] == "G3":
-        dr = r["direction"]
-        o += ["", "- 向き（落下の 30 s の復帰 R4s1001 − R1v3s1001 > 0）: "
+        dr, rn = r["direction"], r["p1_r4_minus_n4"]
+        o += ["", "- 向き（落下の 30 s の復帰 R4s1001 − R1v3s1001 > 0。各腕の分母）: "
               + ("使わない（R1v3s1001 がない。P-3）" if dr is None else f"{_diff(dr)} → {'正' if dr['pass'] else '正でない'}"),
-              f"- 把持失敗の復帰 R4s1001 − N4s1001: {_diff(r['p1_r4_minus_n4'])}（基準 +20 ポイント）→ {'満たす' if r['p1_r4_minus_n4']['pass'] else '満たさない'}",
+              f"- 把持失敗の復帰 R4s1001 − N4s1001: {_diff(rn)}（対 {rn['pairs']}、b {rn['b']}、c {rn['c']}{_ci(rn)}、基準 +20 ポイント）"
+              f"→ {'満たす' if rn['pass'] else '満たさない'}",
+              "- 把持失敗の分母: 同じ種で両方の腕とも誘発が 30 s より前に成立した対（関門 2 の守り 3 と同じ）。",
               "", f"## 結論: {'種 2 つで同じ向き' if r['decision']['pass'] else '「種 1 つの結果」と明記し、診断として載せる'}"]
     else:
+        # 報告の順（事前登録 v2 の草案 第 7 節 5）: H1 → H2 → 守り → 置き損ね・60 s・曲線
         o += ["", "## 主要評価項目（Holm、α = 0.05）", "", "| 項目 | 組 | b | c | p | Holm 補正後の p | 成立 |", "|---|---|---|---|---|---|---|"]
         for k in ("H1", "H2"):
             v = r["primary"][k]
@@ -441,10 +530,23 @@ def summary_md(res: dict) -> str:
             o.append(f"| {k} | {v['pairs']} | {v['b']} | {v['c']} | {v['p']:.6g} | {ph} | {est} |")
         o += ["", "- 分母: 同じ種で両方とも落下の誘発が 30 s より前に成立した組（成功は 30 s 以内）。b は R4 だけ、c は相手だけ。",
               "- H1 は R4 対 R1v3、H2 は R4 対 N4（どちらも落下 P2、帯 167000〜167099）。"]
-        p3 = r["secondary"]["p3"]["30"]
-        o += ["", "## 置き損ね（P3）の 30 s の復帰（副次・族の外）", "",
-              f"- R4 対 R1v3: 組 {p3['R4_vs_R1v3']['pairs']}、b {p3['R4_vs_R1v3']['b']}、c {p3['R4_vs_R1v3']['c']}、p {p3['R4_vs_R1v3']['p']:.6g}（副次・族の外）",
-              f"- R4 対 N4: 組 {p3['R4_vs_N4']['pairs']}、b {p3['R4_vs_N4']['b']}、c {p3['R4_vs_N4']['c']}、p {p3['R4_vs_N4']['p']:.6g}（副次・族の外）"]
-        g = r["secondary"]["guards"]
-        o += ["", f"## 守り（副次、{g['natural']['mode']}）: {'満たす' if r['secondary']['guards_pass'] else '割った'}"]
+        sec = r["secondary"]
+        g = sec["guards"]
+        o += ["", f"## 守り（副次、{'点推定' if g['natural']['mode'] == 'point' else '区間の下限'}で判定）: "
+                  f"{'満たす' if sec['guards_pass'] else '割った'}", ""] + _guard_lines(g, "満たす", "割った")
+        o += ["", "## 置き損ね（P3）の復帰（副次・族の外）", ""]
+        for L in ("30", "60"):
+            p3 = sec["p3"][L]
+            for k, lab in (("R4_vs_R1v3", "R4 対 R1v3"), ("R4_vs_N4", "R4 対 N4")):
+                v = p3[k]
+                o.append(f"- {L} s {lab}: 組 {v['pairs']}、b {v['b']}、c {v['c']}、p {v['p']:.6g}（副次・族の外）")
+        o += ["- 分母: 同じ種で両方とも置き損ねの誘発が L より前に成立した組。"]
+        six = sec["sixty"]
+        o += ["", "## 60 s の採点（副次・族の外）", "",
+              f"- H1 の形（R4 対 R1v3）: 組 {six['H1_form']['pairs']}、b {six['H1_form']['b']}、c {six['H1_form']['c']}、p {six['H1_form']['p']:.6g}",
+              f"- H2 の形（R4 対 N4）: 組 {six['H2_form']['pairs']}、b {six['H2_form']['b']}、c {six['H2_form']['c']}、p {six['H2_form']['p']:.6g}",
+              "- 分母: 同じ種で両方とも落下の誘発が 60 s より前に成立した組（成功は 60 s 以内）。",
+              "", "## 曲線の材料（30・45・60 s の割合）", "", "| 条件 | 30 s | 45 s | 60 s |", "|---|---|---|---|"]
+        for name, by in sec["rates"].items():
+            o.append(f"| {name} | {_rate_txt(by['30'])} | {_rate_txt(by['45'])} | {_rate_txt(by['60'])} |")
     return "\n".join(o) + "\n"
