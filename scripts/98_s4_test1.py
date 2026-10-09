@@ -53,8 +53,9 @@ EXAMPLE_PARAMS = {
     "h1": True, "e7_n": 150, "rtc_arm": True, "plan": "B", "guard_mode": "point", "ni_margin": 0.10, "h2_layers": ["1001", "1002"],
     "rtc_p1_n": 100, "e7_band_extended": False, "c4_on_time": None,
     "versions": {"entry_sha256": "<枝の確定の掲示の値>", "executor_v3_sha256": "<同>", "rtc_setting": "<同（例 ZEROS）>",
-                 "rtc_module_sha256": "<同>", "ckpt_sha256": {"R1v3": "<同>", "N1v3": "<同>", "R1v3s1001": "<同>", "N1v3s1001": "<同>",
-                                                             "R1v3s1002": "<同>", "N1v3s1002": "<同>"}},
+                 "rtc_setting_sha256": "<同（設定の中身の SHA-256）>", "rtc_module_sha256": "<同>",
+                 "ckpt_sha256": {"R1v3": "<同>", "N1v3": "<同>", "R1v3s1001": "<同>", "N1v3s1001": "<同>",
+                                 "R1v3s1002": "<同>", "N1v3s1002": "<同>"}},
     "p_fill": {"P-1": "B1 を採った（例）", "P-2": "ES（例）", "P-3": "B2 を採らない（例）", "P-4": 150, "P-6": "naive",
                "P-7": "1001・1002 とも 2 万手", "_note": "結果で埋まる所（P-1〜P-10）と作者の判断（D1〜D8）を、出どころとともに書く"},
 }

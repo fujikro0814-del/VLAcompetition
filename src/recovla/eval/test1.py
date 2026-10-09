@@ -16,8 +16,9 @@ truth_success_t の最大。
 H3 の腕: 案 A は種 1000 の naive の P1（p1.1000.R 対 p1.1000.N）、案 B は RTC の設定の P1（rtc.p1 対 rtc.p1_n。事前登録の案 12-2）。
 版の照合 (b)（登録版 第 7 節 1 の (b-1)〜(b-5)、判断の紙の問 5）: params.versions（「枝の確定」の掲示の値）があるか、どれかの試行に
 起動の入口（scripts/98_s4_test1_eval.py）の印 "t1" があれば、条件ごとに s4_gates.json の SHA-256（LF）が掲示の値（0165）、入口の版・
-保存点のパスと SHA-256・v3 の設定と版（v3.1）と executor_v3.py の SHA-256・RTC の設定名と rtc.py の SHA-256 がそれぞれ 1 種類で
-掲示の値と同じこと、naive の条件に RTC の印がないことを確かめ、条件をまたいで入口の版・同じモデルの保存点・v3 の版が 1 種類であることを
+保存点のパスと SHA-256・v3 の設定と版（v3.1）と executor_v3.py の SHA-256・RTC の設定名と rtc.py の SHA-256・設定の中身の SHA-256
+（setting_sha256。掲示の値 versions.rtc_setting_sha256 があれば照らす）がそれぞれ 1 種類で掲示の値と同じこと、naive の条件に RTC の印が
+ないことを確かめ、条件をまたいで入口の版・同じモデルの保存点・v3 の版・RTC の setting_sha256 が 1 種類であることを
 確かめる（version_check）。満たさなければ未完。どちらも無い（入口を通っていない合成の記録）ときは照らさず、1 枚に「照らしていない」と書く。
 案 B の G-P1（登録版 12-3、判断の紙の問 7）: 両方の腕で誘発が 30 s より前に成立した同じ種の対で、差 (b − c)/対の数、区間は Newcombe の
 対あり（束 4 の paired_guard と同じ）。対が 0 なら満たさない。各腕の分母の差（対なし）は記述として並べる。案 A は構造上 0 で満たす。
@@ -56,7 +57,7 @@ REGISTERED_CKPT = {
     "R1v3s1002": "outputs/s4/train/train_R1v3s1002_20261009-050112_20261009-050112/checkpoints/020000/pretrained_model",
     "N1v3s1002": "outputs/s4/train/train_N1v3s1002_20261009-071920_20261009-071920/checkpoints/020000/pretrained_model",
 }
-VERSION_KEYS = ("entry_sha256", "executor_v3_sha256", "rtc_setting", "rtc_module_sha256", "ckpt_sha256")
+VERSION_KEYS = ("entry_sha256", "executor_v3_sha256", "rtc_setting", "rtc_setting_sha256", "rtc_module_sha256", "ckpt_sha256")
 # h1（P-1）と rtc_arm（P-3）は結果で埋まる所なので既定を置かない（params に必ず書く）
 PARAM_REQUIRED = ("h1", "rtc_arm")
 PARAM_DEFAULTS = {"e7_n": None, "plan": "A", "guard_mode": "point", "ni_margin": 0.10, "h2_layers": ["1001", "1002"],
@@ -284,7 +285,8 @@ def version_items(name, kind, d: pathlib.Path, model, mark: dict, p: dict) -> tu
     """(満たさない点の文の列, 条件の版の要約)。"""
     recs = _records(d, kind) if d.is_dir() else []
     ver = p["versions"] or {}
-    prob, summ = [], {"entry_sha256": None, "ckpt_sha256": None, "executor_v3_sha256": None, "rtc_setting": None}
+    prob, summ = [], {"entry_sha256": None, "ckpt_sha256": None, "executor_v3_sha256": None, "rtc_setting": None,
+                      "rtc_setting_sha256": None}
     if not ver:
         prob.append(f"{name}: params.versions（「枝の確定」の掲示の値）が無い")
     t1s = [r.get("t1") for r in recs]
@@ -330,14 +332,19 @@ def version_items(name, kind, d: pathlib.Path, model, mark: dict, p: dict) -> tu
         ms = _one([(t.get("rtc") or {}).get("module_sha256") for t in t1s])
         if ms is None or ms != ver.get("rtc_module_sha256"):
             prob.append(f"{name}: (b-3) RTC の設定（rtc.py）の SHA-256 が無いか 2 種類以上か、掲示の値と違う")
+        ss = _one([(t.get("rtc") or {}).get("setting_sha256") for t in t1s])
+        if ss is None or (ver.get("rtc_setting_sha256") and ss != ver["rtc_setting_sha256"]):
+            prob.append(f"{name}: (b-3) RTC の設定の中身の SHA-256（setting_sha256）が無いか 2 種類以上か、掲示の値と違う")
         summ["rtc_setting"] = rs
+        summ["rtc_setting_sha256"] = ss
     elif any(t.get("rtc") is not None or (r.get("diag") or {}).get("arm") not in (None, "naive") for t, r in zip(t1s, recs)):
         prob.append(f"{name}: (b-3) naive の条件に RTC の設定の印がある")
     return prob, summ
 
 
 def version_cross(checks: dict, models: dict) -> list:
-    """条件をまたぐ版の照合: 入口の版が全条件で 1 種類、同じモデルの保存点が同じ、v3 の腕の executor_v3.py が 1 種類。"""
+    """条件をまたぐ版の照合: 入口の版が全条件で 1 種類、同じモデルの保存点が同じ、v3 の腕の executor_v3.py が 1 種類、
+    RTC の腕の設定の中身の SHA-256（setting_sha256）が 1 種類。"""
     prob = []
     vs = {n: c.get("versions") or {} for n, c in checks.items()}
     if len({v.get("entry_sha256") for v in vs.values()}) != 1:
@@ -351,6 +358,9 @@ def version_cross(checks: dict, models: dict) -> list:
     ex = {v["executor_v3_sha256"] for v in vs.values() if v.get("executor_v3_sha256")}
     if len(ex) > 1:
         prob.append("v3 の腕の executor_v3.py の SHA-256 が条件によって違う")
+    rss = {v["rtc_setting_sha256"] for v in vs.values() if v.get("rtc_setting_sha256")}
+    if len(rss) > 1:
+        prob.append("RTC の腕の設定の中身の SHA-256（setting_sha256）が条件によって違う")
     return prob
 
 

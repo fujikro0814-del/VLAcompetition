@@ -30,7 +30,7 @@ B = _load(ROOT / "scripts" / "98_s4_test1_b.py", "t1e_b")
 CHK = _load(ROOT / "scripts" / "98_s4_test1.py", "t1e_check")
 H = _load(ROOT / "tests" / "test_s4_test1.py", "t1e_helpers")          # 合成の記録の作り方（make_e7・make_p1・make_natural）
 
-ENTRY_SHA, EXEC_SHA, RTC_MOD_SHA = "e" * 64, "x" * 64, "r" * 64
+ENTRY_SHA, EXEC_SHA, RTC_MOD_SHA, RTC_SET_SHA = "e" * 64, "x" * 64, "r" * 64, "s" * 64
 CK_SHA = {m: (str(i) * 64)[:64] for i, m in enumerate(EV.REGISTERED)}
 
 
@@ -355,6 +355,16 @@ def test_claims_are_exclusive_and_stale_ones_are_dropped(tmp_path):
     assert not p.exists()
 
 
+def test_claims_own_leftover_is_dropped_and_retaken(tmp_path):
+    """自分の pid の占有が残っていたら（外し損ね）、live が消して take が取り直せる。"""
+    c1 = EV.Claims(tmp_path / "claims", lambda pid, ct: True)
+    assert c1.take("nat_R1v3", 1)
+    p = tmp_path / "claims" / "nat_R1v3.claim"
+    assert p.exists() and not c1.live("nat_R1v3") and not p.exists()
+    assert c1.take("nat_R1v3", 1) and p.exists()
+    assert c1.take("nat_R1v3", 1)                                                 # 残りがあっても取り直せる（前は 6 時間待って止まった）
+
+
 def test_child_argv_passes_branch_and_rtc():
     a = types.SimpleNamespace(cmd="rotate", branch=1, rtc_setting="ZEROS", experiment="S4T1", run=["R1v3s1001=x"], expect=["entry=e"],
                               allow_smoke=False, trials=None, health_spec=EV.HEALTH_SPECS[0])
@@ -380,7 +390,8 @@ def build_branch(tmp, branch=1, rtc_out=None, naive_p1_out=None, mark=True):
     """入口の layout の条件名で合成の記録を作り、入口が書く印（t1・b1・v3・diag）を足す。"""
     rs = "ZEROS" if branch in (1, 3) else None
     versions = {"entry_sha256": ENTRY_SHA, "executor_v3_sha256": EXEC_SHA if branch in (1, 2) else None,
-                "rtc_setting": rs, "rtc_module_sha256": RTC_MOD_SHA if rs else None, "ckpt_sha256": dict(CK_SHA)}
+                "rtc_setting": rs, "rtc_setting_sha256": RTC_SET_SHA if rs else None,
+                "rtc_module_sha256": RTC_MOD_SHA if rs else None, "ckpt_sha256": dict(CK_SHA)}
     lay, params = EV.layout_params(branch, rs, versions)
     lay["root"] = str(tmp / "v2eval")
     base = tmp / "v2eval" / "S4T1"
@@ -406,7 +417,8 @@ def build_branch(tmp, branch=1, rtc_out=None, naive_p1_out=None, mark=True):
             m["t1"] = {"role": c["key"], "files_sha256": {"configs/s4_gates.json": EV.POSTED_GATES_SHA256,
                                                           "scripts/98_s4_test1_eval.py": ENTRY_SHA},
                        "ckpt": {"path": EV.registered_path(c["model"]), "sha256": CK_SHA[c["model"]]},
-                       "rtc": {"setting": c["rtc"], "module_sha256": RTC_MOD_SHA} if c["rtc"] else None}
+                       "rtc": ({"setting": c["rtc"], "module_sha256": RTC_MOD_SHA, "setting_sha256": RTC_SET_SHA}
+                               if c["rtc"] else None)}
             if c["group"] == "e7":
                 m["b1"] = {"executor_version": "current" if c["arm"] == "R1v3_cur" else "v3.1",
                            "files_sha256": {"src/recovla/runtime/executor_v3.py": EXEC_SHA}}
@@ -453,6 +465,11 @@ VERSION_BREAKERS = {
     "rtc_name": ("P1_N1v3_rtc", lambda m: (m["t1"]["rtc"].update(setting="range10_cap5"), m["diag"].update(arm="range10_cap5")),
                  "rtc.p1_n"),
     "rtc_module": ("nat_R1v3_rtc", lambda m: m["t1"]["rtc"].update(module_sha256="1" * 64), "rtc.natural"),
+    # RTC の設定の中身の SHA-256（setting_sha256）: 試行で混ざる・無い・掲示の値と違う
+    "rtc_body_mixed": ("P1_R1v3_rtc", lambda m: m["t1"]["rtc"].update(setting_sha256="2" * 64) if m["trial"] == 3 else None,
+                       "rtc.p1"),
+    "rtc_body_missing": ("nat_R1v3_rtc", lambda m: m["t1"]["rtc"].pop("setting_sha256"), "rtc.natural"),
+    "rtc_body_not_posted": ("P1_N1v3_rtc", lambda m: m["t1"]["rtc"].update(setting_sha256="3" * 64), "rtc.p1_n"),
     "naive_rtc_mark": ("P1_R1v3", lambda m: m.update(diag={"arm": "ZEROS"}) if m["trial"] == 5 else None, "p1.1000.R"),
     "ckpt_path": ("P1_R1v3s1002", lambda m: m["t1"]["ckpt"].update(
         path="outputs/s4/train/train_R1v3s1002_20261010-000000_20261010-000000/checkpoints/020000/pretrained_model"), "p1.1002.R"),
@@ -498,6 +515,107 @@ def test_cross_condition_versions(tmp_path):
         {"scripts/98_s4_test1_eval.py": "f" * 64}))
     a, b, diffs = both(lay, dict(params, versions=dict(params["versions"])))
     assert diffs == [] and a["status"] == "incomplete" and a["version_check"]["problems"]
+
+
+def test_rtc_setting_body_sha_across_conditions(tmp_path):
+    """RTC の腕の setting_sha256 は、条件の中で 1 種類でも、条件をまたいで違えば未完（掲示の値を書かない場合も）。"""
+    lay, params = build_branch(tmp_path, 3)
+    a, b, diffs = both(lay, params)
+    assert diffs == [] and a["status"] == "complete"
+    assert {a["checks"][k]["versions"]["rtc_setting_sha256"] for k in ("rtc.natural", "rtc.p1", "rtc.p1_n")} == {RTC_SET_SHA}
+    assert a["checks"]["p1.1000.R"]["versions"]["rtc_setting_sha256"] is None
+    _edit_all(tmp_path / "v2eval" / "S4T1" / "P1_N1v3_rtc", lambda m: m["t1"]["rtc"].update(setting_sha256="4" * 64))
+    no_post = dict(params, versions=dict(params["versions"], rtc_setting_sha256=None))
+    a, b, diffs = both(lay, no_post)
+    assert diffs == [], diffs[:5]
+    assert a["checks"]["rtc.p1_n"]["ok"] and b["checks"]["rtc.p1_n"]["ok"]           # 条件の中では 1 種類
+    assert a["status"] == b["status"] == "incomplete" and a["version_check"]["ok"] is False
+    assert any("setting_sha256" in p for p in a["version_check"]["problems"])
+    assert "rtc_setting_body_across" in b["version_check"]["problems"]
+
+
+# ---------------------------------------------------------------- 本番の前提（--expect 必須・禁止の引数）
+ALL_EXPECT = {"R1v3": "a", "N1v3": "a", "R1v3s1001": "a", "N1v3s1001": "a", "R1v3s1002": "a", "N1v3s1002": "a", "entry": "a",
+              "executor_v3": "a", "rtc_module": "a", "rtc_setting": "a"}
+
+
+def _ns(**kw):
+    d = dict(cmd="rotate", branch=1, rtc_setting="ZEROS", experiment="S4T1", dry_run=False, allow_smoke=False)
+    d.update(kw)
+    return types.SimpleNamespace(**d)
+
+
+@pytest.mark.parametrize("branch, extra_need", [(1, {"executor_v3", "rtc_module", "rtc_setting"}), (2, {"executor_v3"}),
+                                                (3, {"rtc_module", "rtc_setting"}), (4, set()), ("health", set())])
+def test_production_requires_all_expect(branch, extra_need):
+    base = set(EV.REGISTERED) | {"entry"}
+    assert set(EV.required_expect(branch)) == base | extra_need
+    a = _ns(branch=branch)
+    with pytest.raises(SystemExit) as e:
+        EV.check_expect_required(a, {})
+    for k in base | extra_need:
+        assert k in str(e.value.code)                                              # 足りない名前を並べる
+    with pytest.raises(SystemExit, match="N1v3s1002"):
+        EV.check_expect_required(a, {k: v for k, v in ALL_EXPECT.items() if k != "N1v3s1002"})
+    EV.check_expect_required(a, {k: ALL_EXPECT[k] for k in base | extra_need})
+    # dry-run・smoke は要らない
+    EV.check_expect_required(_ns(branch=branch, dry_run=True), {})
+    EV.check_expect_required(_ns(branch=branch, experiment="S4SMOKE_T1", allow_smoke=True), {})
+
+
+def test_main_refuses_production_without_expect(capsys):
+    assert EV.main(["rotate", "--branch", "1", "--rtc-setting", "ZEROS", "--worker", "1"]) == 3
+    err = capsys.readouterr().err
+    assert "足りない名前" in err and "R1v3s1001" in err and "rtc_setting" in err and "executor_v3" in err
+    assert EV.main(["run", "--branch", "4", "--cond", "P1_R1v3", "--expect", "entry=x"]) == 3
+    err = capsys.readouterr().err
+    assert "足りない名前" in err and "entry" not in err and "executor_v3" not in err and "rtc_module" not in err
+    assert EV.main(["health", "--worker", "1"]) == 3 and "足りない名前" in capsys.readouterr().err
+
+
+def test_expect_rtc_setting_is_the_body_sha():
+    want = EV.rtc_info("ZEROS")["setting_sha256"]
+    assert EV.parse_pairs([f"rtc_setting={want}"], "--expect") == {"rtc_setting": want}
+    EV.check_expect_rtc_setting({"rtc_setting": want}, "ZEROS")
+    EV.check_expect_rtc_setting({}, "ZEROS")
+    EV.check_expect_rtc_setting({"rtc_setting": "0" * 64}, None)                 # RTC の腕の無い条件は照らさない
+    with pytest.raises(SystemExit, match="中身の SHA-256"):
+        EV.check_expect_rtc_setting({"rtc_setting": "0" * 64}, "ZEROS")
+    if EV.rtc_info("range10_cap5")["setting_sha256"] != want:
+        with pytest.raises(SystemExit):
+            EV.check_expect_rtc_setting({"rtc_setting": want}, "range10_cap5")
+    ver = EV.versions_now(3, "ZEROS")
+    assert ver["rtc_setting_sha256"] == want and EV.versions_now(4, None)["rtc_setting_sha256"] is None
+
+
+def test_doc_smoke_health_and_expect_values():
+    doc = (ROOT / "docs" / "stage4" / "test1_eval.md").read_text(encoding="utf-8")
+    smoke = [ln for ln in doc.splitlines() if "S4SMOKE_T1 --trials" in ln]
+    assert smoke and all("--dry-run" not in ln for ln in smoke)                   # smoke の例は dry-run を外した形
+    assert "外して smoke を回す" in doc and "selection:190600:33" in doc and "計 132 試行・約 1.6 プロセス時間" in doc
+    posted = {"R1v3s1001": "859fb1198c2198176e58c40285c6d85f2f4ba1e1057252696ad654021dbca7a2",
+              "N1v3s1001": "054227f072d880d66762f852e5fed4d8b1df61d01b7edc58cc844066e9ee8768",
+              "R1v3s1002": "c13c11af381c9036958ae2d4d0d60ea0858c70ca4913b765bc91d5b90fab182c",
+              "N1v3s1002": "a536b0f2064be76012ddcb9e3026995fee1d49bd561c3eb3415b4cab17ef9d05",
+              "R1v3": "d16c29c763543e25a4154b64ff6202ae787d4826602191939a06c62e0e4748a8",
+              "N1v3": "cc64ad2d26de834f7fd54d1b5b1536cd13b29206fedfefa09d686e2d89a83220"}
+    for m, sha in posted.items():
+        assert f"| {m} | `{sha}` |" in doc, m
+    assert "取り込み後に" in doc and "rtc_setting=<SHA>" in doc
+    assert EV.HEALTH_SPECS[0] == "selection:190600:33" and EV.build_parser().parse_args(["health"]).health_spec == EV.HEALTH_SPECS[0]
+
+
+def test_production_refuses_spec_and_82_change():
+    for f in ("--accept-spec-change", "--accept-spec", "--accept-s", "--allow-82-change", "--allow-8", "--allow-82-change=1"):
+        assert EV.forbidden_flag(f, EV.PROD_FORBIDDEN), f
+        with pytest.raises(SystemExit, match="本番では渡せない"):
+            EV.check_prod_forbidden(_ns(), ["--min-free-gb", "12", f])
+        EV.check_prod_forbidden(_ns(dry_run=True), [f])                           # dry-run・smoke は通す
+        EV.check_prod_forbidden(_ns(experiment="S4SMOKE_T1"), [f])
+    for f in ("--accept-env-change", "--accept-env", "--min-free-gb"):
+        EV.check_prod_forbidden(_ns(), [f])
+    full = [f"--expect={k}={v}" for k, v in ALL_EXPECT.items()]
+    assert EV.main(["rotate", "--branch", "1", "--rtc-setting", "ZEROS", "--allow-82-change"] + full) == 3
 
 
 # ---------------------------------------------------------------- 案 B の G-P1（同じ種の対）

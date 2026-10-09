@@ -46,7 +46,7 @@ CKPT_RUNS = {"R1v3": "outputs/train/train_R1v3_20261005-180404_20261005-180404",
              "R1v3s1002": "outputs/s4/train/train_R1v3s1002_20261009-050112_20261009-050112",
              "N1v3s1002": "outputs/s4/train/train_N1v3s1002_20261009-071920_20261009-071920"}
 CKPT_TAIL = "/checkpoints/020000/pretrained_model"
-VERSION_FIELDS = ["entry_sha256", "executor_v3_sha256", "rtc_setting", "rtc_module_sha256", "ckpt_sha256"]
+VERSION_FIELDS = ["entry_sha256", "executor_v3_sha256", "rtc_setting", "rtc_setting_sha256", "rtc_module_sha256", "ckpt_sha256"]
 DEFAULTS = {"e7_n": None, "plan": "A", "guard_mode": "point", "ni_margin": 0.10, "h2_layers": ["1001", "1002"],
             "rtc_p1_n": 50, "e7_band_extended": False, "c4_on_time": None, "p_fill": {}, "versions": None}
 KNOWN_RETURNS = {"placed": "scripted_return", "retry": "retry", "replan": "replan"}
@@ -356,7 +356,7 @@ def must_check_versions(specs, q):
 def versions_of(name, spec, q):
     """(理由の列, 要約)。"""
     why = []
-    out = {"entry_sha256": None, "ckpt_sha256": None, "executor_v3_sha256": None, "rtc_setting": None}
+    out = {"entry_sha256": None, "ckpt_sha256": None, "executor_v3_sha256": None, "rtc_setting": None, "rtc_setting_sha256": None}
     want = q["versions"] or {}
     if not want:
         why.append("no_versions_param")
@@ -416,7 +416,14 @@ def versions_of(name, spec, q):
         mod = single_value([(x.get("rtc") or {}).get("module_sha256") for x in t1])
         if mod is None or mod != want.get("rtc_module_sha256"):
             why.append("rtc_module_sha")
+        body = single_value([(x.get("rtc") or {}).get("setting_sha256") for x in t1])
+        posted = want.get("rtc_setting_sha256")
+        if body is None:
+            why.append("rtc_setting_body_sha")
+        elif posted and body != posted:
+            why.append("rtc_setting_body_not_posted")
         out["rtc_setting"] = st
+        out["rtc_setting_sha256"] = body
     else:
         for x, r in zip(t1, recs):
             if x.get("rtc") is not None or (r.get("diag") or {}).get("arm") not in (None, "naive"):
@@ -430,12 +437,15 @@ def versions_across(checks, specs):
     entries = set()
     by_model = {}
     v3s = set()
+    bodies = set()
     for name, c in checks.items():
         v = c.get("versions") or {}
         entries.add(v.get("entry_sha256"))
         by_model.setdefault(specs[name]["model"], set()).add(v.get("ckpt_sha256"))
         if v.get("executor_v3_sha256"):
             v3s.add(v["executor_v3_sha256"])
+        if v.get("rtc_setting_sha256"):
+            bodies.add(v["rtc_setting_sha256"])
     if len(entries) != 1:
         why.append("entry_across")
     for m in by_model:
@@ -443,6 +453,8 @@ def versions_across(checks, specs):
             why.append(f"ckpt_across:{m}")
     if len(v3s) > 1:
         why.append("executor_v3_across")
+    if len(bodies) > 1:
+        why.append("rtc_setting_body_across")
     return why
 
 

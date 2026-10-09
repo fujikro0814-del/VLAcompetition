@@ -31,7 +31,9 @@
   （outputs\\s4\\seed_wrap\\postcheck_<実行名>.json が通っていること。smoke の実行は使わない）。--run 名前=<実行名> で変えられる（記録に残る。
   登録版と違う実行は解析の版の照合 (b-4) で未完になる）。checkpoints\\last があれば 020000 と同じ中身かを確かめ、違えば警告する。
   SHA-256 は 98_s4_b4_eval.py と同じ ckpt_digest。--expect 名前=<SHA-256> と違えば起動しない。名前は 6 本のモデルのほか、
-  executor_v3（src/recovla/runtime/executor_v3.py）・rtc_module（src/recovla/diag/rtc.py）・entry（このファイル）。
+  executor_v3（src/recovla/runtime/executor_v3.py）・rtc_module（src/recovla/diag/rtc.py）・rtc_setting（RTC の設定の中身の
+  setting_sha256）・entry（このファイル）。本番（dry-run でも smoke でもない run・rotate・health）では --expect が必須: 6 本と entry、
+  枝 1・2 は executor_v3、枝 1・3 は rtc_module・rtc_setting。足りなければ名前を並べて起動しない。
 記録: 試行の json と run.json に "t1"（枝・条件・役・モデル・保存点のパスと SHA-256・RTC の設定・実行器・使ったファイルの SHA-256
   （s4_gates.json は LF にそろえた値））。resume_spec.json に t1_ckpt_sha256・t1_rtc・t1_entry_sha256（再開のとき違えば 96 が止める）。
 rotate（98_s4_b1.py と同じ止め方・progress・腕ごとの子プロセス）: 1 回の呼び出しで塊 1 つ（E7 5 種、P1 10 種、自然 11 種＝33 試行。
@@ -41,7 +43,8 @@ rotate（98_s4_b1.py と同じ止め方・progress・腕ごとの子プロセス
   同じ比べる組（E7・P1・自然）の中で 1 つの条件だけが 1 塊より先に進むことはしない（登録版 第 8 節「交互の塊が崩れた」）。
   進み具合は outputs\\s4\\test1_eval\\rotate_<実験>_b<枝>_w<ワーカー>.progress.json（pid 付き、1 分ごとに心拍）。止める合図:
   <条件>\\STOP、outputs\\s4\\STOP、outputs\\s4\\test1_eval\\rotate_<実験>.STOP（全ワーカー）。
-引数の拒み方: モデル・帯・実行のしかた・誘発・制限時間・計画役の引数は、省略形も前方一致で拒む（0166）。
+引数の拒み方: モデル・帯・実行のしかた・誘発・制限時間・計画役の引数は、省略形も前方一致で拒む（0166）。本番では
+  --accept-spec-change・--allow-82-change も前方一致で拒む。
 ドライバ: 610.88 と違っても止めない。警告を出し、版は試行の env に残る（0166）。記録と今の環境（ドライバ・torch・CUDA・OS）が違えば
   止める（96 の --accept-env-change のときだけ進め、96 が環境の区切りを書く）。
 終了コード: 96_s4_resume.py と同じ（0 全部そろった、1 途中で止まった、2 エラー、3 引数・前提の食い違い）。
@@ -87,7 +90,7 @@ BLOCK_SEEDS = {"e7": 5, "p1": 10, "nat": 11, "health": 11}        # 登録版 �
 GROUP_RANK = {"e7": 0, "p1": 1, "nat": 2, "health": 3}
 PER_TRIAL_H = {"e7": 40.9 / 450, "p1_R": 0.019, "p1_N": 0.023, "nat": 10.3 / 792, "rtc_nat": 4.2 / 198, "rtc_p1_R": 0.018,
                "rtc_p1_N": 0.023, "health": 1.6 / 132}            # 登録版 第 5 節の表から（推測）
-HEALTH_SPECS = ("selection:190600:33", "natural:190600:33")       # 色の扱いは回す前に掲示（登録版 第 4 節）。既定は 1 種 1 色
+HEALTH_SPECS = ("selection:190600:33", "natural:190600:33")       # 作者の決定で既定の selection（1 種 1 色、4 本 × 33）を使う
 FILES = ("scripts/98_s4_test1_eval.py", "scripts/96_s4_resume.py", "scripts/82_v2_eval.py", "scripts/98_s4_b1.py",
          "scripts/98_s4_d_rtc.py", "src/recovla/runtime/executor_v3.py", "src/recovla/runtime/executor.py", "src/recovla/diag/rtc.py",
          "configs/s4_gates.json")
@@ -95,6 +98,7 @@ FORBIDDEN_EXTRA = ("--model", "--mode", "--exec-interval", "--induce", "--ablate
                    "--trials", "--experiment", "--condition", "--no-safety", "--no-limiter", "--xcmd-leash", "--cart-margin",
                    "--diag-ik", "--diag-no-gravcomp", "--planner", "--text", "--step-timeout-s", "--task-time-limit-s")
 ROTATE_FORBIDDEN = ("--max-new", "--progress-file", "--stop-file")
+PROD_FORBIDDEN = ("--accept-spec-change", "--allow-82-change")   # 本番の run・rotate・health では拒む（前方一致）
 
 
 def _load(path: pathlib.Path, name: str):
@@ -313,9 +317,50 @@ def ckpt_info(name: str, v82=None, choose: dict = None, expect: dict = None, roo
     return r
 
 
-EXPECT_KEYS = tuple(REGISTERED) + ("executor_v3", "rtc_module", "entry")
+EXPECT_KEYS = tuple(REGISTERED) + ("executor_v3", "rtc_module", "rtc_setting", "entry")
 EXPECT_FILES = {"executor_v3": "src/recovla/runtime/executor_v3.py", "rtc_module": "src/recovla/diag/rtc.py",
                 "entry": "scripts/98_s4_test1_eval.py"}
+
+
+def is_production(a) -> bool:
+    """dry-run でも smoke（実験名 S4SMOKE*）でもない run・rotate・health。"""
+    return not getattr(a, "dry_run", False) and not str(a.experiment or "").startswith("S4SMOKE")
+
+
+def required_expect(branch) -> list:
+    """本番で必ず渡す --expect の名前。6 本の保存点と entry、枝 1・2 は executor_v3、枝 1・3 は rtc_module・rtc_setting。"""
+    need = list(REGISTERED) + ["entry"]
+    if branch in BRANCHES:
+        if BRANCHES[branch]["b1"]:
+            need.append("executor_v3")
+        if BRANCHES[branch]["b2"]:
+            need += ["rtc_module", "rtc_setting"]
+    return need
+
+
+def check_expect_required(a, expect: dict) -> None:
+    if not is_production(a):
+        return
+    lack = [k for k in required_expect(a.branch) if not expect.get(k)]
+    if lack:
+        raise SystemExit(f"本番（dry-run でも smoke でもない）は --expect が要る。足りない名前: {', '.join(lack)}（起動しない）")
+
+
+def check_prod_forbidden(a, extra: list) -> None:
+    if not is_production(a):
+        return
+    for f in extra:
+        if forbidden_flag(f, PROD_FORBIDDEN):
+            raise SystemExit(f"{f} は本番では渡せない（{', '.join(PROD_FORBIDDEN)}。起動しない）")
+
+
+def check_expect_rtc_setting(expect: dict, rtc_setting: str) -> None:
+    """--expect rtc_setting=<SHA-256> を、RTC の設定の中身の SHA-256（rtc_info の setting_sha256）と照らす。"""
+    if not expect.get("rtc_setting") or not rtc_setting:
+        return
+    got = rtc_info(rtc_setting)["setting_sha256"]
+    if got != expect["rtc_setting"]:
+        raise SystemExit(f"RTC の設定 {rtc_setting} の中身の SHA-256 {got} が掲示した値 {expect['rtc_setting']} と違う（起動しない）")
 
 
 def parse_pairs(items: list, what: str, keys=EXPECT_KEYS) -> dict:
@@ -491,6 +536,7 @@ def run_condition(r96, ops, v82, a, conds: list, name: str, extra: list, max_new
     for f in extra:
         if forbidden_flag(f, FORBIDDEN_EXTRA):
             raise SystemExit(f"{f} は 98_s4_test1_eval.py が決める（モデル・帯・実行のしかた・誘発・制限時間・計画役）")
+    check_prod_forbidden(a, extra)
     c = find(conds, name)
     trials = a.trials or c["trials"]
     if c["group"] == "health" and not a.trials:
@@ -499,8 +545,10 @@ def run_condition(r96, ops, v82, a, conds: list, name: str, extra: list, max_new
     if why:
         raise SystemExit(why)
     expect = parse_pairs(a.expect, "--expect")
+    check_expect_required(a, expect)
     fsha = files_sha256()
     check_expect_files(expect, fsha)
+    check_expect_rtc_setting(expect, c["rtc"])
     if fsha["configs/s4_gates.json"] != POSTED_GATES_SHA256:
         raise SystemExit(f"configs/s4_gates.json の SHA-256（LF）{fsha['configs/s4_gates.json']} が掲示の値（0165）と違う")
     ck = ckpt_info(c["model"], v82, parse_pairs(a.run, "--run", tuple(REGISTERED)), expect)
@@ -558,6 +606,8 @@ def _conds_of(a) -> list:
 
 def cmd_run(a, extra) -> int:
     conds = _conds_of(a)
+    check_prod_forbidden(a, extra)                          # 96・82 を読み込む前に、本番の前提を確かめる
+    check_expect_required(a, parse_pairs(a.expect, "--expect"))
     r96, ops, v82 = _env()
     rc = env_gate(r96, ops, v82, a, [a.cond], extra)
     if rc and not a.dry_run:
@@ -609,12 +659,11 @@ class Claims:
             x = json.loads(p.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return False
-        if x.get("pid") == os.getpid():
-            return False
-        if self.alive(int(x.get("pid", -1)), x.get("proc_create_time")):
+        if x.get("pid") != os.getpid() and self.alive(int(x.get("pid", -1)), x.get("proc_create_time")):
             return True
+        # 自分の pid の占有が残っている（前の呼び出しで外し損ねた）か、死んだワーカーの占有なら外す。残すと take が取り直せない
         try:
-            p.unlink()                                    # 死んだワーカーの占有は外す
+            p.unlink()
         except OSError:
             pass
         return False
@@ -730,15 +779,18 @@ def cmd_rotate(a, extra) -> int:
     conds = _conds_of(a)
     if not conds:
         raise SystemExit("回す条件がない（--groups）")
+    check_prod_forbidden(a, extra)                          # 96・82 を読み込む前に、本番の前提を確かめる
+    expect = parse_pairs(a.expect, "--expect")
+    check_expect_required(a, expect)
     r96, ops, v82 = _env()
     for c in conds:
         c["trials_run"] = a.trials or (a.health_spec if c["group"] == "health" else c["trials"])
         why = check_band(c, c["trials_run"], a.experiment, a.allow_smoke)
         if why:
             raise SystemExit(why)
-    expect = parse_pairs(a.expect, "--expect")
     fsha = files_sha256()
     check_expect_files(expect, fsha)
+    check_expect_rtc_setting(expect, getattr(a, "rtc_setting", None))
     for m in sorted({c["model"] for c in conds}):           # 子を起こす前に、保存点がそろうことを確かめる
         ck = ckpt_info(m, v82, parse_pairs(a.run, "--run", tuple(REGISTERED)), expect)
         for w in ck["warnings"]:
@@ -871,6 +923,12 @@ def cmd_ckpt(a) -> int:
         print(f"{m}: 決められない — {why}")
     for k, rel in EXPECT_FILES.items():
         print(f"{k}: {rel}  SHA-256 {fsha[rel]}")
+    try:
+        from recovla.diag import rtc as D
+        for s in D.CANDIDATES:
+            print(f"rtc_setting（{s} の中身）: SHA-256 {rtc_info(s)['setting_sha256']}")
+    except Exception as e:                               # noqa: BLE001
+        print(f"rtc_setting: 計算できない — {type(e).__name__}: {e}")
     print(f"configs/s4_gates.json（LF）: {fsha['configs/s4_gates.json']}（掲示 0165: {'一致' if fsha['configs/s4_gates.json'] == POSTED_GATES_SHA256 else '違う'}）")
     return 0 if not bad else 3
 
@@ -907,6 +965,7 @@ def versions_now(branch, rtc_setting: str, v82=None, expect: dict = None) -> dic
     return {"entry_sha256": fsha["scripts/98_s4_test1_eval.py"],
             "executor_v3_sha256": fsha["src/recovla/runtime/executor_v3.py"] if br["b1"] else None,
             "rtc_setting": rtc_setting if br["b2"] else None,
+            "rtc_setting_sha256": rtc_info(rtc_setting)["setting_sha256"] if br["b2"] else None,
             "rtc_module_sha256": fsha["src/recovla/diag/rtc.py"] if br["b2"] else None, "ckpt_sha256": ck}
 
 
@@ -939,7 +998,8 @@ def build_parser() -> argparse.ArgumentParser:
         if name in ("ckpt", "run", "rotate", "health", "layout"):
             p.add_argument("--run", action="append", default=[], help="保存点の実行を変える（R1v3s1001=<実行名>。記録に残る）")
             p.add_argument("--expect", action="append", default=[],
-                           help="掲示した SHA-256（R1v3s1001=…、executor_v3=…、rtc_module=…、entry=…）。違えば起動しない")
+                           help="掲示した SHA-256（R1v3s1001=…、executor_v3=…、rtc_module=…、rtc_setting=…、entry=…）。"
+                                "違えば起動しない。本番では必須（足りなければ起動しない）")
         if name in ("run", "rotate", "health"):
             p.add_argument("--experiment", default=None, help="既定は S4T1（健全性の確認は S4T1HC）")
             p.add_argument("--trials", default=None, help="smoke だけ（--allow-smoke と一緒に）。本番は表の帯")

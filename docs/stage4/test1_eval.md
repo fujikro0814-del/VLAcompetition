@@ -26,22 +26,29 @@
 .venv\Scripts\python.exe scripts\98_s4_test1_eval.py plan --branch <枝> [--rtc-setting <設定>]
 
 :: 1. smoke（44400〜44799 の未使用の種。台帳役が割り当てる。E7 は計画役の API を呼ぶ）
+::    まず下のコマンドの末尾に --dry-run を付けて確かめ、その後 --dry-run を外して smoke を回す
 .venv\Scripts\python.exe scripts\98_s4_test1_eval.py rotate --branch <枝> [--rtc-setting <設定>] --allow-smoke ^
-    --experiment S4SMOKE_T1 --trials <種>:<数> --dry-run
+    --experiment S4SMOKE_T1 --trials <種>:<数>
     （smoke の --trials は条件の形に合わせる: E7 は 44700:2、単発は induced:44700:2 / natural:44700:1。形の違う条件は
-      --groups e7・--groups p1・--groups nat で分けて回す）
+      --groups e7・--groups p1・--groups nat で分けて回す。smoke と dry-run では --expect は要らない）
 
-:: 2. 健全性の確認（190600〜190632、4 本 × 33。テスト 1 の直前。問 8）
+:: 2. 健全性の確認（190600〜190632、既定の selection:190600:33＝1 種 1 色、4 本 × 33 試行＝計 132 試行・約 1.6 プロセス時間。
+::    テスト 1 の直前。問 8。作者の決定）。本番なので --expect（6 本と entry）が要る
 .venv\Scripts\python.exe scripts\98_s4_test1_eval.py health --dry-run
-.venv\Scripts\python.exe scripts\98_s4_test1_eval.py health --worker 1     （3 本なら --worker 2・3 も別の窓で）
+.venv\Scripts\python.exe scripts\98_s4_test1_eval.py health --worker 1 ^
+    --expect R1v3=<SHA> --expect N1v3=<SHA> --expect R1v3s1001=<SHA> --expect N1v3s1001=<SHA> ^
+    --expect R1v3s1002=<SHA> --expect N1v3s1002=<SHA> --expect entry=<SHA>
+    （3 本なら同じコマンドを --worker 2・3 で別の窓に）
 
 :: 3. dry-run（全条件の何を飛ばし何を回すか。環境とドライバの表示）
 .venv\Scripts\python.exe scripts\98_s4_test1_eval.py rotate --branch <枝> [--rtc-setting <設定>] --dry-run
 
-:: 4. 3 本並行（同じコマンドを --worker 1・2・3 で 3 つ。--expect は「枝の確定」の掲示の値）
+:: 4. 3 本並行（同じコマンドを --worker 1・2・3 で 3 つ。--expect は「枝の確定」の掲示の値。第 3-1 節）
+::    本番では --expect が必須: 6 本と entry、枝 1・2 は executor_v3、枝 1・3 は rtc_module と rtc_setting。足りなければ起動しない
 .venv\Scripts\python.exe scripts\98_s4_test1_eval.py rotate --branch <枝> [--rtc-setting <設定>] --worker 1 ^
     --expect R1v3=<SHA> --expect N1v3=<SHA> --expect R1v3s1001=<SHA> --expect N1v3s1001=<SHA> ^
-    --expect R1v3s1002=<SHA> --expect N1v3s1002=<SHA> --expect executor_v3=<SHA> --expect rtc_module=<SHA> --expect entry=<SHA>
+    --expect R1v3s1002=<SHA> --expect N1v3s1002=<SHA> --expect entry=<SHA> ^
+    [--expect executor_v3=<SHA>] [--expect rtc_module=<SHA> --expect rtc_setting=<SHA>]
 
 :: 5. 監視（ワーカーごと）
 .venv\Scripts\python.exe scripts\96_s4_ops.py wait --progress outputs\s4\test1_eval\rotate_S4T1_b<枝>_w1.progress.json
@@ -78,7 +85,7 @@
 | | nat_R1v3s1001・nat_N1v3s1001・nat_R1v3s1002・nat_N1v3s1002 | natural:161000:33（99 試行） | 同上 |
 | RTC（枝 1・3） | nat_R1v3_rtc | natural:161000:66 | `--rtc-setting` の設定（`98_s4_d_rtc.py` の patch96。diag_NNNN.npz も同じ形） |
 | | P1_R1v3_rtc・P1_N1v3_rtc | induced:162000:100 | 同上（試行の diag の誘発の欄は P1 に直す。B2 と同じ） |
-| 健全性（S4T1HC） | health_R1v3s1001・health_N1v3s1001・health_R1v3s1002・health_N1v3s1002 | selection:190600:33（既定。1 種 1 色）か natural:190600:33（`--health-spec`） | 自然と同じ |
+| 健全性（S4T1HC） | health_R1v3s1001・health_N1v3s1001・health_R1v3s1002・health_N1v3s1002 | selection:190600:33（既定。1 種 1 色。作者が決めた。G2） | 自然と同じ |
 
 - 帯は `s4_gates.json` の `test1_*`・`seed_copy_health` と毎回照らし、表の指定と完全に一致するときだけ通す（`e7_band_extended` は偽）。本番の実験名は S4T1（健全性は S4T1HC）だけ。smoke は `--allow-smoke`・実験名 S4SMOKE*・44400〜44799 の中で X2（44404〜44423）と台帳の「使用済み」の外。
 - 枝 1・3 では `--rtc-setting` が要り、枝 2・4 では渡すと止まる。
@@ -95,10 +102,26 @@
 - 82 の `CKPT` の写しに、束 3 の 4 本（R1v3s1001・N1v3s1001・R1v3s1002・N1v3s1002）を足す。R1v3・N1v3 は 82 の `CKPT` のまま（登録版 第 5 節の実行と同じことを確かめ、違えば止める）。
 - 4 本は登録版 第 5 節の実行名の `checkpoints\020000\pretrained_model`。`outputs\s4\seed_wrap\postcheck_<実行名>.json` が通っていること（train_config_only_seed_and_names・same_dataset_fingerprint・exit_code 0・checkpoints_ok）。smoke の実行は `--run` でも使えない。
 - `checkpoints\last` があれば、020000 と同じ中身か（同じ場所か同じ SHA-256）を確かめ、違えば警告を出す（使うのは 020000）。
-- SHA-256 は `98_s4_b4_eval.py` と同じ `ckpt_digest`（相対パスの順に「相対パス<TAB>ファイルの SHA-256<LF>」をつないだもの）。`--expect 名前=<SHA>` と違えば起動しない。名前は 6 本のモデルと `executor_v3`・`rtc_module`・`entry`。
+- SHA-256 は `98_s4_b4_eval.py` と同じ `ckpt_digest`（相対パスの順に「相対パス<TAB>ファイルの SHA-256<LF>」をつないだもの）。`--expect 名前=<SHA>` と違えば起動しない。名前は 6 本のモデルと `executor_v3`・`rtc_module`・`rtc_setting`（RTC の設定の中身の SHA-256＝`setting_sha256`）・`entry`。
+- **本番（dry-run でも smoke でもない run・rotate・health）では `--expect` が必須**（作者の決定）。6 本と `entry`、枝 1・2 では `executor_v3`、枝 1・3 では `rtc_module`・`rtc_setting` が揃わなければ、足りない名前を並べて起動しない。smoke（実験名 S4SMOKE*）と `--dry-run` では要らない。
 - 記録: 試行の json と run.json に `"t1"`（枝・条件・役＝layout の鍵・モデル・保存点のパスと SHA-256・RTC の設定と rtc.py の SHA-256・実行器・使ったファイルの SHA-256。s4_gates.json は LF にそろえた値）。E7 は `98_s4_b1.py` と同じ `"v3"`・`"b1"`（`executor_version`・`files_sha256`）。`resume_spec.json` に `t1_ckpt_sha256`・`t1_rtc`・`t1_entry_sha256`・`b1_*`（再開のとき違えば 96 が止める）。
 - ドライバが 610.88 と違っても止めない（警告だけ。版は試行の env に残る。0166）。記録と今の環境（ドライバ・torch・CUDA・OS）が違えば止める（96 の `--accept-env-change` のときだけ進め、96 が環境の区切りを書く）。
-- 禁止の引数（モデル・帯・実行のしかた・誘発・制限時間・計画役。rotate は `--max-new` なども）は省略形も前方一致で拒む（0166）。
+- 禁止の引数（モデル・帯・実行のしかた・誘発・制限時間・計画役。rotate は `--max-new` なども）は省略形も前方一致で拒む（0166）。本番の run・rotate・health では `--accept-spec-change`・`--allow-82-change` も前方一致で拒む。
+- 3 本並行の占有のファイルに自分の pid のものが残っていたら（外し損ね）、消してから取り直す。
+
+### 3-1 `--expect` に使う値
+
+点検で計算した保存点の SHA-256（`ckpt_digest`、`checkpoints\020000\pretrained_model`）。`ckpt` の出力と同じであることを確かめてから使う。
+
+| 名前 | SHA-256 |
+|---|---|
+| R1v3 | `d16c29c763543e25a4154b64ff6202ae787d4826602191939a06c62e0e4748a8` |
+| N1v3 | `cc64ad2d26de834f7fd54d1b5b1536cd13b29206fedfefa09d686e2d89a83220` |
+| R1v3s1001 | `859fb1198c2198176e58c40285c6d85f2f4ba1e1057252696ad654021dbca7a2` |
+| N1v3s1001 | `054227f072d880d66762f852e5fed4d8b1df61d01b7edc58cc844066e9ee8768` |
+| R1v3s1002 | `c13c11af381c9036958ae2d4d0d60ea0858c70ca4913b765bc91d5b90fab182c` |
+| N1v3s1002 | `a536b0f2064be76012ddcb9e3026995fee1d49bd561c3eb3415b4cab17ef9d05` |
+| entry・executor_v3・rtc_module・rtc_setting | main に取り込んだ後のファイルで決まるので、**取り込み後に `ckpt` で計算して掲示**する（`rtc_setting` は「枝の確定」の設定の行） |
 
 ## 4. 解析の版の照合 (b)（登録版 第 7 節 1、判断の紙の問 5）
 
@@ -108,11 +131,11 @@ A（`test1.py`）と B（`98_s4_test1_b.py`）が、別のコードで次を確�
 |---|---|---|
 | (b-1) | 全試行の `t1.files_sha256["configs/s4_gates.json"]` が 7f2f651c…（0165） | 入口（`98_s4_test1.py`）が今のファイル（LF）を 7f2f651c… と照らす |
 | (b-2) | v3 の腕: `v3.settings` が 1 種類、`b1.executor_version` が v3.1、`executor_v3.py` の SHA-256 が 1 種類で掲示の値。今の実行器の腕: `b1.executor_version` が current、v3 の欄なし | v3 の腕で `executor_v3.py` が 1 種類 |
-| (b-3) | RTC の腕: 設定名（`t1.rtc.setting` と `diag.arm`）が 1 種類で掲示の値、rtc.py の SHA-256 が掲示の値。naive の条件に RTC の印がない | — |
+| (b-3) | RTC の腕: 設定名（`t1.rtc.setting` と `diag.arm`）が 1 種類で掲示の値、rtc.py の SHA-256 が掲示の値、設定の中身の SHA-256（`t1.rtc.setting_sha256`）が全試行で 1 種類（`versions.rtc_setting_sha256` があればその値）。naive の条件に RTC の印がない | RTC の腕の `setting_sha256` が 1 種類 |
 | (b-4) | 保存点のパスが登録版 第 5 節のもの、SHA-256 が 1 種類で掲示の値 | 同じモデルの保存点が条件をまたいで同じ |
 | (b-5) | 入口の SHA-256 が 1 種類で掲示の値。`t1.role` が条件と同じ | 入口の版が全条件で 1 種類。HEAD が 2 つ以上のときの「子が読み込むファイル」に入口・98_s4_b1.py・98_s4_d_rtc.py を足す |
 
-- 掲示の値は params の `versions`（`entry_sha256`・`executor_v3_sha256`・`rtc_setting`・`rtc_module_sha256`・`ckpt_sha256`）。`98_s4_test1_eval.py layout` が今のファイルから計算した値で書くので、「枝の確定」の掲示の値と見比べてから使う。
+- 掲示の値は params の `versions`（`entry_sha256`・`executor_v3_sha256`・`rtc_setting`・`rtc_setting_sha256`・`rtc_module_sha256`・`ckpt_sha256`）。`98_s4_test1_eval.py layout` が今のファイルから計算した値で書くので、「枝の確定」の掲示の値と見比べてから使う。
 - 照らすのは、`versions` があるか、どれかの試行に入口の印 `t1` があるとき。記録に `t1` があるのに `versions` が無ければ未完。どちらも無い（入口を通っていない合成の記録）ときは照らさず、1 枚に「版の照合 (b): 照らしていない」と書く（今までのテストの記録のため）。本番の記録は必ず入口を通るので、必ず照らされる。
 - A と B の照合は、合否・版の要約（`checks.*.versions`）・`version_check.ok` を照らす。理由の文は実装ごとに違うので照らさない。
 
@@ -131,15 +154,15 @@ A（`test1.py`）と B（`98_s4_test1_b.py`）が、別のコードで次を確�
 5. 同じコマンドをもう一度回すと、完全な記録を飛ばして何も回さない。1 つのワーカーを Ctrl+C して起こし直すと、続きから回る。
 6. 3 つのワーカーを起こしたとき、同じ条件を 2 つが回さない（占有のファイル）。progress.json の calls の並びで、E7 の 3 腕が 1 塊以上離れない。
 7. nvidia-smi のドライバ（610.88 と違えば警告が出るだけ）と、空きメモリ 12 GB 以上・学習が動いていないこと（登録版 第 5 節）。
-8. 健全性の確認の色の扱い（下の G2）を掲示してから回す。
+8. 健全性の確認の色の扱いは `selection:190600:33`（1 種 1 色）に決まった（下の G2）。`--health-spec` は既定のまま回す。
 
 ## 7. 食い違いと判断が要る点
 
 | 番号 | 中身 | この道具の扱い |
 |---|---|---|
 | G1 | 依頼の文は種のモデルの保存点を `checkpoints/last/pretrained_model` と書いているが、登録版 第 5 節は `checkpoints/020000/pretrained_model`（2 万手） | 登録版を正として 020000 を使う。`last` があれば中身を照らし、違えば警告 |
-| G2 | 健全性の確認（190600〜190632、4 本 × 33 試行）の色の扱いは「回す前に掲示」（登録版 第 4 節）で、まだ決まっていない | 既定は `selection:190600:33`（1 種 1 色、`choose_targets` で決まる色。33 試行）。`--health-spec natural:190600:33` なら 1 種 3 色（99 試行 × 4）。どちらかを掲示する |
+| G2 | 健全性の確認（190600〜190632、4 本 × 33 試行）の色の扱いは「回す前に掲示」（登録版 第 4 節） | **作者が既定の `selection:190600:33` に決めた**（1 種 1 色、`choose_targets` で決まる色。各 33 試行、計 132 試行・約 1.6 プロセス時間）。`--health-spec natural:190600:33`（1 種 3 色）は使わない |
 | G3 | 3 本並行の分け方は登録版に無い（「3 本並行」と「塊ごとに交互」だけ） | ワーカーが条件を分け合い、同じ組で 1 塊より先に進まない作り（第 2-1 節）。E7 は 3 腕が別のワーカーで同時に回ることが多い（同じ種・同じ時期） |
 | G4 | 版の照合 (b) を、入口の印も `versions` も無い記録では照らさない | 今までのテストの合成の記録のため。本番は必ず照らされる（第 4 節） |
-| G5 | RTC の設定の「SHA-256」の定義が登録版に無い | 設定名と `src/recovla/diag/rtc.py` の SHA-256（束 2 の `b2.files_sha256` と同じ値）で照らす。設定の中身の SHA-256（`setting_sha256`）も記録に残す |
+| G5 | RTC の設定の「SHA-256」の定義が登録版に無い | 設定名と `src/recovla/diag/rtc.py` の SHA-256（束 2 の `b2.files_sha256` と同じ値）で照らす。**作者の決定で、設定の中身の SHA-256（`setting_sha256`）も照らす**: A・B は RTC の腕の全試行で 1 種類（条件をまたいでも 1 種類）、`versions.rtc_setting_sha256` があればその値。入口は `--expect rtc_setting=<SHA>` と照らす |
 | G6 | `s4_gates.json` の `induced_denominator_rule` の文字列が `<= L` のまま（判断の紙 3 の 4） | 道具は 0155・登録版どおり `<`。記録だけ |
