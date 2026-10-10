@@ -100,6 +100,20 @@ class ReflexParams:
         return dataclasses.asdict(self)
 
 
+# 名前のついた設定（実験で使う形を明示する。96_s4_resume.py の --reflex NAME）
+PRESETS = {
+    "drop_only": {"fire_on_miss": False},   # 落下だけ（collapse・open。持ち上げを確かめた後）。空掴みでは発火しない。実験の主
+    "full": {},                             # 落下＋空掴み（miss）。ReflexParams の既定のまま
+}
+
+
+def preset_params(name: str, overrides: dict = None) -> "ReflexParams":
+    """名前のついた設定に、個別の上書きを重ねた引数。"""
+    if name not in PRESETS:
+        raise ValueError(f"反射の設定 {name!r} は {sorted(PRESETS)} のどれか")
+    return ReflexParams.from_dict(dict(PRESETS[name], **(overrides or {})))
+
+
 def _r(x, n=4):
     return None if x is None else round(float(x), n)
 

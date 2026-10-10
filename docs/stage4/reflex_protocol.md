@@ -121,7 +121,7 @@ run.json と resume_spec.json の `"reflex"` に引数を残す。反射が切�
 センサの模型を変えても同じ。
 
 **自然な試行の空掴み**（誤発火ではなく、本当に空を掴んで 0.3 s 以上閉じたまま）: S4T1HC で 45/132 本（成功した試行では 18/105 本）、
-S4B2 *_ext で 53/207 本（成功した試行で 24/176 本）。反射を入れると、成功した試行の 14〜17% で、空掴みの後に約 1 s 止まってやり直す。
+S4B2 *_ext で 53/207 本（成功した試行で 24/176 本）。空掴みでも発火する設定（full）では、成功した試行の 14〜17% で、空掴みの後に約 1 s 止まってやり直す。実験の主の設定（drop_only）では空掴みでは発火しない。
 これが成功を減らすか増やすかは、記録からは分からない（第 8 節の自然な試行の比較で見る）。
 
 **置き損ね（P3）に反射は効くか**: P3 は、方策が箱の上で開を出したのをきっかけに、誘発が閉のまま運んで、ずらし先で開き、
@@ -144,82 +144,75 @@ S4B2 *_ext で 53/207 本（成功した試行で 24/176 本）。反射を入�
 
 ## 7. 実機に移すときの前提と未確認の点
 
-**前提（仮定）**
+**前提（仮定。どれも実機で測っていない）**
 1. Franka Hand の状態（`franka::GripperState`: width・is_grasped・time）は、別のスレッドで `Gripper::readOnce()` を回して読む。
-   頻度は 10〜30 Hz、届くまでの遅れは 20〜50 ms、開き幅の雑音は 0.5 mm 程度と仮定した（franka_ros の gripper の状態の既定の頻度 30 Hz
-   を目安にした。実測していない）。
-2. grasp() で握っている立方体が抜けると、ハンドは力の制御のまま閉じ続け、開き幅は 0 へ向かい、is_grasped は偽になる。
-3. `Gripper::grasp` と `move` は、終わるまで戻らない呼び出し。反射で開くときは、`Gripper::stop()` で grasp を止めてから `move(0.08, speed)`
-   を別のスレッドで出す。
-4. 「止める」は、腕の制御の参照（直交座標の姿勢、または関節の位置）を、発火の時点で測った姿勢に置く。libfranka の制御の周期（1 kHz）の中で
-   参照を跳ばさないよう、速さの上限（0.25 m/s）で寄せる。
-5. 実機の立方体は 4 cm の PLA、約 50 g。grasp の力は数十 N。
-6. 実機での落ちる原因として、次を想定する（今は作っていない）: 人の手で引き抜く・はたき落とす（P2S で真似た）、ヨーのずれによる角・縁の掴み
-   （シミュレーションの立方体のヨーは ±30°、指のヨーは固定）、浅い掴み、箱の壁や他の立方体への衝突。
+   頻度の目安は franka_ros の gripper の設定で 30 Hz、franka_ros2 の設定で 15 Hz。届くまでの遅れは 20〜50 ms、開き幅の雑音は 0.5 mm 程度と
+   仮定した。オフラインの評価は 10 Hz・50 ms・0.5 mm（悲観）と 30 Hz・20 ms・0.5 mm（楽観）で同じ検出だった（第 6 節）。
+2. **grasp() で握った立方体が抜けると、ハンドは閉じ続けて開き幅が 0 へ向かう、という振る舞いは公式の文書に書かれていない（確からしさは
+   中〜低）。** 主の決まり（collapse）はこれに頼るので、実機の確かめ（下の手順）で最初に見る。is_grasped が偽になるかも同じ。
+3. `Gripper::grasp(0.04, speed, force, eps_inner=5 mm, eps_outer=5 mm)` は、斜めに握った立方体（5.2 cm）では失敗（false）を返す。
+   実機では eps_outer を大きく（例 0.03 m）して呼ぶ。反射の持つ範囲（3.0〜6.0 cm）はこれと別に決まる。
+4. grasp と move は終わるまで戻らない呼び出し。反射で開くときは、`Gripper::stop()` で grasp を止めてから `move(0.08, speed)` を出す
+   （別のスレッド）。stop から move が動き出すまでの時間は未確認。
+5. 「止める」は、腕の制御の参照（直交座標の姿勢、または関節の位置）を、発火の時点で測った姿勢に置く。参照を跳ばさないよう、
+   速さの上限（0.25 m/s）で寄せる。
+6. 引き抜き・はたき落としの力で、腕の衝突の検出（`setCollisionBehavior` のしきい値）が働いて腕が止まりうる（約 20 N の引き抜きを
+   想定）。止まったら反射の試しにならないので、確かめではしきい値を記録し、必要なら上げる。シミュレーションの P2S では、人の手が
+   立方体に与えた力は 1 手あたり最大約 10 N、指の接触力の法線の和 約 80 N、腕の関節トルクの変化は最大約 6 Nm だった
+   （小さなシミュレーション 1 本。`info.pull` に試行ごとに残る）。
+7. 実機の立方体は 4 cm の PLA、約 50 g。grasp の力は 30〜40 N/本。
+8. 実機で落ちる原因として想定するもの（今は作っていない）: 人の手で引き抜く・はたき落とす（P2S で真似た）、ヨーのずれによる角・縁の
+   掴み（シミュレーションの立方体のヨーは ±30°、指のヨーは固定）、浅い掴み、箱の壁や他の立方体への衝突。
+
+**実機の確かめの手順（約 30 分、カメラなし。反射も方策も動かさず、信号だけを見る）**
+1. 準備: PLA の立方体（4 cm、約 50 g）を机に置く。腕を手で（または決まった姿勢へ）立方体の上に動かす。衝突のしきい値の設定を控える。
+2. 記録の道具: 別のスレッドで `Gripper::readOnce()` を回し、(受け取った PC の時刻, GripperState.time, width, is_grasped) を全部書く。
+   腕の `RobotState`（`O_F_ext_hat_K`・`tau_ext_hat_filtered`・`q`）も 1 kHz の制御の中で書く（間引いてよい）。
+3. 握る: `grasp(0.04, 0.05, 30〜40 N, eps_inner=0.005, eps_outer=0.03)`。戻り値と、握った後の width・is_grasped を控える。腕で 15 cm 持ち上げて止める。
+4. 引き抜き 5 回: 人が立方体をつまみ、指の溝の向き（指の閉じる向きと直交）または下へ、ゆっくり（0.2〜0.5 m/s）引き抜く。毎回握り直す。
+5. はたき落とし 5 回: 人が立方体を横から手ではたく。
+6. 見ること: (a) 抜けた後に width が 0 へ向かうか、速さ、is_grasped がいつ偽になるか。(b) 読みの頻度と、GripperState.time と受け取りの
+   時刻の差（遅れ）、width の雑音（握って止まっている間の標準偏差）。(c) 衝突の検出で腕が止まったか、そのときの外力。(d) 最後の 1 回で、
+   抜けた直後に `stop()` → `move(0.08, 0.1)` を出し、stop を呼んでから指が開き始めるまでの時間。(e) `O_F_ext_hat_K` の z の、持つ前・
+   持った後・抜けた後の差（0.49 N が見えるか）。
+7. 合格の目安: (a) 10 回中 9 回以上で width が 0.5 s 以内に 2.5 cm 未満、(b) 頻度 10 Hz 以上・遅れ 50 ms 以下・雑音 1 mm 以下、
+   (c) 腕が止まらない（止まるならしきい値を記録して上げる）、(d) 0.3 s 以下。外れたら、引数（loss_m・est_s・settle_s）を見直す。
 
 **未確認**
-1. 上の 1〜3（頻度・遅れ・雑音、抜けた後の指の動き、stop と move の切り替えにかかる時間）。実機で開き幅の時系列を記録して確かめる。
-2. 斜めに握ったとき（5.2 cm）に grasp() が失敗を返すか、そのまま握り続けるか（シミュレーションの is_grasped の窓は 3.5〜4.5 cm）。
-3. 箱の壁を挟んで持ち上げたときの誤発火（記録の再生で 576 本に 1 本）。
-4. 外力の推定のずれの大きさ（第 6 節の終わり）。
-5. 空掴みのたびに止めてやり直すことが、方策の自分での立て直しを邪魔しないか（第 8 節で見る）。
+1. 上の 1〜6。とくに 2（抜けた後に閉じ続けるか）。
+2. 箱の壁を挟んで持ち上げたときの誤発火（記録の再生で 576 本に 1 本）。
+3. 外力の推定のずれの大きさ（第 6 節の終わり）。
+4. 空掴みのたびに止めてやり直すことが、方策自身の立て直しを邪魔しないか（実験の主の設定 drop_only では空掴みは切）。
 
-## 8. 確かめの実験の提案（まだ回さない）
+## 8. 確かめの実験
 
-問い: 反射を入れると、落下からの復帰が P2H と同じくらい上がるか。自然な試行の成功を下げないか。
-
-**腕**: 反射の入（`--reflex`）と切。同じ種・同じ順で両方を回し、種ごとの対で比べる（McNemar の正確な検定）。
-
-**条件と本数**（試行の時間の目安: 誘発 約 115 s、自然 約 33 s。GPU 1 枚で続けて回す）
-
-| 優先 | 模型 | 条件 | 誘発 | 本数（各腕） | 見込み |
-|---|---|---|---|---|---|
-| 主 | R1v3 | 落下 P2（指を開く） | `--induce P2` | 50 | 成立 約 24 本。切 0/23 → 入 約 10/25（P2H と同じ）なら、食い違い 8〜10 本が全部入の側で p ≈ 0.004〜0.002 |
-| 主 | R1v3 | 引き抜き P2S（指が閉じる） | `--induce P2S` | 50 | 実機に近い形。切の復帰は未知（P2 と同じく低いと見込む） |
-| 主 | R1v3 | 自然 | なし | 99（33 種 × 3 色） | 害の確かめ。成功 約 80%。10 ポイント下がれば見えるくらい（食い違いが多ければ見えない） |
-| 主 | N1v3 | P2・P2S | 同上 | 各 50 | 対照。「データに合わせる」が効くなら、落下の実演を学んだ R1v3 の方が N1v3 より上がる |
-| 副 | R1v3 | 把持失敗 P1 | `--induce P1` | 50 | 切 25%（10/40）。+25 ポイント以上なら見える。小さい効果は見えない |
-| 副 | R1v3 | 置き損ね P3 | `--induce P3` | 25 | 反射はほとんど働かない見込み（第 6 節）。害がないかだけ見る |
-
-主だけで 誘発 400 本 × 約 115 s ≈ 13 h、自然 198 本 × 約 35 s ≈ 2 h。副を足すと +4 h。
-
-**判定の物差し**（決めておく）: 主の指標は 30 s の復帰（段階 4 と同じ。分母は 30 s より前に成立した試行）。60 s を副。
-反射の事象（発火の数・理由・待ちの時間）を、入の腕で必ず数える（落下の試行で発火しなかった本数も）。
-
-**コマンド**（作業場所 `C:\PAI\recovery_vla`。種の帯 `<S_P2>` などは本線が決める。既存の検証・テストの帯と重ねない）:
-
-```
-.venv\Scripts\python.exe scripts\96_s4_resume.py run --experiment S4RFX --condition R1v3_P2_off  --model R1v3 --trials induced:<S_P2>:50  --induce P2  --mode naive --exec-interval 6 --no-safety
-.venv\Scripts\python.exe scripts\96_s4_resume.py run --experiment S4RFX --condition R1v3_P2_on   --model R1v3 --trials induced:<S_P2>:50  --induce P2  --mode naive --exec-interval 6 --no-safety --reflex
-.venv\Scripts\python.exe scripts\96_s4_resume.py run --experiment S4RFX --condition R1v3_P2S_off --model R1v3 --trials induced:<S_P2S>:50 --induce P2S --mode naive --exec-interval 6 --no-safety
-.venv\Scripts\python.exe scripts\96_s4_resume.py run --experiment S4RFX --condition R1v3_P2S_on  --model R1v3 --trials induced:<S_P2S>:50 --induce P2S --mode naive --exec-interval 6 --no-safety --reflex
-.venv\Scripts\python.exe scripts\96_s4_resume.py run --experiment S4RFX --condition R1v3_nat_off --model R1v3 --trials natural:<S_NAT>:33  --mode naive --exec-interval 6 --no-safety
-.venv\Scripts\python.exe scripts\96_s4_resume.py run --experiment S4RFX --condition R1v3_nat_on  --model R1v3 --trials natural:<S_NAT>:33  --mode naive --exec-interval 6 --no-safety --reflex
-（N1v3 は --model N1v3、条件名 N1v3_P2_off などで、P2・P2S の 4 本を同じ種で）
-（副: --induce P1 --trials induced:<S_P1>:50、--induce P3 --trials induced:<S_P3>:25）
-.venv\Scripts\python.exe scripts\96_s4_resume.py score --experiment S4RFX --condition R1v3_P2_off R1v3_P2_on --at 30,45,60
-```
-
-制限時間は既定の 60 s（S4DREC と同じ）。反射の引数を変えるときは `--reflex-set stop=freeze` のように付け、別の条件名にする
-（同じ条件で入切や引数を混ぜると、96 は控えの食い違いで止まる）。
+事前登録は `docs/stage4/reflex_prereg_v1.md`（学習なしの実験。帯 191500〜191699）。主の設定は `--reflex drop_only`
+（落下だけ。空掴みは切）。
 
 ## 9. 危ないところ
 
 - 誘発が行動を上書きしていた間の方策の開閉は記録になく、オフラインの評価は「閉のまま」とみなした。実際の実行で発火が遅れたり、
-  出なかったりするかもしれない（入の腕の事象で確かめる）。
-- 反射が開いた後も方策が閉を出し続けると、空掴み → 反射 → やり直し → 空掴み、を繰り返しうる（1 回およそ 1.5〜2 s）。
+  出なかったりするかもしれない（入の腕の事象で数える。事前登録の「落下で発火しない ≤10%」）。
+- full の設定では、反射が開いた後も方策が閉を出し続けると、空掴み → 反射 → やり直し、を繰り返しうる（1 回およそ 1.5〜2 s）。
 - `stop=measured` は参照を後ろへ戻すので、腕は一瞬減速して戻る。速さの上限は 0.25 m/s。腕の制限層（躍度・加速度）を超えないことは
-  シミュレーションで確かめる（G3 の監査）。
+  実験の G3 の監査で確かめる。
+- 区切りの途中で発火すると、行動の記録（runtime の actions）に発火の時刻の行が 1 つ足される（保持の扱い、塊の番号なし。実際に出した
+  止めの指令）。区切りと同じ手なら、その区切りの行を止めの指令に置き換える。どちらだったかは事象の `log` に残る。区切りの途中で
+  出す止めの指令は、評価の道具（誘発）の上書きを通らない（次の区切りからは通る）。
 - 反射は run（単発）だけに入れた。task（3 個の連続タスク、E7）には入れていない。
 - 引き抜き P2S は、立方体の位置と速度を直接書く（人がしっかりつまんで引く手の代わり）。力で引くと、静止摩擦が切れた瞬間に
-  立方体が 6〜10 m/s で飛んだので、この形にした。指と腕にかかる反力の大きさは、実際の人の手とは違いうる。
+  立方体が 6〜10 m/s で飛んだので、この形にした。指と腕にかかる反力の大きさは、実際の人の手とは違いうる（`info.pull` に残す）。
 - 引数は検証の記録で決めた。同じ記録で良く見えているので、新しい種では少し悪くなりうる。
 
 ## 10. 動かし方・確かめ方
 
-- テスト: `PYTHONPATH=src python -m pytest -q tests/test_s4_reflex.py -p no:cacheprovider`（CPU。検出の合成の信号、止め方と待ち、
-  偽の口での実行系への組み込み（切ならビット一致、入でも発火しなければ動きは同じ）、G1、96 の引数と控え、小さなシミュレーションでの P2S）。
+- 入れ方: `96_s4_resume.py run ... --reflex drop_only`（または `full`）。引数を変えるなら `--reflex-set KEY=VALUE` を足し、別の条件名に
+  する（同じ条件で入切・設定の名前・引数を混ぜると、96 は控えの食い違いで止まる）。run.json・resume_spec.json の `"reflex"` に
+  `{"preset", "params", "overrides"}`、試行の json の `"reflex"` に引数と事象が残る。
+- P2S: `--induce P2S`。試行の json の `induce.info.pull` に、引いた向き・速さ・力積・接触力・指先の動き・腕のトルクの変化が残る。
+  P2 と同じ `--trials` の指定なら、同じ種・同じ目標・同じ発動の点になる（テスト `test_p2_and_p2s_fire_at_the_same_point_on_the_same_seed`）。
+- テスト: `PYTHONPATH=src python -m pytest -q tests/test_s4_reflex.py -p no:cacheprovider`（CPU）。
 - G1: `python scripts/check_g1_boundary.py`（runtime の 16 ファイルで違反 0）。
 - 変えたファイル: `src/recovla/runtime/reflex.py`（新）、`src/recovla/runtime/runner.py`（反射の口。None なら前と同じ）、
   `src/recovla/eval/induce_slip.py`（新。P2S）、`src/recovla/harness/loop.py`（誘発に `pre_physics_step` があれば物理の 1 手ごとに呼ぶ。
-  無ければ前と同じ）、`scripts/96_s4_resume.py`（`--reflex`・`--reflex-set`・`--induce P2S`）、`tests/test_s4_reflex.py`（新）。
+  無ければ前と同じ）、`scripts/96_s4_resume.py`（`--reflex NAME`・`--reflex-set`・`--induce P2S`）、`tests/test_s4_reflex.py`（新）。

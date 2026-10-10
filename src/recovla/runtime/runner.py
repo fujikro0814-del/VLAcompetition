@@ -151,7 +151,19 @@ class PolicyRuntime:
             self.next_infer_k = None
             if self.safety is not None:
                 self.safety.gate = False
-            self._apply(rx.hold_action(self.motion.x_cmd))
+            a = rx.hold_action(self.motion.x_cmd)
+            self._apply(a)
+            # 行動の記録は「実際に出した指令」にする。同じ手で区切りの行動を出した直後に発火したなら、その記録（捨てた方策の
+            # 行動）を止めの指令に置き換え、区切りの途中で発火したなら、発火の時刻の行として足す（保持の扱い。塊の番号なし）
+            t = self.io.now()
+            row = (self.k, t, None, True, a.copy())
+            if self.log_act and self.log_act[-1][0] == self.k and abs(self.log_act[-1][1] - t) < 1e-9:
+                self.log_act[-1] = row
+                rx.cur["log"] = "replaced_boundary_row"
+            else:
+                self.log_act.append(row)
+                rx.cur["log"] = "appended_row"
+            rx.cur["a_sent"] = [round(float(v), 6) for v in a]
 
     # ------------------------------------------------------------------ perception
     def _tip(self, q) -> np.ndarray:

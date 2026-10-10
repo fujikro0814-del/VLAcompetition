@@ -11,8 +11,8 @@
   --min-free-gb 12（空きメモリがこれ未満なら待つ）、--min-commit-free-gb 6、--mem-timeout-min 120、
   --max-new N（新しい試行を N 本回したら止まる）、--stop-file、--progress-file、--accept-spec-change、--accept-env-change、
   --allow-82-change、task の --planner s4|legacy（計画役。既定 s4）、
-  run の --reflex（握り損ねの反射。src\\recovla\\runtime\\reflex.py。既定は切で、切なら動きも記録も前と同じ）と
-  --reflex-set KEY=VALUE（反射の引数を変える。何度でも）。入れたときは resume_spec.json・run.json の "reflex" と、試行の json の
+  run の --reflex drop_only|full（握り損ねの反射を名前のついた設定で入れる。src\\recovla\\runtime\\reflex.py の PRESETS。
+  既定は切で、切なら動きも記録も前と同じ）と --reflex-set KEY=VALUE（設定の引数を変える。何度でも）。入れたときは resume_spec.json・run.json の "reflex" と、試行の json の
   "reflex"（引数・発火の事象）に残る。run の --induce P2S（引き抜きの落下。src\\recovla\\eval\\induce_slip.py）。
   詳しくは docs\\stage4\\reflex_protocol.md。
   再起動で止まったら: サインインの後に 96_s4_ops.py wait（または progress.json）で止まった所を見て、同じコマンドで続きから回す
@@ -490,13 +490,15 @@ def limits_conflict(kind: str, old: dict, new: dict) -> dict:
 
 
 def reflex_config(a):
-    """--reflex のときだけ、握り損ねの反射の引数（recovla.runtime.reflex.ReflexParams を辞書にしたもの）。切なら None。
-    --reflex-set KEY=VALUE で既定を上書きする（値は JSON として読み、読めなければ文字列）。"""
-    if not getattr(a, "reflex", False):
+    """--reflex NAME のときだけ、握り損ねの反射の設定 {"preset": NAME, "params": ReflexParams を辞書にしたもの}。切なら None。
+    NAME は recovla.runtime.reflex.PRESETS（drop_only = 落下だけ、full = 落下＋空掴み）。--reflex-set KEY=VALUE で
+    さらに上書きする（値は JSON として読み、読めなければ文字列）。"""
+    name = getattr(a, "reflex", None)
+    if not name:
         if getattr(a, "reflex_set", None):
-            raise SystemExit("--reflex-set は --reflex と一緒に使う")
+            raise SystemExit("--reflex-set は --reflex NAME と一緒に使う")
         return None
-    from recovla.runtime.reflex import ReflexParams
+    from recovla.runtime.reflex import preset_params
     d = {}
     for kv in getattr(a, "reflex_set", None) or []:
         k, sep, v = kv.partition("=")
@@ -507,7 +509,7 @@ def reflex_config(a):
         except ValueError:
             d[k.strip()] = v
     try:
-        return ReflexParams.from_dict(d).to_dict()
+        return {"preset": name, "params": preset_params(name, d).to_dict(), "overrides": d}
     except (TypeError, ValueError) as e:
         raise SystemExit(f"--reflex-set: {e}")
 
@@ -619,7 +621,7 @@ class Engine:
             extra = {}
             if self.reflex_cfg is not None:                          # --reflex のときだけ（切なら 82 と同じ呼び方）
                 from recovla.runtime.reflex import GraspLossReflex, ReflexParams
-                extra["reflex"] = GraspLossReflex(ReflexParams.from_dict(self.reflex_cfg))
+                extra["reflex"] = GraspLossReflex(ReflexParams.from_dict(self.reflex_cfg["params"]))
             return PolicyRuntime(io, setup, pol, perception=per, safety=sf, checks=rtv["checks"], gripper_gate=gate, **extra,
                                  tip_offset=float(CFG["sim"]["fingertip_offset"]), mode=a.mode, s=self.exec_interval,
                                  d_init=int(rt_cfg["delay_steps"]), rtc_horizon=int(rt_cfg["rtc_guidance_horizon"]),
@@ -987,10 +989,11 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--grip-gate", action="store_true")
             p.add_argument("--xcmd-leash", type=float, default=None)
             p.add_argument("--cart-margin", type=float, default=None)
-            p.add_argument("--reflex", action="store_true",
-                           help="握り損ねの反射を入れる（recovla.runtime.reflex。既定は切。切なら動きも記録も前と同じ）")
+            p.add_argument("--reflex", default=None, choices=("drop_only", "full"),
+                           help="握り損ねの反射を、名前のついた設定で入れる（recovla.runtime.reflex.PRESETS。drop_only = 落下だけ"
+                                "（実験の主）、full = 落下＋空掴み）。既定は切。切なら動きも記録も前と同じ")
             p.add_argument("--reflex-set", action="append", default=None, metavar="KEY=VALUE",
-                           help="反射の引数を既定から変える（例 stop=freeze、fire_on_miss=false）。何度でも付けられる")
+                           help="反射の引数を設定から変える（例 stop=freeze）。何度でも付けられる。変えたら別の条件名にする")
         else:
             p.add_argument("--text", default="全部片付けて")
             p.add_argument("--step-timeout-s", type=float, default=TASK_STEP_TIMEOUT_DEFAULT,

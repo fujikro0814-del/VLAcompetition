@@ -331,6 +331,35 @@ def test_on_drop_discards_chunk_stops_opens_and_replans(monkeypatch):
     assert abs(np.asarray(ev["target"]) - np.asarray(ev["hand"])).max() < 1e-12          # 測った手先で止める
     tr = rt.trace()["reflex"]
     assert tr["n_fire"] >= 1 and tr["events"][0]["t_resume"] is not None
+    # 行動の記録は実際に出した指令（止めの指令）。発火の時刻の行があり、捨てた方策の行動ではない
+    fire_rows = [r for r in rt.log_act if abs(r[1] - t_fire) < 1e-9]
+    assert len(fire_rows) == 1 and fire_rows[0][3] and fire_rows[0][2] is None
+    assert np.allclose(fire_rows[0][4], ev["a_sent"]) and fire_rows[0][4][6] == -1.0
+    assert ev["log"] in ("appended_row", "replaced_boundary_row")
+
+
+def test_fire_on_a_boundary_tick_replaces_the_logged_policy_action(monkeypatch):
+    """区切りと同じ手で発火したら、その区切りの記録（捨てた方策の行動）を止めの指令に置き換える。"""
+    monkeypatch.setattr(RUN, "noise_generator", lambda seed, i: None)
+    io = FakeIO(None)
+    rx = GraspLossReflex(ReflexParams())
+    rt = RUN.PolicyRuntime(io, SimpleNamespace(cube_size=0.04, gripper_speed=0.08, grasp_force=40.0), FakePolicy(),
+                           mode="naive", s=6, motion=FakeMotion(), reflex=rx)
+    rt.start("pick up the red cube", 1)
+    for _ in range(int(round(3.0 / 0.002))):
+        rt.tick()
+        io.advance()
+    assert rx.det.state == "holding"
+    while rt.n_tick % RUN.STEPS_PER_ACTION != 0:                          # 次の手が区切りになるまで進める
+        rt.tick()
+        io.advance()
+    io.grip = SimpleNamespace(t=io.t, width=0.0, is_grasped=False)        # 区切りの手に、空になった読みが届く
+    rt.tick()                                                             # 区切りの行動を出した後、同じ手で発火
+    ev = rx.events[0]
+    assert ev["log"] == "replaced_boundary_row"
+    last = rt.log_act[-1]
+    assert last[0] == rt.k and abs(last[1] - ev["t"]) < 1e-9 and last[3] and last[2] is None and last[4][6] == -1.0
+    assert sum(1 for r in rt.log_act if r[0] == rt.k) == 1
 
 
 def test_runtime_reflex_file_passes_g1_boundary():
@@ -359,28 +388,51 @@ def test_96_reflex_off_keeps_spec_and_run_json(r96):
 
 
 def test_96_reflex_on_records_config(r96):
-    a = r96.build_parser().parse_args(BASE_ARGS + ["--reflex", "--reflex-set", "stop=freeze", "--reflex-set", "settle_s=0.6"])
+    a = r96.build_parser().parse_args(BASE_ARGS + ["--reflex", "full", "--reflex-set", "stop=freeze", "--reflex-set", "settle_s=0.6"])
     a.world_per_trial = True
     cfg = r96.reflex_config(a)
-    assert cfg["stop"] == "freeze" and cfg["settle_s"] == 0.6 and cfg["loss_m"] == ReflexParams().loss_m
+    p = cfg["params"]
+    assert cfg["preset"] == "full" and cfg["overrides"] == {"stop": "freeze", "settle_s": 0.6}
+    assert p["stop"] == "freeze" and p["settle_s"] == 0.6 and p["loss_m"] == ReflexParams().loss_m and p["fire_on_miss"]
     assert r96.make_spec(a)["reflex"] == cfg
     assert json.loads(r96.run_json_text(a, "run", [], 0.0, 6, {"time_limit_s": 60.0}))["reflex"] == cfg
     for bad in (["--reflex-set", "x=1"], ["--reflex-set", "novalue"]):
         with pytest.raises(SystemExit):
-            r96.reflex_config(r96.build_parser().parse_args(BASE_ARGS + ["--reflex"] + bad))
+            r96.reflex_config(r96.build_parser().parse_args(BASE_ARGS + ["--reflex", "full"] + bad))
+    with pytest.raises(SystemExit):                                         # 名前のない --reflex は受け付けない
+        r96.build_parser().parse_args(BASE_ARGS + ["--reflex"])
+
+
+def test_96_drop_only_preset_is_explicit_in_run_json(r96):
+    """実験の主の設定: 落下だけ（collapse・open、持ち上げの確認の後）。空掴み（miss）は使えるが切。"""
+    a = r96.build_parser().parse_args(BASE_ARGS + ["--reflex", "drop_only"])
+    a.world_per_trial = True
+    d = json.loads(r96.run_json_text(a, "run", [], 0.0, 6, {"time_limit_s": 60.0}))["reflex"]
+    assert d["preset"] == "drop_only" and d["params"]["fire_on_miss"] is False and d["overrides"] == {}
+    assert d["params"]["fire_on_open"] is True and d["params"]["min_lift_m"] > 0
+    from recovla.runtime.reflex import PRESETS, preset_params
+    assert set(PRESETS) == {"drop_only", "full"} and preset_params("full").fire_on_miss
+    with pytest.raises(ValueError):
+        preset_params("nope")
     with pytest.raises(SystemExit):                                         # --reflex なしの --reflex-set
         r96.reflex_config(r96.build_parser().parse_args(BASE_ARGS + ["--reflex-set", "stop=freeze"]))
 
 
 def test_96_spec_check_refuses_mixing_reflex_on_and_off(r96, tmp_path):
     off = r96.build_parser().parse_args(BASE_ARGS)
-    on = r96.build_parser().parse_args(BASE_ARGS + ["--reflex"])
-    for x in (off, on):
+    on = r96.build_parser().parse_args(BASE_ARGS + ["--reflex", "drop_only"])
+    full = r96.build_parser().parse_args(BASE_ARGS + ["--reflex", "full"])
+    for x in (off, on, full):
         x.world_per_trial = True
     r96.check_spec(off, tmp_path, r96.make_spec(off))                       # 控えを書く（反射なし）
     r96.check_spec(off, tmp_path, r96.make_spec(off))                       # 同じなら通る
     with pytest.raises(SystemExit):
         r96.check_spec(on, tmp_path, r96.make_spec(on))                     # 控えに無い反射を入れて続けない
+    d2 = tmp_path / "on"
+    d2.mkdir()
+    r96.check_spec(on, d2, r96.make_spec(on))
+    with pytest.raises(SystemExit):
+        r96.check_spec(full, d2, r96.make_spec(full))                       # 設定の名前が違っても混ぜない
 
 
 # ---------------------------------------------------------------- 引き抜きの誘発 P2S（小さなシミュレーション）
@@ -396,6 +448,57 @@ def test_pullout_params_and_no_action_override():
     assert p["side"] in (-1.0, 1.0) and 0.0 <= p["down_deg"] <= 60.0 and 0.2 <= p["speed_m_s"] <= 0.5
     assert a.record()["variant"] == "pull_out" and a.record()["kind"] == "P2"
 
+
+def _carry_truths(target=0, n=60):
+    """立方体を持って箱（+y）へ運ぶ真値の並び（発動の判定だけに使う。シミュレーションなし）。"""
+    from recovla.expert import script as S
+    from recovla.sim import frames
+    out = []
+    for j in range(n):
+        y = -0.25 + 0.45 * j / (n - 1)
+        tip = np.array([0.45, y, frames.CUBE_REST_Z + 0.10])
+        cp = np.array([[0.30, 0.10, frames.CUBE_REST_Z], [0.60, -0.10, frames.CUBE_REST_Z], [0.35, -0.20, frames.CUBE_REST_Z]])
+        cp[target] = tip
+        out.append(S.Truth(t=round(0.1 * j, 3), target=target, cube_pos=cp, cube_quat=np.tile([1.0, 0, 0, 0], (3, 1)),
+                           cube_linvel=np.zeros((3, 3)), fingers=np.array([0.0194, 0.0194]), finger_vel=np.zeros(2),
+                           gripper_closed=True, hand_pos=tip + [0, 0, 0.1034], hand_vel=np.zeros(3), fingertip=tip,
+                           x_cmd=tip + [0, 0, 0.1034], box=np.array([0.45, 0.20, 0.0])))
+    return out
+
+
+def test_p2_and_p2s_fire_at_the_same_point_on_the_same_seed():
+    """同じ種・同じ並びなら、P2 と P2S は同じ u・同じしきい値で、同じ区切りに発動する（対にできる）。P2 は指を開き、P2S は開かない。"""
+    from recovla.common.seeds import COLORS
+    from recovla.eval.induce import Inducer
+    from recovla.eval.induce_slip import PullOutInducer
+    from recovla.sim import scene
+    fake = SimpleNamespace(data=SimpleNamespace(xmat=np.tile(np.eye(3).reshape(1, 9), (4, 1)), time=0.0), hand_id=0,
+                           model=SimpleNamespace(body_mass=np.full(4, 0.05)), cube_ids=np.array([1, 2, 3]))
+    for seed in (191510, 191511, 191512, 191513):
+        lay = scene.sample_layout(seed)
+        tgt = COLORS[0]
+        p2, p2s = Inducer("P2", seed, lay, tgt, fake), PullOutInducer(seed, lay, tgt, fake)
+        assert p2.params["u"] == p2s.params["u"]
+        k2 = ks = None
+        for k, tr in enumerate(_carry_truths(COLORS.index(tgt))):
+            a = np.zeros(7)
+            a[6] = 1.0
+            b2, bs = p2.filter(k, a, tr), p2s.filter(k, a, tr)
+            if p2.fired and k2 is None:
+                k2 = k
+                assert b2[6] == -1.0
+            if p2s.fired and ks is None:
+                ks = k
+                assert bs[6] == 1.0 and not p2s.active
+        assert k2 is not None and k2 == ks and p2.t_fire == p2s.t_fire
+        assert p2.info["threshold_m"] == p2s.info["threshold_m"] and p2.params["r0_m"] == p2s.params["r0_m"]
+
+
+def test_96_p2_and_p2s_get_the_same_trial_list():
+    """96 の --trials induced:<種>:<数> は誘発の種類によらない（目標の色・配置が同じ）。P2 と P2S を同じ指定で回せば対になる。"""
+    r41 = _load(ROOT / "scripts" / "41_results.py", "r41_reflex")
+    a = r41.trial_list("induced:191510:6")
+    assert [(s, t) for s, _, t in a] == [(s, t) for s, _, t in r41.trial_list("induced:191510:6")]
 
 def test_pullout_on_tiny_sim_fingers_close_on_empty():
     """立方体を握った手（家の姿勢、空中）から引き抜く: grasp の指令はそのままで開き幅が 0 へ向かい、立方体は机に落ちる。"""
@@ -451,5 +554,10 @@ def test_pullout_on_tiny_sim_fingers_close_on_empty():
         assert min(w) < 0.002 and w[int(0.3 / rig.timestep)] < 0.035      # 空を掴んで閉じ切る
         assert abs(d.xpos[rig.cube_ids[ind.rig_target]][2] - frames.CUBE_REST_Z) < 0.005
         assert rec["established"] and rec["reason"] is None and rec["version"] == "P2S-v1"
+        # 引いている間の記録（外からの力積・接触力・指先の動き・腕のトルクの変化）
+        assert pull["mass_kg"] > 0 and pull["impulse_ns"] > 0 and pull["hand_force_max_n"] > 0
+        assert pull["contact_normal_max_n"] > 40.0 and pull["contact_resist_max_n"] > 0     # 40 N/本で握っていた
+        assert 0 <= pull["tip_move_max_m"] < 0.02 and pull["arm_torque_dev_max_nm"] > 0
+        json.dumps(rec)
     finally:
         rig.close()

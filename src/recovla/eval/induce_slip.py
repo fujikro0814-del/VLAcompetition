@@ -23,12 +23,18 @@
 - 成立は P2 と同じ（stage3 の Inducer.after。着地の検査）。ただし P2 の「指が開いている」の代わりに「立方体が手の中にない
   （指先の中心から drop_dist より遠い）」を使う（指は閉じたままなので）。
 - 記録: meta["induce"] の kind は "P2"（集計は P2 として読む）、variant="pull_out"・version="P2S-v1"、info["pull"] に
-  引いた向き・抜けた時刻・理由・抜けたときの指に対する速さ・位置を書き換えた量の最大。
+  引いた向き・抜けた時刻・理由・抜けたときの指に対する速さ・位置を書き換えた量の最大、人の手が与えた力積（引く向き）と
+  1 手あたりの力の最大、指と立方体の接触力（法線・接線の和の最大、引く向きに逆らう成分の最大）、指先の動き（最大・終わり）、
+  腕の関節トルクの引き始めからの変化の最大、立方体の質量。
+- P2 と P2S は同じ種で対にできる: 発動は段階 3 の P2 と同じ乱数列・同じ判定（u・r0・しきい値が同じ）で、P2S の引き方は
+  別の乱数列（seed_sequence(seed, "induce", 2)）から引く。同じ種・同じ --trials の指定なら、目標の色・配置・発動の
+  しきい値は両方で同じ（tests/test_s4_reflex.py で確かめる）。
 ほかの実機寄りの落ちる原因（今は作らない）: ヨーのずれによる角・縁の掴み（立方体のヨーは ±30°、指のヨーは固定）、浅い掴み、
 箱の壁や他の立方体への衝突。
 """
 import dataclasses
 
+import mujoco
 import numpy as np
 
 from recovla.common import seeds
@@ -54,8 +60,12 @@ class PullOutInducer(Inducer):
         speed = float(rng.uniform(*self.pc["speed_m_s"]))
         self.params["pull"] = {"side": side, "down_deg": down, "speed_m_s": speed}
         self.pull = {"t_start": None, "t_end": None, "end_reason": None, "dir": None, "exit_speed_m_s": None,
-                     "max_dp_m": None}
+                     "max_dp_m": None, "impulse_ns": None, "hand_force_max_n": 0.0, "contact_normal_max_n": 0.0,
+                     "contact_tangential_max_n": 0.0, "contact_resist_max_n": 0.0, "tip_move_max_m": 0.0,
+                     "tip_move_end_m": None, "arm_torque_dev_max_nm": 0.0, "mass_kg": None}
         self._on = False
+        self._fingers = self._tau0 = self._tip0 = None
+        self._imp = 0.0
         self._tip_prev = None
         self._p0 = None
 
@@ -79,10 +89,39 @@ class PullOutInducer(Inducer):
         th = np.radians(p["down_deg"])
         u = np.cos(th) * p["side"] * x + np.sin(th) * np.array([0.0, 0.0, -1.0])
         self._dir = u / np.linalg.norm(u)
-        self.pull.update(t_start=round(float(tr.t), 3), dir=[round(float(v), 4) for v in self._dir])
+        self.pull.update(t_start=round(float(tr.t), 3), dir=[round(float(v), 4) for v in self._dir],
+                         mass_kg=round(float(self.rig.model.body_mass[self.rig.cube_ids[self.rig_target]]), 4))
         self._on, self._tip_prev, self._p0, self._t0 = True, None, None, float(d.time)
 
     # ------------------------------------------------------------------ 物理の 1 手ごと
+    def _measure(self, world, b, tip) -> None:
+        """引いている間の記録（直前の物理の 1 手の後の状態から）: 指と立方体の接触力、引く向きの成分、指先の動き、
+        腕の関節トルクの、引き始めからの変化。"""
+        d, m = world.data, world.model
+        if self._fingers is None:
+            self._fingers = {m.body(n).id for n in ("left_finger", "right_finger")}
+        fn = ft = fdir = 0.0
+        f6 = np.zeros(6)
+        for i in range(d.ncon):
+            c = d.contact[i]
+            b1, b2 = int(m.geom_bodyid[c.geom1]), int(m.geom_bodyid[c.geom2])
+            if not ((b1 == b and b2 in self._fingers) or (b2 == b and b1 in self._fingers)):
+                continue
+            mujoco.mj_contactForce(m, d, i, f6)
+            fn += abs(float(f6[0]))
+            ft += float(np.hypot(f6[1], f6[2]))
+            fw = np.asarray(c.frame, float).reshape(3, 3).T @ f6[:3]       # 接触の座標から世界へ（geom1 が geom2 に及ぼす力）
+            fdir += float(np.dot(fw if b2 == b else -fw, self._dir))       # 立方体が受ける力の、引く向きの成分
+        tau = np.asarray(d.qfrc_actuator[world.arm_vadr], float)
+        if self._tau0 is None:
+            self._tau0, self._tip0 = tau.copy(), tip.copy()
+        P = self.pull
+        P["contact_normal_max_n"] = round(max(P["contact_normal_max_n"], fn), 2)
+        P["contact_tangential_max_n"] = round(max(P["contact_tangential_max_n"], ft), 2)
+        P["contact_resist_max_n"] = round(max(P["contact_resist_max_n"], -fdir), 2)     # 引く向きに逆らう摩擦の最大
+        P["tip_move_max_m"] = round(max(P["tip_move_max_m"], float(np.linalg.norm(tip - self._tip0))), 4)
+        P["arm_torque_dev_max_nm"] = round(max(P["arm_torque_dev_max_nm"], float(np.max(np.abs(tau - self._tau0)))), 3)
+
     def pre_physics_step(self, world) -> None:
         if not self._on:
             return
@@ -93,13 +132,15 @@ class PullOutInducer(Inducer):
         dt = float(m.opt.timestep)
         v_tip = np.zeros(3) if self._tip_prev is None else (tip - self._tip_prev) / dt
         self._tip_prev = tip.copy()
+        self._measure(world, b, tip)
         p = float(np.dot(d.xpos[b] - tip, self._dir))
         el = float(d.time) - self._t0
         if p > self.pc["exit_m"] or el > self.pc["max_s"]:
             self._on = False
             v_rel = float(np.dot(d.qvel[va:va + 3] - v_tip, self._dir))
             self.pull.update(t_end=round(float(d.time), 4), end_reason="exit" if p > self.pc["exit_m"] else "max_s",
-                             exit_speed_m_s=round(v_rel, 3))
+                             exit_speed_m_s=round(v_rel, 3), tip_move_end_m=round(float(np.linalg.norm(tip - self._tip0)), 4),
+                             impulse_ns=round(self._imp, 4))
             return
         vt = float(self.params["pull"]["speed_m_s"])
         if self._p0 is None:
@@ -108,8 +149,13 @@ class PullOutInducer(Inducer):
         dp = (self._p0 + vt * el) - p               # 人の手: 指に対する立方体の位置を、引く向きに vt で動かす（他の向きは物理のまま）
         d.qpos[qa:qa + 3] = d.qpos[qa:qa + 3] + dp * self._dir
         v = d.qvel[va:va + 3]
-        d.qvel[va:va + 3] = v + ((float(np.dot(v_tip, self._dir)) + vt) - float(np.dot(v, self._dir))) * self._dir
-        self.pull["max_dp_m"] = round(max(float(self.pull.get("max_dp_m") or 0.0), abs(dp)), 5)
+        dv = (float(np.dot(v_tip, self._dir)) + vt) - float(np.dot(v, self._dir))
+        d.qvel[va:va + 3] = v + dv * self._dir
+        mass = float(m.body_mass[b])
+        self._imp += mass * dv                      # 人の手が立方体に与えた運動量（引く向き）＝外からの力積の見積もり
+        P = self.pull
+        P["max_dp_m"] = round(max(float(P.get("max_dp_m") or 0.0), abs(dp)), 5)
+        P["hand_force_max_n"] = round(max(P["hand_force_max_n"], mass * dv / dt), 2)   # 1 手の力積 / 1 手の時間
     @property
     def rig_target(self) -> int:
         from recovla.common.seeds import COLORS
@@ -129,7 +175,7 @@ class PullOutInducer(Inducer):
     def record(self) -> dict:
         if self._on:                           # 試行が引いている途中で終わった
             self._on = False
-            self.pull.update(t_end=round(float(self.rig.data.time), 4), end_reason="trial_end")
+            self.pull.update(t_end=round(float(self.rig.data.time), 4), end_reason="trial_end", impulse_ns=round(self._imp, 4))
         r = super().record()
         r["info"] = dict(r["info"], pull=dict(self.pull))
         r["variant"], r["version"] = self.VARIANT, self.VERSION
