@@ -10,7 +10,11 @@
   01:45〜02:45 の窓は作者の決定 10/08 で必須から外した）、--ignore-quiet（互換のため残す。--quiet-window を無効にする）、
   --min-free-gb 12（空きメモリがこれ未満なら待つ）、--min-commit-free-gb 6、--mem-timeout-min 120、
   --max-new N（新しい試行を N 本回したら止まる）、--stop-file、--progress-file、--accept-spec-change、--accept-env-change、
-  --allow-82-change、task の --planner s4|legacy（計画役。既定 s4）。
+  --allow-82-change、task の --planner s4|legacy（計画役。既定 s4）、
+  run の --reflex（握り損ねの反射。src\\recovla\\runtime\\reflex.py。既定は切で、切なら動きも記録も前と同じ）と
+  --reflex-set KEY=VALUE（反射の引数を変える。何度でも）。入れたときは resume_spec.json・run.json の "reflex" と、試行の json の
+  "reflex"（引数・発火の事象）に残る。run の --induce P2S（引き抜きの落下。src\\recovla\\eval\\induce_slip.py）。
+  詳しくは docs\\stage4\\reflex_protocol.md。
   再起動で止まったら: サインインの後に 96_s4_ops.py wait（または progress.json）で止まった所を見て、同じコマンドで続きから回す
     （切れた試行の書きかけは _incomplete_<時刻>\\ に退避して、同じ番号・同じ種で回し直す）。
   計画役（task。目標書_段階4.md 第 10 節 17）: 既定 --planner s4 は src\\recovla\\planner\\decompose_s4.py（claude-haiku-5-5、
@@ -485,9 +489,35 @@ def limits_conflict(kind: str, old: dict, new: dict) -> dict:
             if old.get(k) is None or abs(float(old.get(k)) - float(new.get(k))) > 1e-9}
 
 
+def reflex_config(a):
+    """--reflex のときだけ、握り損ねの反射の引数（recovla.runtime.reflex.ReflexParams を辞書にしたもの）。切なら None。
+    --reflex-set KEY=VALUE で既定を上書きする（値は JSON として読み、読めなければ文字列）。"""
+    if not getattr(a, "reflex", False):
+        if getattr(a, "reflex_set", None):
+            raise SystemExit("--reflex-set は --reflex と一緒に使う")
+        return None
+    from recovla.runtime.reflex import ReflexParams
+    d = {}
+    for kv in getattr(a, "reflex_set", None) or []:
+        k, sep, v = kv.partition("=")
+        if not sep:
+            raise SystemExit(f"--reflex-set {kv!r}: KEY=VALUE の形で書く")
+        try:
+            d[k.strip()] = json.loads(v)
+        except ValueError:
+            d[k.strip()] = v
+    try:
+        return ReflexParams.from_dict(d).to_dict()
+    except (TypeError, ValueError) as e:
+        raise SystemExit(f"--reflex-set: {e}")
+
+
 def make_spec(a) -> dict:
     s = {k: getattr(a, k, None) for k in SPEC_KEYS}
     s["script82_sha256"] = SHA82
+    rx = reflex_config(a)
+    if rx is not None:                                               # 反射が切のときは控えの形を変えない
+        s["reflex"] = rx
     return s
 
 
@@ -497,6 +527,8 @@ def check_spec(a, out: pathlib.Path, spec: dict) -> None:
         old = json.loads(p.read_text(encoding="utf-8"))
         # 制限時間を足す前の控え（キーが無い）は、そのキーを比べない（記録の制限時間は cmd_main が試行の json で照らす）
         diff = {k: (old.get(k), spec.get(k)) for k in spec if k in old and old.get(k) != spec.get(k)}
+        if old.get("reflex") != spec.get("reflex"):                  # 反射の入切・引数は、控えに無くても食い違いとして見る
+            diff["reflex"] = (old.get("reflex"), spec.get("reflex"))
         if diff and not a.accept_spec_change:
             raise SystemExit(f"{p} の引数の控えと今回の引数が違う（前, 今）: {diff}\n"
                              f"同じ条件の続きなら引数を前に合わせる。意図して変えるなら --accept-spec-change（別の条件名にする方が安全）")
@@ -509,6 +541,8 @@ def check_spec(a, out: pathlib.Path, spec: dict) -> None:
                  "exec_interval": "exec_interval", "trials": "trials", "induce": "induce"}
         diff = {k: (old.get(r), spec.get(k)) for k, r in pairs.items() if r in old and old.get(r) != spec.get(k)
                 and not (k == "exec_interval" and spec.get(k) is None)}
+        if old.get("reflex") != spec.get("reflex"):
+            diff["reflex"] = (old.get("reflex"), spec.get("reflex"))
         if diff and not a.accept_spec_change:
             raise SystemExit(f"{out}/run.json と今回の引数が違う（前, 今）: {diff}")
     if not p.exists():
@@ -522,6 +556,7 @@ class Engine:
     def __init__(self, a, v82, cfg, lim, env=None):
         self.a, self.v82, self.cfg, self.lim = a, v82, cfg, lim      # cfg は制限時間を重ねた写し
         self.env = env_brief(env)                                     # 各試行の meta["env"] に写す要約
+        self.reflex_cfg = reflex_config(a) if getattr(a, "cmd", None) == "run" else None   # 握り損ねの反射（既定は切）
         self.world = self.suite = None
         self.cache = {}
         self.n_trials = 0
@@ -581,7 +616,11 @@ class Engine:
             gate = dict(rtv.get("gripper_gate") or {})
             if a.grip_gate:
                 gate["enabled"] = True
-            return PolicyRuntime(io, setup, pol, perception=per, safety=sf, checks=rtv["checks"], gripper_gate=gate,
+            extra = {}
+            if self.reflex_cfg is not None:                          # --reflex のときだけ（切なら 82 と同じ呼び方）
+                from recovla.runtime.reflex import GraspLossReflex, ReflexParams
+                extra["reflex"] = GraspLossReflex(ReflexParams.from_dict(self.reflex_cfg))
+            return PolicyRuntime(io, setup, pol, perception=per, safety=sf, checks=rtv["checks"], gripper_gate=gate, **extra,
                                  tip_offset=float(CFG["sim"]["fingertip_offset"]), mode=a.mode, s=self.exec_interval,
                                  d_init=int(rt_cfg["delay_steps"]), rtc_horizon=int(rt_cfg["rtc_guidance_horizon"]),
                                  motion=Motion(setup, limiter_enabled=not a.no_limiter, margin=float(act["limiter_margin"]),
@@ -594,10 +633,16 @@ class Engine:
         from recovla.eval import induce as I
         from recovla.harness.loop import run_policy_trial
         self._before_trial()
-        ind = I.Inducer(a.induce, seed, lay, tgt, self.world) if a.induce else None
+        if a.induce == "P2S":                                        # 引き抜きの落下（recovla.eval.induce_slip。P2S-v1）
+            from recovla.eval.induce_slip import PullOutInducer
+            ind = PullOutInducer(seed, lay, tgt, self.world)
+        else:
+            ind = I.Inducer(a.induce, seed, lay, tgt, self.world) if a.induce else None
         w0 = time.perf_counter()
         meta, arrays, rlog = run_policy_trial(self.world, self.suite, self.make_runtime, lay, tgt, seed, inducer=ind, cfg=CFG,
                                               time_limit_s=self.lim["time_limit_s"])
+        if self.reflex_cfg is not None:                              # 82 の形に足す欄（--reflex のときだけ。発火の事象を含む）
+            meta["reflex"] = rlog["runtime"].get("reflex")
         meta["time_limits"] = dict(self.lim)                         # 82 の形に足す欄（82 と同じ time_limit_s も loop が書く）
         meta["env"] = dict(self.env)                                 # 82 の形に足す欄（環境の要約。回の始めに読んだ値）
         meta["world_per_trial"] = bool(a.world_per_trial)            # 82 の形に足す欄（試行ごとに世界を作り直したか）
@@ -691,6 +736,9 @@ def run_json_text(a, kind, rows, wall_s, exec_interval, lim, env=None, segs=None
         pl = getattr(a, "planner", None) or "s4"
         d["planner"] = dict(PLANNERS[pl], name=pl)                   # 82 の形に足す欄（使った計画役）
     d["time_limits"] = dict(lim)                                     # 82 の形に足す欄
+    rx = reflex_config(a) if kind == "run" else None
+    if rx is not None:                                               # 握り損ねの反射の引数（--reflex のときだけ）
+        d["reflex"] = rx
     d["world_per_trial"] = bool(getattr(a, "world_per_trial", False))  # 82 の形に足す欄
     d["env"] = env                                                   # 82 の形に足す欄（この回の環境）
     d["env_segments"] = segs                                         # 完全な記録を環境ごとに分けた並び（長さ 2 以上なら報告で分ける）
@@ -939,6 +987,10 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--grip-gate", action="store_true")
             p.add_argument("--xcmd-leash", type=float, default=None)
             p.add_argument("--cart-margin", type=float, default=None)
+            p.add_argument("--reflex", action="store_true",
+                           help="握り損ねの反射を入れる（recovla.runtime.reflex。既定は切。切なら動きも記録も前と同じ）")
+            p.add_argument("--reflex-set", action="append", default=None, metavar="KEY=VALUE",
+                           help="反射の引数を既定から変える（例 stop=freeze、fire_on_miss=false）。何度でも付けられる")
         else:
             p.add_argument("--text", default="全部片付けて")
             p.add_argument("--step-timeout-s", type=float, default=TASK_STEP_TIMEOUT_DEFAULT,

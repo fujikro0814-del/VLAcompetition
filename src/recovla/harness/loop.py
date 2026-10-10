@@ -114,6 +114,8 @@ def run_policy_trial(world, suite, make_runtime, layout, target: str, seed: int,
     stops = 0
     audits = [g1_audit(rt, world, suite)]                        # 試行の始め・5 s ごと・終わり
     capture()
+    # 物理の 1 手ごとに外力を出す誘発（P2S の引き抜き。recovla.eval.induce_slip）。無ければ何もしない
+    pre_step = getattr(inducer, "pre_physics_step", None) if inducer is not None else None
     with quiet():
         while state["success_t"] is None and world.step * dt < time_limit_s - 1e-9:
             if inducer is not None and world.step > 0 and world.step % 50 == 0:
@@ -121,6 +123,8 @@ def run_policy_trial(world, suite, make_runtime, layout, target: str, seed: int,
             t_before = float(world.data.time)
             rt.tick()
             world.apply_joint_commands(io.take_commands())
+            if pre_step is not None:
+                pre_step(world)
             world.physics_step(on_step)
             suite.on_physics_step(world.data)
             if abs(float(world.data.time) - t_before - dt) > 1e-9:

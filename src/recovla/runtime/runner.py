@@ -14,6 +14,8 @@
 - rtc: 方策に渡す inference_delay は実行系が見積もった値（直前の推論で実際にかかった行の数。最初は configs の d）。
   実際に使う行の位置は、実際に届いた時刻で決まる（未来の計算時間は実行系には分からないため）
 - グリッパ: 行動の 7 番目が正なら閉（grasp）、そうでなければ開（move）。変わったときだけ口に出す
+- 握り損ねの反射（reflex。既定は None で切）: ハンドの新しい読みごとに recovla.runtime.reflex で検出し、発火したら古い塊と
+  計算中の推論を捨て、参照を止めて指を開き、待ちの後に新しい観測から推論し直す。切なら動きも記録も前と同じ
 """
 import math
 
@@ -40,7 +42,8 @@ def disable_rtc_for(policy) -> None:
 class PolicyRuntime:
     def __init__(self, io, setup, policy, mode: str = "naive", s: int = 10, d_init: int = 4, rtc_horizon: int = 40,
                  motion: Motion = None, limiter_enabled: bool = True, margin: float = 0.99,
-                 perception=None, safety=None, checks: dict = None, tip_offset: float = 0.1034, gripper_gate: dict = None):
+                 perception=None, safety=None, checks: dict = None, tip_offset: float = 0.1034, gripper_gate: dict = None,
+                 reflex=None):
         if mode not in ("sync", "naive", "rtc"):
             raise ValueError(mode)
         self.io, self.setup, self.policy = io, setup, policy
@@ -55,6 +58,7 @@ class PolicyRuntime:
         self.tip_offset = float(tip_offset)
         self.gripper_gate = gripper_gate if gripper_gate and gripper_gate.get("enabled") else None
         self.t_grip_switch = -1e9
+        self.reflex = reflex               # recovla.runtime.reflex.GraspLossReflex（None なら切。切なら動きは前と同じ）
 
     # -------------------------------------------------------------------- trial
     def start(self, task: str, seed: int) -> None:
@@ -81,6 +85,10 @@ class PolicyRuntime:
         self.d_est = self.d_init
         self.log_inf, self.log_act = [], []
         self.reset_chunks()
+        if self.reflex is not None:
+            self.reflex.start_trial()
+            self.rx_intent = False          # 方策が最後に出した開閉（評価の道具が上書きする前）
+            self.rx_grip_t = None           # 最後に読んだハンドの読みの時刻
 
     def set_task(self, task: str, seed: int) -> None:
         """サブタスクの切り替え・やり直し（知覚の起動時の確かめと推定は保つ）。塊は持ち越さない。雑音の列は seed から。"""
@@ -111,6 +119,8 @@ class PolicyRuntime:
             self.k += 1
             self._action_boundary()
         sensor = self.io.sense(cameras=False)
+        if self.reflex is not None:
+            self._reflex_sample(sensor)
         if self.perception is not None:
             self.perception.record_joints(sensor.joints)
         if self.safety is not None and self.n_tick % 10 == 0:          # 入力の読み取り（50 Hz）ごと。旧版と同じ
@@ -119,6 +129,29 @@ class PolicyRuntime:
         self.n_tick += 1
         for q in self.motion.step(sensor.joints):
             self.io.command_joints(q)
+
+    # ------------------------------------------------------------------ reflex（握り損ねの反射。既定は切）
+    def _reflex_sample(self, sensor) -> None:
+        """ハンドの新しい読みごとに検出する（読みは 10 Hz。行動の区切りを待たない）。発火したらその場で古い塊を捨て、
+        手先の参照を止めて指を開く（実機の口: 直交座標の参照と、ハンドの move）。"""
+        g = sensor.gripper
+        if self.external or g is None or g.t == self.rx_grip_t:
+            return
+        self.rx_grip_t = g.t
+        rx = self.reflex
+        if rx.overriding:
+            rx.observe(self.io.now(), self.k, g.width, self.rx_intent)          # 待ちの間は開き幅を控えるだけ
+            return
+        hand = self.motion.hand_pose(sensor.joints.q)[0]
+        if rx.observe(self.io.now(), self.k, g.width, self.rx_intent, hand=hand, x_cmd=self.motion.x_cmd, sample_t=g.t):
+            rx.cur["discarded"] = {"active": None if self.active is None else int(self.active["i"]),
+                                   "pending": None if self.pending is None else int(self.pending["i"])}
+            self.active = None
+            self.pending = None
+            self.next_infer_k = None
+            if self.safety is not None:
+                self.safety.gate = False
+            self._apply(rx.hold_action(self.motion.x_cmd))
 
     # ------------------------------------------------------------------ perception
     def _tip(self, q) -> np.ndarray:
@@ -216,9 +249,14 @@ class PolicyRuntime:
             self.d_est = max(1, lag)
             self.log_inf[-1].update({"k_act": k, "t_act": t, "offset": o0})
             self.pending = None
+            rx = self.reflex
+            if rx is not None and rx.overriding and not rx.accept_chunk(t, k, p["i"], self.log_inf[-1].get("cue")):
+                self.active = None                            # 反射の待ちの後の塊の条件を満たさない: 捨てて推論し直す
         # 2) 推論を始めるか
         start = False
-        if self.pending is None:
+        if self.reflex is not None and self.reflex.blocking(t):
+            pass                                              # 反射の待ちの間は推論を始めない
+        elif self.pending is None:
             if self.mode == "sync":
                 start = self.active is None or self.active["rows_done"] >= self.s
                 if start:
@@ -238,6 +276,11 @@ class PolicyRuntime:
         if held:
             a = np.zeros(7)
             a[6] = 1.0 if self.closed else -1.0
+        if self.reflex is not None:
+            if self.reflex.overriding:                         # 反射の止め方（参照を止めて保ち、指を開く）
+                a, held = self.reflex.hold_action(self.motion.x_cmd), True
+            else:
+                self.rx_intent = bool(a[6] > 0.0)              # 方策の開閉（評価の道具が上書きする前）
         if self.action_filter is not None:
             a = np.asarray(self.action_filter(k, a), float)
         if self.safety is not None:                          # 方策が指令を出している間だけ（保持・評価の道具の上書き中は切る）
@@ -300,6 +343,12 @@ class PolicyRuntime:
                 self.io.gripper_move(0.08, su.gripper_speed)
 
     def trace(self) -> dict:
+        out = self._trace()
+        if self.reflex is not None:                           # 反射が入っているときだけ足す（切なら記録は前と同じ）
+            out["reflex"] = self.reflex.summary()
+        return out
+
+    def _trace(self) -> dict:
         return {"inference": self.log_inf, "actions": [
             {"k": k, "t": t, "chunk": c, "held": h, "a": a.tolist()} for k, t, c, h, a in self.log_act],
             "perception": self.log_per, "startup": getattr(self, "startup", None), "stop_reason": self.stop_reason,
