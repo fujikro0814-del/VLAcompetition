@@ -69,8 +69,9 @@ def test_band_rejection():
     assert D.band_problems([44505], LEDGER)                                            # 掲示板 0164 の smoke の予約
     assert D.band_problems([44399], LEDGER) and D.band_problems([44800], LEDGER)       # 学習用の帯の外
     # 実際の台帳でも、決めた帯（候補・予備・smoke）は重ならない
-    seeds = list(range(44600, 44684)) + list(range(44700, 44780))
-    assert D.band_problems(seeds) == []
+    # 生成（44600〜44659・44700〜44739）と smoke（44680〜44683）は使用済みになったので、使っていない予備だけを見る
+    assert D.band_problems(list(range(44660, 44680)) + list(range(44740, 44780))) == []
+    assert D.band_problems([44600]) and D.band_problems([44700]) and D.band_problems([44680])
 
 
 # ---------------------------------------------------------------- 採る（30_f.py と同じ規則）と本数の確かめ
@@ -438,7 +439,8 @@ def test_ledger_reserved_and_planned_rows_block_but_not_the_band_itself():
     # 掲示板 0164 の smoke（44500〜44503・44510〜44512・44520〜44522）と、決めた帯（候補・予備・smoke）の間に重なりがない
     smoke_0164 = set(range(44500, 44504)) | set(range(44510, 44513)) | set(range(44520, 44523))
     mine = set(range(44600, 44684)) | set(range(44700, 44780))
-    assert not smoke_0164 & mine and not D.band_problems(sorted(mine))
+    reserve = set(range(44660, 44680)) | set(range(44740, 44780))      # 使用済みにならなかった予備
+    assert not smoke_0164 & mine and not D.band_problems(sorted(reserve))
 
 
 def test_stage3_identity_rules():
