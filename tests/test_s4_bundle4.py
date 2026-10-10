@@ -465,8 +465,15 @@ def test_stage3_identity_rules():
 
 @pytest.mark.skipif(not (ROOT / "outputs" / "f" / "data_v3.json").is_file(), reason="段階 3 の data_v3.json がない（作者の PC だけ）")
 def test_stage3_identity_on_this_pc():
+    # 反射の取り込み（6317f55）で harness/loop.py に誘発の pre_physics_step の口が入った。束 4 の生成はこれで止まる（束 4 は
+    # 関門 D で学習に進めず閉じた。掲示板 0171）。変わってよいのはこの 1 ファイルを固定の SHA-256 で、だけ
+    import hashlib
     r = D.stage3_identity()
-    assert r["ok"], r
+    allowed = {"src/recovla/harness/loop.py": "31e189bf558934a88663d939459a1c3b8394c3722a448fb493785761fee4089c"}
+    assert r["code_sha256_same"] and all(r["config_same"].values()), r
+    assert set(r["changed_files_since_stage3"]) <= set(allowed), r
+    for f in r["changed_files_since_stage3"]:
+        assert hashlib.sha256((ROOT / f).read_bytes()).hexdigest() == allowed[f], f
 
 
 def test_worker_history_and_regenerate_replays_same_worker_order(tmp_path, monkeypatch):
